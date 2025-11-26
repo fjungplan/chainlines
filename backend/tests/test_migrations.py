@@ -4,52 +4,40 @@ Tests for database migrations and TeamNode model.
 import pytest
 import uuid
 from datetime import datetime
-from sqlalchemy import text, inspect, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, select
 from app.models.team import TeamNode
-from app.db.database import engine
+from app.db.database import async_session_maker
 
 
 @pytest.mark.asyncio
-async def test_team_node_table_exists():
-    """Test that team_node table exists after migrations."""
-    async with engine.connect() as conn:
-        # Query the database to check if table exists
+async def test_team_node_table_exists(isolated_engine):
+    """Table should exist after migration (fresh engine)."""
+    async with isolated_engine.connect() as conn:
         result = await conn.execute(
-            text("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'team_node'
-                )
-            """)
+            text(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name='team_node')"
+            )
         )
-        exists = result.scalar()
-        assert exists is True, "team_node table should exist"
+        assert result.scalar() is True
 
 
 @pytest.mark.asyncio
-async def test_team_node_table_structure():
-    """Test that team_node table has the correct structure."""
-    async with engine.connect() as conn:
-        # Check table columns
+async def test_team_node_table_structure(isolated_engine):
+    """Column names and nullability should match expectations."""
+    async with isolated_engine.connect() as conn:
         result = await conn.execute(
-            text("""
+            text(
+                """
                 SELECT column_name, data_type, is_nullable
                 FROM information_schema.columns
-                WHERE table_name = 'team_node'
+                WHERE table_name='team_node'
                 ORDER BY ordinal_position
-            """)
+                """
+            )
         )
         columns = {row[0]: {"type": row[1], "nullable": row[2]} for row in result}
-        
-        # Verify expected columns exist
-        assert "node_id" in columns
-        assert "founding_year" in columns
-        assert "dissolution_year" in columns
-        assert "created_at" in columns
-        assert "updated_at" in columns
-        
-        # Verify nullability
+        for name in ["node_id", "founding_year", "dissolution_year", "created_at", "updated_at"]:
+            assert name in columns
         assert columns["node_id"]["nullable"] == "NO"
         assert columns["founding_year"]["nullable"] == "NO"
         assert columns["dissolution_year"]["nullable"] == "YES"
@@ -58,72 +46,41 @@ async def test_team_node_table_structure():
 
 
 @pytest.mark.asyncio
-async def test_team_node_indexes_exist():
-    """Test that the expected indexes exist on team_node table."""
-    async with engine.connect() as conn:
+async def test_team_node_indexes_exist(isolated_engine):
+    """Index names should be present."""
+    async with isolated_engine.connect() as conn:
         result = await conn.execute(
-            text("""
-                SELECT indexname
-                FROM pg_indexes
-                WHERE tablename = 'team_node'
-            """)
+            text("SELECT indexname FROM pg_indexes WHERE tablename='team_node'")
         )
-        indexes = [row[0] for row in result]
-        
-        # Check for expected indexes
+        indexes = {row[0] for row in result}
         assert "idx_team_node_founding" in indexes
         assert "idx_team_node_dissolution" in indexes
 
 
 @pytest.mark.asyncio
-async def test_create_team_node(client):
-    """Test creating a TeamNode instance and saving to database."""
-    from app.db.database import async_session_maker
-    
-    async with async_session_maker() as session:
-        async with session.begin():
-            # Create a new team node
-            team = TeamNode(
-                founding_year=2010,
-                dissolution_year=None
-            )
-            
-            session.add(team)
-            await session.flush()
-            
-            # Verify it was saved
-            assert team.node_id is not None
-            assert isinstance(team.node_id, uuid.UUID)
-            assert team.founding_year == 2010
-            assert team.dissolution_year is None
-            assert team.created_at is not None
-            assert team.updated_at is not None
-            assert isinstance(team.created_at, datetime)
-            assert isinstance(team.updated_at, datetime)
-            
-            # Clean up
-            await session.delete(team)
+async def test_create_team_node(isolated_session):
+    """Creating and flushing a TeamNode should populate fields."""
+    async with isolated_session.begin():
+        team = TeamNode(founding_year=2010)
+        isolated_session.add(team)
+        await isolated_session.flush()
+        assert isinstance(team.node_id, uuid.UUID)
+        assert team.founding_year == 2010
+        assert team.dissolution_year is None
+        assert isinstance(team.created_at, datetime)
+        assert isinstance(team.updated_at, datetime)
 
 
 @pytest.mark.asyncio
-async def test_team_node_timestamps_auto_populate(client):
-    """Test that created_at and updated_at are automatically populated."""
-    from app.db.database import async_session_maker
-    
-    async with async_session_maker() as session:
-        async with session.begin():
-            team = TeamNode(founding_year=1995)
-            
-            session.add(team)
-            await session.flush()
-            
-            # After saving, timestamps should be populated
-            assert team.created_at is not None
-            assert team.updated_at is not None
-            assert team.created_at <= team.updated_at
-            
-            # Clean up
-            await session.delete(team)
+async def test_team_node_timestamps_auto_populate(isolated_session):
+    """Timestamps should auto-fill on insert."""
+    async with isolated_session.begin():
+        team = TeamNode(founding_year=1995)
+        isolated_session.add(team)
+        await isolated_session.flush()
+        assert team.created_at is not None
+        assert team.updated_at is not None
+        assert team.created_at <= team.updated_at
 
 
 @pytest.mark.asyncio
@@ -138,24 +95,13 @@ async def test_team_node_founding_year_validation(client):
 
 
 @pytest.mark.asyncio
-async def test_team_node_with_dissolution_year(client):
-    """Test creating a team node with a dissolution year."""
-    from app.db.database import async_session_maker
-    
-    async with async_session_maker() as session:
-        async with session.begin():
-            team = TeamNode(
-                founding_year=2000,
-                dissolution_year=2015
-            )
-            
-            session.add(team)
-            await session.flush()
-            
-            assert team.dissolution_year == 2015
-            
-            # Clean up
-            await session.delete(team)
+async def test_team_node_with_dissolution_year(isolated_session):
+    """Dissolution year should persist."""
+    async with isolated_session.begin():
+        team = TeamNode(founding_year=2000, dissolution_year=2015)
+        isolated_session.add(team)
+        await isolated_session.flush()
+        assert team.dissolution_year == 2015
 
 
 @pytest.mark.asyncio
@@ -172,24 +118,13 @@ async def test_team_node_repr():
 
 
 @pytest.mark.asyncio
-async def test_team_node_query(client):
-    """Test querying TeamNode from database."""
-    from app.db.database import async_session_maker
-    
-    async with async_session_maker() as session:
-        async with session.begin():
-            # Create test data
-            team1 = TeamNode(founding_year=2010)
-            team2 = TeamNode(founding_year=2015, dissolution_year=2020)
-            
-            session.add_all([team1, team2])
-            await session.flush()
-            
-            # Query using select statement
-            result = await session.execute(select(TeamNode))
-            teams = result.scalars().all()
-            assert len(teams) >= 2
-            
-            # Clean up
-            await session.delete(team1)
-            await session.delete(team2)
+async def test_team_node_query(isolated_session):
+    """Selecting TeamNode rows should return inserted items."""
+    async with isolated_session.begin():
+        team1 = TeamNode(founding_year=2010)
+        team2 = TeamNode(founding_year=2015, dissolution_year=2020)
+        isolated_session.add_all([team1, team2])
+        await isolated_session.flush()
+        result = await isolated_session.execute(select(TeamNode))
+        teams = result.scalars().all()
+        assert len(teams) >= 2

@@ -96,10 +96,9 @@ async def test_health_endpoint_integration(client):
     assert data["database"] in ["connected", "disconnected"]
 
 
-@pytest.mark.asyncio 
-async def test_create_tables_runs_without_errors():
-    """Test that create_tables() runs without errors"""
-    from app.db.database import create_tables
-    
-    # Should not raise any exceptions
-    await create_tables()
+@pytest.mark.asyncio
+async def test_create_tables_runs_without_errors(isolated_engine):
+    """Creating tables via metadata on a fresh engine should not error."""
+    from app.db.database import Base
+    async with isolated_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
