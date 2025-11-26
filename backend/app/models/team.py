@@ -8,7 +8,6 @@ import uuid
 from typing import Optional, List
 from sqlalchemy import (
     Integer,
-    UUID,
     CheckConstraint,
     String,
     Boolean,
@@ -17,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, validates, relationship
 from app.db.base import Base, TimestampMixin
+from app.db.types import GUID
 
 
 class TeamNode(Base, TimestampMixin):
@@ -28,9 +28,9 @@ class TeamNode(Base, TimestampMixin):
     __tablename__ = "team_node"
     
     node_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), 
-        primary_key=True, 
-        default=uuid.uuid4
+        GUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     founding_year: Mapped[int] = mapped_column(Integer, nullable=False)
     dissolution_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -42,6 +42,30 @@ class TeamNode(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    # Lineage event relationships
+    outgoing_events: Mapped[List["LineageEvent"]] = relationship(
+        "LineageEvent",
+        foreign_keys="LineageEvent.previous_node_id",
+        back_populates="previous_node",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    incoming_events: Mapped[List["LineageEvent"]] = relationship(
+        "LineageEvent",
+        foreign_keys="LineageEvent.next_node_id",
+        back_populates="next_node",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    def get_predecessors(self) -> list:
+        """Return all predecessor TeamNodes via incoming lineage events."""
+        return [event.previous_node for event in self.incoming_events if event.previous_node]
+
+    def get_successors(self) -> list:
+        """Return all successor TeamNodes via outgoing lineage events."""
+        return [event.next_node for event in self.outgoing_events if event.next_node]
     
     __table_args__ = (
         CheckConstraint('founding_year >= 1900', name='check_founding_year_minimum'),
@@ -71,10 +95,10 @@ class TeamEra(Base, TimestampMixin):
     __tablename__ = "team_era"
 
     era_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        GUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     node_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("team_node.node_id", ondelete="CASCADE"), nullable=False
+        GUID(as_uuid=True), ForeignKey("team_node.node_id", ondelete="CASCADE"), nullable=False
     )
     season_year: Mapped[int] = mapped_column(Integer, nullable=False)
     registered_name: Mapped[str] = mapped_column(String(255), nullable=False)
