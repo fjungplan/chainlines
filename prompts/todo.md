@@ -3,54 +3,71 @@
 ## Phase 0: Foundation
 
 ### Prompt 1: Project Initialization
-- [ ] **Project Structure**
-    - [ ] Create root directory with `docker-compose.yml`.
-    - [ ] Create `backend/` directory (FastAPI).
-    - [ ] Create `frontend/` directory (React + Vite).
-    - [ ] Create shared `.env.example`.
-- [ ] **Docker Configuration**
-    - [ ] Configure PostgreSQL 15 service (port 5432, health check, volume).
-    - [ ] Configure Backend service (Python 3.11, depends on Postgres).
-    - [ ] Configure Frontend service (Node 18, port 5173).
-- [ ] **Backend Setup**
-    - [ ] Create `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, alembic, etc.).
-    - [ ] Create `main.py` with basic FastAPI app.
-    - [ ] Create `app/core/config.py` using pydantic-settings.
-- [ ] **Frontend Setup**
-    - [ ] Initialize Vite React app.
-    - [ ] Install `react-router-dom` and `axios`.
-- [ ] **Testing**
-    - [ ] Add `pytest.ini`.
-    - [ ] Write basic `test_main.py`.
-- [ ] **Verification**: Run `docker-compose up` and check localhost:8000/docs.
+- [x] **Project Structure**
+    - [x] Create root directory with `docker-compose.yml`.
+    - [x] Create `backend/` directory (FastAPI).
+    - [x] Create `frontend/` directory (React + Vite).
+    - [x] Create shared `.env.example`.
+- [x] **Docker Configuration**
+    - [x] Configure PostgreSQL 15 service (port 5432, health check, volume).
+    - [x] Configure Backend service (Python 3.11, depends on Postgres).
+    - [x] Configure Frontend service (Node 18, port 5173).
+- [x] **Backend Setup**
+    - [x] Create `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, alembic, etc.).
+    - [x] Create `main.py` with basic FastAPI app.
+    - [x] Create `app/core/config.py` using pydantic-settings.
+- [x] **Frontend Setup**
+    - [x] Initialize Vite React app.
+    - [x] Install `react-router-dom` and `axios`.
+- [x] **Testing**
+    - [x] Add `pytest.ini`.
+    - [x] Write basic `test_main.py`.
+- [x] **Verification**: Run `docker-compose up` and check localhost:8000/docs.
 
 ### Prompt 2: Database Connection & Health
-- [ ] **Database Module**
-    - [ ] Implement `app/db/database.py` (Async engine, sessionmaker).
-    - [ ] Create `get_db()` dependency.
-- [ ] **Health Check**
-    - [ ] Create `app/api/health.py` with GET `/health`.
-    - [ ] return DB connection status and timestamp.
-- [ ] **Main Updates**
-    - [ ] Register health router in `main.py`.
-    - [ ] Add CORS middleware.
-    - [ ] Add startup event for table creation.
-- [ ] **Configuration**
-    - [ ] Update `.env` with `DATABASE_URL` and `CORS_ORIGINS`.
-- [ ] **Testing**: Verify `/health` returns 200 and DB status "connected".
+- [x] **Database Module**
+    - [x] Implement `app/db/database.py` (Async engine, sessionmaker).
+    - [x] Create `get_db()` dependency.
+    - [x] Create `create_tables()` function.
+    - [x] Create `check_db_connection()` function.
+- [x] **Health Check**
+    - [x] Create `app/api/health.py` with GET `/health`.
+    - [x] Return DB connection status and timestamp.
+    - [x] Return 503 if database is disconnected.
+- [x] **Main Updates**
+    - [x] Register health router in `main.py`.
+    - [x] Add CORS middleware with settings-based origins.
+    - [x] Add startup event for table creation.
+    - [x] Add exception handlers for validation and general errors.
+- [x] **Configuration**
+    - [x] Update `.env.example` with `DATABASE_URL` and `CORS_ORIGINS`.
+    - [x] Config already has DATABASE_URL, DEBUG, CORS_ORIGINS.
+- [x] **Testing**: 
+    - [x] Created `tests/test_health.py` with 6 comprehensive tests.
+    - [x] All tests pass (9/9 total including Prompt 1 tests).
+    - [x] Verified `/health` returns 200 with DB status "connected".
+    - [x] Verified CORS headers allow localhost:5173.
+    - [x] No errors in docker-compose logs.
 
 ### Prompt 3: Database Migration System
-- [ ] **Alembic Setup**
-    - [ ] Initialize alembic (`alembic init`).
-    - [ ] Configure `alembic.ini` and `env.py` for async.
-- [ ] **Base Model**
-    - [ ] Create `app/db/base.py` with timestamps mixin.
-- [ ] **Team Node Migration**
-    - [ ] Create migration script for `team_node` table.
-    - [ ] Define `TeamNode` SQLAlchemy model.
-- [ ] **CLI Helpers**
-    - [ ] Create Make/Shell commands for `migrate`, `rollback`, `create-migration`.
-- [ ] **Testing**: Run migration, verify table creation, rollback.
+- [x] **Alembic Setup**
+    - [x] Initialize alembic (`alembic init`).
+    - [x] Configure `alembic.ini` for async PostgreSQL connection.
+    - [x] Configure `env.py` with async engine and model imports.
+- [x] **Base Model**
+    - [x] Create `app/db/base.py` with DeclarativeBase and TimestampMixin.
+- [x] **Team Node Migration**
+    - [x] Create migration script for `team_node` table with indexes.
+    - [x] Define `TeamNode` SQLAlchemy model with UUID primary key.
+    - [x] Add validation: `founding_year >= 1900`.
+- [x] **CLI Helpers**
+    - [x] Create Makefile with `migrate`, `migrate-rollback`, `migrate-create` commands.
+- [x] **Docker Integration**
+    - [x] Update docker-compose.yml to run migrations before backend starts.
+- [x] **Testing**: 
+    - [x] Created `tests/test_migrations.py` with 10 tests.
+    - [x] Verified migration upgrade/downgrade works correctly.
+    - [x] Verified table structure, indexes, and validation.
 
 ---
 
