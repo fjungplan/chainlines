@@ -3,26 +3,26 @@
 ## Phase 0: Foundation
 
 ### Prompt 1: Project Initialization
-- [ ] **Project Structure**
-    - [ ] Create root directory with `docker-compose.yml`.
-    - [ ] Create `backend/` directory (FastAPI).
-    - [ ] Create `frontend/` directory (React + Vite).
-    - [ ] Create shared `.env.example`.
-- [ ] **Docker Configuration**
-    - [ ] Configure PostgreSQL 15 service (port 5432, health check, volume).
-    - [ ] Configure Backend service (Python 3.11, depends on Postgres).
-    - [ ] Configure Frontend service (Node 18, port 5173).
-- [ ] **Backend Setup**
-    - [ ] Create `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, alembic, etc.).
-    - [ ] Create `main.py` with basic FastAPI app.
-    - [ ] Create `app/core/config.py` using pydantic-settings.
-- [ ] **Frontend Setup**
-    - [ ] Initialize Vite React app.
-    - [ ] Install `react-router-dom` and `axios`.
-- [ ] **Testing**
-    - [ ] Add `pytest.ini`.
-    - [ ] Write basic `test_main.py`.
-- [ ] **Verification**: Run `docker-compose up` and check localhost:8000/docs.
+- [x] **Project Structure**
+    - [x] Create root directory with `docker-compose.yml`.
+    - [x] Create `backend/` directory (FastAPI).
+    - [x] Create `frontend/` directory (React + Vite).
+    - [x] Create shared `.env.example`.
+- [x] **Docker Configuration**
+    - [x] Configure PostgreSQL 15 service (port 5432, health check, volume).
+    - [x] Configure Backend service (Python 3.11, depends on Postgres).
+    - [x] Configure Frontend service (Node 18, port 5173).
+- [x] **Backend Setup**
+    - [x] Create `requirements.txt` (fastapi, uvicorn, sqlalchemy, asyncpg, alembic, etc.).
+    - [x] Create `main.py` with basic FastAPI app.
+    - [x] Create `app/core/config.py` using pydantic-settings.
+- [x] **Frontend Setup**
+    - [x] Initialize Vite React app.
+    - [x] Install `react-router-dom` and `axios`.
+- [x] **Testing**
+    - [x] Add `pytest.ini`.
+    - [x] Write basic `test_main.py`.
+- [x] **Verification**: Run `docker-compose up` and check localhost:8000/docs.
 
 ### Prompt 2: Database Connection & Health
 - [ ] **Database Module**
