@@ -12,15 +12,17 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # Create ENUM type
-    event_type_enum = pg.ENUM(
-        'LEGAL_TRANSFER',
-        'SPIRITUAL_SUCCESSION',
-        'MERGE',
-        'SPLIT',
-        name='event_type_enum'
+    # Ensure ENUM type exists (guarded for Postgres CI re-runs)
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'event_type_enum') THEN
+                CREATE TYPE event_type_enum AS ENUM ('LEGAL_TRANSFER', 'SPIRITUAL_SUCCESSION', 'MERGE', 'SPLIT');
+            END IF;
+        END$$;
+        """
     )
-    event_type_enum.create(op.get_bind(), checkfirst=True)
 
     # Create lineage_event table
     op.create_table(
@@ -29,7 +31,7 @@ def upgrade():
         sa.Column('previous_node_id', pg.UUID(as_uuid=True), sa.ForeignKey('team_node.node_id', ondelete='SET NULL'), nullable=True),
         sa.Column('next_node_id', pg.UUID(as_uuid=True), sa.ForeignKey('team_node.node_id', ondelete='SET NULL'), nullable=True),
         sa.Column('event_year', sa.Integer(), nullable=False),
-        sa.Column('event_type', event_type_enum, nullable=False),
+        sa.Column('event_type', pg.ENUM(name='event_type_enum'), nullable=False),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('created_at', sa.TIMESTAMP(), server_default=sa.text('NOW()')),
         sa.Column('updated_at', sa.TIMESTAMP(), server_default=sa.text('NOW()')),
