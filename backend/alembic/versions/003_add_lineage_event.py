@@ -12,6 +12,8 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
+    # Ensure pgcrypto is available for gen_random_uuid()
+    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
     # Ensure ENUM type exists (guarded for Postgres CI re-runs)
     op.execute(
         """
