@@ -19,8 +19,21 @@
 - Extract light DTO builders for common views (timeline era, team summary).
 - Add guardrails: no lazy-loads in async during serialization.
 
+### Status (2025-11-28): Completed
+- Implementation:
+	- Centralized eager-loading in `backend/app/repositories/team_repository.py` and `backend/app/services/lineage_service.py`.
+	- Ensured `timeline_service` preloads `TeamEra.sponsor_links.brand` and lineage event nodes.
+	- Added DTOs in `backend/app/services/dto.py` and refactored `backend/app/core/graph_builder.py` to consume them.
+	- Expanded guards in `backend/tests/api/test_no_lazy_load.py` to cover history, timeline, eras, team list/detail, sponsor service composition, and timeline sponsor shape.
+- Validation:
+	- Test suite result: 82 passed, 1 skipped in ~10s.
+	- Targeted guard tests consistently pass; no async lazy-load regressions observed.
+- Notes:
+	- Health test stabilized by mocking DB connectivity in success case to avoid coupling to external Postgres during tests.
+	- No breaking changes to API contracts; timeline payloads slightly leaner via DTOs.
+
 ## Phase B — Service Layer Consolidation
-- Clarify responsibilities:
+ - Clarify responsibilities:
 	- `TeamService`: write operations, validations.
 	- `TeamDetailService`: team history assembly + transition classification.
 	- `TimelineService`: graph building and range filters.
@@ -28,6 +41,24 @@
 	- Status calculation (active/historical/dissolved).
 	- Transition classification (MERGED_INTO, ACQUISITION, REVIVAL, SPLIT).
 - Define `ServiceError` types → consistent HTTP mapping in routers.
+
+### Status (2025-11-28): In Progress
+- Timeline:
+	- Repository refactored to mapped `selectinload`; lambda loaders removed.
+	- Service ensures eras are initialized to avoid async lazy-load; caching retained.
+	- GraphBuilder emits snake_case fields; Pydantic v2 alignment verified.
+	- Targeted timeline + guard tests pass.
+
+- Teams:
+	- `TeamRepository` provides `get_by_id`, `get_all`, `get_eras_for_node` with eager-loads.
+	- `TeamService` now delegates for `get_node_with_eras`, `list_nodes`, `get_node_eras`, adding defensive `eras` initialization.
+	- `api/v1/teams.py` wired to `TeamService` for get/list/eras.
+	- Tests: teams API (4) and guard (7) pass; team service integration (2) pass.
+
+- Health/CI:
+	- Health endpoint stabilized via DI checker; tests deterministic.
+	- Added GitHub Actions workflow to run backend tests on Windows with `python -X faulthandler -m pytest -q`.
+	- Makefile `test` target updated to use faulthandler in container.
 
 ## Phase C — API Consistency & Caching
 - Standardize headers on mobile endpoints:

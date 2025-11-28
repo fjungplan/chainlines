@@ -1,7 +1,7 @@
 from typing import List, Dict
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
-from app.services.dto import build_timeline_era_dto, build_team_summary_dto
+from app.services.dto import build_team_summary_dto, build_timeline_era_dto
 
 
 class GraphBuilder:
@@ -20,10 +20,27 @@ class GraphBuilder:
     def build_nodes(self, teams: List[TeamNode]) -> List[Dict]:
         nodes: List[Dict] = []
         for node in teams:
-            node_dto = build_team_summary_dto(node)
-            node_dto["eras"] = [build_timeline_era_dto(era) for era in node.eras]
-            node_dto["eras"] = sorted(node_dto["eras"], key=lambda e: e["year"])
-            nodes.append(node_dto)
+            # Build base node in snake_case for API schema
+            base = {
+                "id": str(getattr(node, "node_id", "")),
+                "founding_year": getattr(node, "founding_year", None),
+                "dissolution_year": getattr(node, "dissolution_year", None),
+            }
+
+            # Build eras aligned to TimelineEra schema
+            eras: List[Dict] = []
+            for era in getattr(node, "eras", []) or []:
+                eras.append({
+                    "year": getattr(era, "season_year", None),
+                    "name": getattr(era, "registered_name", None),
+                    "tier": getattr(era, "tier_level", None),
+                    "sponsors": self.build_jersey_composition(era),
+                })
+
+            # Sort eras by year
+            eras = sorted(eras, key=lambda e: e.get("year") or 0)
+            base["eras"] = eras
+            nodes.append(base)
         return nodes
 
     def build_links(self, events: List[LineageEvent]) -> List[Dict]:
