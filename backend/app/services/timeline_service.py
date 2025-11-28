@@ -68,6 +68,11 @@ class TimelineService:
         # lineage events within range
         events_result = await self.session.execute(
             select(LineageEvent)
+            .options(
+                # Eager-load to avoid any incidental lazy access in link building
+                selectinload(LineageEvent.previous_node),
+                selectinload(LineageEvent.next_node),
+            )
             .where((LineageEvent.event_year >= start_year) & (LineageEvent.event_year <= end_year))
         )
         events: List[LineageEvent] = list(events_result.scalars().all())
