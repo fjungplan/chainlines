@@ -60,12 +60,33 @@ jobs:
           sys.exit(1)
           PY
 
+      - name: Clean enum type (CI only)
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import psycopg2
+          conn = psycopg2.connect(dbname='cycling_lineage', user='cycling', password='cycling', host='localhost', port=5432)
+          conn.autocommit = True
+          cur = conn.cursor()
+          cur.execute("DROP TYPE IF EXISTS event_type_enum CASCADE;")
+          cur.close()
+          conn.close()
+          print('Dropped event_type_enum if it existed')
+          PY
+
       - name: Run Alembic migrations
         working-directory: backend
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
         run: |
           alembic upgrade head
+
+      - name: Run backend tests (full suite)
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: |
+          pytest tests/ -v --tb=short
 
       - name: Run backend tests (full suite)
         working-directory: backend
