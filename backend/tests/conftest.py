@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.db.base import Base
 from app.core.config import settings
 from main import app
+from app.db.database import get_db
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
 from app.models.enums import EventType
@@ -106,3 +107,52 @@ async def isolated_session(isolated_engine) -> AsyncGenerator[AsyncSession, None
 async def db_session(isolated_session) -> AsyncGenerator[AsyncSession, None]:
     """Alias for isolated_session for convenience."""
     yield isolated_session
+
+
+@pytest_asyncio.fixture
+async def test_client(isolated_session) -> AsyncGenerator[AsyncClient, None]:
+    """Async test client with DB dependency overridden to use isolated_session."""
+
+    async def _override_get_db():
+        yield isolated_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest_asyncio.fixture
+async def sample_teams_in_db(isolated_session):
+    """Create 5 teams with eras across different years and tiers."""
+    nodes = []
+    # Create 5 nodes
+    for base_year in [1995, 2000, 2005, 2010, 2015]:
+        node = TeamNode(founding_year=base_year)
+        isolated_session.add(node)
+        await isolated_session.flush()
+        nodes.append(node)
+    await isolated_session.commit()
+
+    # Add eras with various years and tiers
+    tier_cycle = [1, 2, 3, 2, 1]
+    years = [2020, 2021, 2022, 2023, 2024]
+    for i, node in enumerate(nodes):
+        # Each node gets two eras in consecutive years
+        e1 = TeamEra(
+            node_id=node.node_id,
+            season_year=years[i],
+            registered_name=f"Team {i} A",
+            tier_level=tier_cycle[i],
+        )
+        e2 = TeamEra(
+            node_id=node.node_id,
+            season_year=years[i] + 1,
+            registered_name=f"Team {i} B",
+            tier_level=tier_cycle[-(i+1)],
+        )
+        isolated_session.add_all([e1, e2])
+    await isolated_session.commit()
+    return nodes

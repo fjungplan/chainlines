@@ -2,7 +2,7 @@ name: Backend Postgres Tests
 
 on:
   push:
-    branches: [ main, "**" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "**" ]
 
@@ -58,6 +58,20 @@ jobs:
                   print('Waiting for Postgres...', e)
                   time.sleep(2)
           sys.exit(1)
+          PY
+
+      - name: Clean enum type (CI only)
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import psycopg2
+          conn = psycopg2.connect(dbname='cycling_lineage', user='cycling', password='cycling', host='localhost', port=5432)
+          conn.autocommit = True
+          cur = conn.cursor()
+          cur.execute("DROP TYPE IF EXISTS event_type_enum CASCADE;")
+          cur.close()
+          conn.close()
+          print('Dropped event_type_enum if it existed')
           PY
 
       - name: Run Alembic migrations
