@@ -1,9 +1,12 @@
 import { useTimeline } from '../hooks/useTeamData';
+import { useResponsive } from '../hooks/useResponsive';
 import { LoadingSpinner } from '../components/Loading';
 import { ErrorDisplay } from '../components/ErrorDisplay';
+import TimelineGraph from '../components/TimelineGraph';
 import './HomePage.css';
 
 function HomePage() {
+  const { isMobile } = useResponsive();
   const { data, isLoading, error, refetch } = useTimeline({
     start_year: 2020,
     end_year: 2024,
@@ -17,11 +20,10 @@ function HomePage() {
     return <ErrorDisplay error={error} onRetry={refetch} />;
   }
 
-  return (
+  return isMobile ? (
     <div className="home-page">
-      <h2>Timeline Data Loaded</h2>
-      <p>Successfully loaded timeline data from the backend API.</p>
-      
+      <h2>Mobile View</h2>
+      <p>Mobile list view coming soon...</p>
       <div className="data-summary">
         <div className="summary-card">
           <h3>Nodes</h3>
@@ -31,19 +33,10 @@ function HomePage() {
           <h3>Links</h3>
           <p className="summary-value">{data?.links?.length || 0}</p>
         </div>
-        <div className="summary-card">
-          <h3>Year Range</h3>
-          <p className="summary-value">
-            {data?.meta?.year_range?.[0]} - {data?.meta?.year_range?.[1]}
-          </p>
-        </div>
       </div>
-
-      <details className="data-preview">
-        <summary>View Raw Data</summary>
-        <pre>{JSON.stringify(data, null, 2)}</pre>
-      </details>
     </div>
+  ) : (
+    <TimelineGraph data={data} />
   );
 }
 
