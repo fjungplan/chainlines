@@ -154,18 +154,20 @@
 ## Phase 3: Basic Frontend Shell
 
 ### Prompt 10: React Setup & Routing
-- [ ] **Dependencies**: Install `react-router-dom`, `axios`, `@tanstack/react-query`, `d3`.
-- [ ] **API Client**: Configure axios instance with interceptors.
-- [ ] **Routing**: Setup `App.jsx` with `BrowserRouter`.
-- [ ] **Pages**: Create stubs for `HomePage`, `TeamDetailPage`, `NotFoundPage`.
-- [ ] **Layout**: Create responsive `Layout` component.
+- [x] **Dependencies**: Installed `react-router-dom`, `axios`, `@tanstack/react-query`, `d3`.
+- [x] **API Client**: Configured axios instance with interceptors (`src/api/client.js`).
+- [x] **Routing**: Set up `App.jsx` with `BrowserRouter`, nested routes and `Layout` wrapper.
+- [x] **Pages**: Created `HomePage`, `TeamDetailPage`, `NotFoundPage`.
+- [x] **Layout**: Implemented responsive `Layout` component with mobile-first CSS.
+✅ Completed via branches `frontend/prompt-10-react-setup` merged into `main`.
 
 ### Prompt 11: Loading & Error UI
-- [ ] **Components**
-    - [ ] Create `LoadingSpinner` and `LoadingSkeleton`.
-    - [ ] Create `ErrorDisplay` and `ErrorBoundary`.
-- [ ] **Hooks**: Implement `useTimeline` and `useTeamHistory` using React Query.
-- [ ] **Integration**: Wrap App in `QueryClientProvider`.
+- [x] **Components**
+    - [x] Created `LoadingSpinner` and `LoadingSkeleton`.
+    - [x] Created `ErrorDisplay` and `ErrorBoundary`.
+- [x] **Hooks**: Implemented `useTimeline`, `useTeamHistory`, `useTeams` using React Query.
+- [x] **Integration**: Wrapped App in `QueryClientProvider` (`main.jsx`) and added global error boundary.
+✅ Completed via branch `frontend/prompt-11-loading-error-handling` merged into `main`; all backend tests still pass (96/96).
 
 ---
 
