@@ -1,10 +1,12 @@
 from typing import List, Dict
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
+from app.services.dto import build_team_summary_dto, build_timeline_era_dto
 
 
 class GraphBuilder:
     def build_jersey_composition(self, era: TeamEra) -> List[Dict]:
+        # Kept for backward compatibility if used elsewhere; DTO now handles sponsors.
         sponsors = []
         for link in getattr(era, "sponsors_ordered", []) or []:
             brand = getattr(link, "brand", None)
@@ -18,12 +20,14 @@ class GraphBuilder:
     def build_nodes(self, teams: List[TeamNode]) -> List[Dict]:
         nodes: List[Dict] = []
         for node in teams:
+            # Build base node in snake_case for API schema
             base = {
                 "id": str(getattr(node, "node_id", "")),
                 "founding_year": getattr(node, "founding_year", None),
                 "dissolution_year": getattr(node, "dissolution_year", None),
             }
 
+            # Build eras aligned to TimelineEra schema
             eras: List[Dict] = []
             for era in getattr(node, "eras", []) or []:
                 eras.append({
@@ -33,6 +37,7 @@ class GraphBuilder:
                     "sponsors": self.build_jersey_composition(era),
                 })
 
+            # Sort eras by year then name for deterministic ordering
             eras = sorted(eras, key=lambda e: (e.get("year") or 0, e.get("name") or ""))
             base["eras"] = eras
             nodes.append(base)
