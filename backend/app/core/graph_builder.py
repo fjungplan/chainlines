@@ -37,10 +37,19 @@ class GraphBuilder:
                     "sponsors": self.build_jersey_composition(era),
                 })
 
-            # Sort eras by year
-            eras = sorted(eras, key=lambda e: e.get("year") or 0)
+            # Sort eras by year then name for deterministic ordering
+            eras = sorted(eras, key=lambda e: (e.get("year") or 0, e.get("name") or ""))
             base["eras"] = eras
             nodes.append(base)
+
+        # Deterministic node ordering: founding_year then id
+        nodes = sorted(
+            nodes,
+            key=lambda n: (
+                n.get("founding_year") if n.get("founding_year") is not None else -10**9,
+                n.get("id") or "",
+            ),
+        )
         return nodes
 
     def build_links(self, events: List[LineageEvent]) -> List[Dict]:
@@ -53,4 +62,14 @@ class GraphBuilder:
                     "year": ev.event_year,
                     "type": ev.event_type.name if hasattr(ev.event_type, 'name') else str(ev.event_type),
                 })
+        # Deterministic link ordering: year, source, target, type
+        links = sorted(
+            links,
+            key=lambda l: (
+                l.get("year") if l.get("year") is not None else -10**9,
+                l.get("source") or "",
+                l.get("target") or "",
+                l.get("type") or "",
+            ),
+        )
         return links
