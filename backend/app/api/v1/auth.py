@@ -31,6 +31,10 @@ async def google_auth(
     
     # Create tokens
     tokens = await AuthService.create_tokens(session, user)
+    
+    # Commit the transaction (user creation/update + refresh token)
+    await session.commit()
+    
     return tokens
 
 
@@ -55,6 +59,10 @@ async def refresh_token(
     
     # Create new tokens
     tokens = await AuthService.create_tokens(session, user)
+    
+    # Commit the transaction (new refresh token + revoke old one)
+    await session.commit()
+    
     return tokens
 
 

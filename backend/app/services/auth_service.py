@@ -59,7 +59,8 @@ class AuthService:
             )
             session.add(user)
         
-        await session.commit()
+        # Flush to DB to get user_id, but don't commit yet (let caller manage transaction)
+        await session.flush()
         await session.refresh(user)
         return user
     
@@ -88,7 +89,8 @@ class AuthService:
             expires_at=expires_at
         )
         session.add(db_refresh_token)
-        await session.commit()
+        # Flush to DB but don't commit yet (let caller manage transaction)
+        await session.flush()
         
         return TokenResponse(
             access_token=access_token,
