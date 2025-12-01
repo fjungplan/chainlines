@@ -69,8 +69,9 @@ class AuthService:
         user: User
     ) -> TokenResponse:
         """Create access and refresh tokens for user"""
+        role_value = getattr(user.role, 'value', user.role)
         access_token = create_access_token(
-            data={"sub": str(user.user_id), "email": user.email, "role": user.role.value}
+            data={"sub": str(user.user_id), "email": user.email, "role": role_value}
         )
         
         refresh_token = create_refresh_token(

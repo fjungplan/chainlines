@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, Text, TIMESTAMP, Enum, ForeignKey, text
+from sqlalchemy import Column, String, Integer, Boolean, Text, TIMESTAMP, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 from app.db.types import GUID
@@ -22,7 +22,8 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False)
     display_name = Column(String(255))
     avatar_url = Column(String(500))
-    role = Column(Enum(UserRole), default=UserRole.NEW_USER)
+    # Use SQLAlchemy Enum with native_enum=False to store as string but return enum
+    role = Column(Enum(UserRole, native_enum=False), default=UserRole.NEW_USER, nullable=False)
     approved_edits_count = Column(Integer, default=0)
     is_banned = Column(Boolean, default=False)
     banned_reason = Column(Text, nullable=True)

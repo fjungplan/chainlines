@@ -7,7 +7,7 @@ Create Date: 2025-12-01 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, ENUM
+from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision = '005_add_users'
@@ -17,16 +17,7 @@ depends_on = None
 
 
 def upgrade():
-    # Create enum type idempotently using DO block
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE user_role_enum AS ENUM ('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
-
-    # Users table
+    # Users table (role stored as VARCHAR with CHECK constraint for portability)
     op.create_table(
         'users',
         sa.Column('user_id', UUID, primary_key=True, server_default=sa.text('gen_random_uuid()')),
@@ -34,7 +25,7 @@ def upgrade():
         sa.Column('email', sa.String(255), unique=True, nullable=False),
         sa.Column('display_name', sa.String(255)),
         sa.Column('avatar_url', sa.String(500)),
-        sa.Column('role', ENUM('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN', name='user_role_enum', create_type=False), server_default='NEW_USER'),
+        sa.Column('role', sa.String(20), server_default='NEW_USER', nullable=False),
         sa.Column('approved_edits_count', sa.Integer, default=0),
         sa.Column('is_banned', sa.Boolean, default=False),
         sa.Column('banned_reason', sa.Text, nullable=True),
@@ -42,7 +33,10 @@ def upgrade():
         sa.Column('last_login_at', sa.TIMESTAMP, nullable=True),
         sa.Column('updated_at', sa.TIMESTAMP, server_default=sa.text('NOW()'))
     )
-    
+
+    # Role constraint
+    op.create_check_constraint('ck_users_role', 'users', "role IN ('GUEST','NEW_USER','TRUSTED_USER','ADMIN')")
+
     # Refresh tokens table
     op.create_table(
         'refresh_tokens',
@@ -52,7 +46,7 @@ def upgrade():
         sa.Column('expires_at', sa.TIMESTAMP, nullable=False),
         sa.Column('created_at', sa.TIMESTAMP, server_default=sa.text('NOW()'))
     )
-    
+
     op.create_index('idx_users_google_id', 'users', ['google_id'])
     op.create_index('idx_users_email', 'users', ['email'])
     op.create_index('idx_refresh_tokens_user', 'refresh_tokens', ['user_id'])
@@ -61,6 +55,5 @@ def upgrade():
 
 def downgrade():
     op.drop_table('refresh_tokens')
+    op.drop_constraint('ck_users_role', 'users', type_='check')
     op.drop_table('users')
-    # Drop enum type if no longer used
-    op.execute('DROP TYPE IF EXISTS user_role_enum')
