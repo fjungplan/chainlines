@@ -1,7 +1,7 @@
 """add users and auth tables
 
-Revision ID: 005
-Revises: 004
+Revision ID: 005_add_users
+Revises: 004_add_sponsors
 Create Date: 2025-12-01 00:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
-revision = '005'
-down_revision = '004'
+revision = '005_add_users'
+down_revision = '004_add_sponsors'
 branch_labels = None
 depends_on = None
 
