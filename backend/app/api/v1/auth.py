@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.db.database import get_db
 from app.schemas.auth import GoogleTokenRequest, TokenResponse, RefreshTokenRequest, UserResponse
@@ -17,25 +18,24 @@ async def google_auth(
     session: AsyncSession = Depends(get_db)
 ):
     """Authenticate with Google ID token"""
-    # Verify Google token
-    google_user_info = await AuthService.verify_google_token(request.id_token)
-    
-    if not google_user_info:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
-    
-    # Get or create user
-    user = await AuthService.get_or_create_user(session, google_user_info)
-    
-    if user.is_banned:
-        raise HTTPException(status_code=403, detail=f"Account banned: {user.banned_reason}")
-    
-    # Create tokens
-    tokens = await AuthService.create_tokens(session, user)
-    
-    # Commit the transaction (user creation/update + refresh token)
-    await session.commit()
-    
-    return tokens
+    # Use a single transactional context to avoid nested transactions
+    async with session.begin():
+        # Verify Google token
+        google_user_info = await AuthService.verify_google_token(request.id_token)
+        
+        if not google_user_info:
+            raise HTTPException(status_code=401, detail="Invalid Google token")
+        
+        # Get or create user
+        user = await AuthService.get_or_create_user(session, google_user_info)
+        
+        if user.is_banned:
+            raise HTTPException(status_code=403, detail=f"Account banned: {user.banned_reason}")
+        
+        # Create tokens
+        tokens = await AuthService.create_tokens(session, user)
+        
+        return tokens
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -44,32 +44,34 @@ async def refresh_token(
     session: AsyncSession = Depends(get_db)
 ):
     """Refresh access token using refresh token"""
-    # Verify refresh token
-    payload = verify_token(request.refresh_token)
-    
-    if not payload or payload.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-    
-    user_id = payload.get("sub")
-    
-    # Get user
-    user = await session.get(User, user_id)
-    if not user or user.is_banned:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    
-    # Create new tokens
-    tokens = await AuthService.create_tokens(session, user)
-    
-    # Commit the transaction (new refresh token + revoke old one)
-    await session.commit()
-    
-    return tokens
+    # Use a single transactional context to avoid nested transactions
+    async with session.begin():
+        # Verify refresh token
+        payload = verify_token(request.refresh_token)
+        
+        if not payload or payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+        
+        user_id = payload.get("sub")
+        # Get user
+        stmt = select(User).where(User.user_id == user_id)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if user.is_banned:
+            raise HTTPException(status_code=403, detail=f"Account banned: {user.banned_reason}")
+        
+        # Create tokens with new refresh token
+        tokens = await AuthService.create_tokens(session, user)
+        
+        return tokens
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
-):
+async def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
     return UserResponse(
         user_id=str(current_user.user_id),
@@ -77,5 +79,5 @@ async def get_current_user_info(
         display_name=current_user.display_name,
         avatar_url=current_user.avatar_url,
         role=current_user.role.value,
-        approved_edits_count=current_user.approved_edits_count
+        approved_edits_count=current_user.approved_edits_count,
     )
