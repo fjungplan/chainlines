@@ -30,10 +30,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up application...")
     try:
-        await create_tables()
-        logger.info("Database tables created/verified successfully")
+        # Only auto-create tables for SQLite dev runs; Postgres uses Alembic
+        if settings.DATABASE_URL.startswith("sqlite+"):
+            await create_tables()
+            logger.info("SQLite tables created/verified successfully")
+        else:
+            logger.info("Skipping table auto-creation (managed by Alembic)")
     except Exception as e:
-        logger.error(f"Error creating database tables: {e}", exc_info=True)
+        logger.error(f"Startup error: {e}", exc_info=True)
         raise
     
     yield
