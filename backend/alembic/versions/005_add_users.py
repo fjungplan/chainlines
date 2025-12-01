@@ -17,9 +17,15 @@ depends_on = None
 
 
 def upgrade():
-    # Create enum type idempotently
-    user_role_enum = sa.Enum('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN', name='user_role_enum')
-    user_role_enum.create(op.get_bind(), checkfirst=True)
+    # Create enum type only if it doesn't exist (CI may have leftovers)
+    connection = op.get_bind()
+    result = connection.execute(sa.text(
+        "SELECT 1 FROM pg_type WHERE typname = 'user_role_enum'"
+    ))
+    if not result.fetchone():
+        op.execute("""
+            CREATE TYPE user_role_enum AS ENUM ('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN')
+        """)
 
     # Users table
     op.create_table(
@@ -29,7 +35,7 @@ def upgrade():
         sa.Column('email', sa.String(255), unique=True, nullable=False),
         sa.Column('display_name', sa.String(255)),
         sa.Column('avatar_url', sa.String(500)),
-        sa.Column('role', user_role_enum, server_default='NEW_USER'),
+        sa.Column('role', sa.Enum('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN', name='user_role_enum'), server_default='NEW_USER'),
         sa.Column('approved_edits_count', sa.Integer, default=0),
         sa.Column('is_banned', sa.Boolean, default=False),
         sa.Column('banned_reason', sa.Text, nullable=True),
