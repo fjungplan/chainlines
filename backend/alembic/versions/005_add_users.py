@@ -17,15 +17,14 @@ depends_on = None
 
 
 def upgrade():
-    # Create enum type only if it doesn't exist (CI may have leftovers)
-    connection = op.get_bind()
-    result = connection.execute(sa.text(
-        "SELECT 1 FROM pg_type WHERE typname = 'user_role_enum'"
-    ))
-    if not result.fetchone():
-        op.execute("""
-            CREATE TYPE user_role_enum AS ENUM ('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN')
-        """)
+    # Create enum type idempotently using DO block
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE user_role_enum AS ENUM ('GUEST', 'NEW_USER', 'TRUSTED_USER', 'ADMIN');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
 
     # Users table
     op.create_table(
