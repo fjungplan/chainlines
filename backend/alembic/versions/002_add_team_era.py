@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 # revision identifiers, used by Alembic.
 revision: str = "002_add_team_era"
@@ -18,11 +19,21 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Check database dialect and use appropriate UUID type
+    dialect = op.get_context().dialect
+    if dialect.name == 'postgresql':
+        id_type = PG_UUID(as_uuid=True)
+        server_default_arg = sa.text('gen_random_uuid()')
+    else:
+        # SQLite: use CHAR(36) for UUID as string
+        id_type = sa.CHAR(36)
+        server_default_arg = None
+    
     # Create team_era table
     op.create_table(
         "team_era",
-        sa.Column("era_id", sa.UUID(), nullable=False),
-        sa.Column("node_id", sa.UUID(), nullable=False),
+        sa.Column("era_id", id_type, nullable=False, server_default=server_default_arg),
+        sa.Column("node_id", id_type, nullable=False),
         sa.Column("season_year", sa.Integer(), nullable=False),
         sa.Column("registered_name", sa.String(length=255), nullable=False),
         sa.Column("uci_code", sa.String(length=3), nullable=True),

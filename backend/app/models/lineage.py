@@ -1,10 +1,9 @@
 from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime
 from sqlalchemy.orm import relationship
-from app.db.base import Base
+from app.db.base import Base, utc_now
 from app.db.types import GUID
 from app.models.enums import EventType
 import uuid
-from datetime import datetime
 
 class LineageEvent(Base):
     __tablename__ = "lineage_event"
@@ -16,8 +15,8 @@ class LineageEvent(Base):
     event_type = Column(Enum(EventType, name="event_type_enum"), nullable=False)
     notes = Column(Text, nullable=True)
     # Use application-level UTC timestamps for cross-dialect compatibility (SQLite/Postgres)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     previous_node = relationship("TeamNode", foreign_keys=[previous_node_id], back_populates="outgoing_events")
     next_node = relationship("TeamNode", foreign_keys=[next_node_id], back_populates="incoming_events")

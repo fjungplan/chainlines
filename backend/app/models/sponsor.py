@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy import String, Integer, ForeignKey, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from app.db.base import Base
+from app.db.base import Base, utc_now
 from app.db.types import GUID
 
 if TYPE_CHECKING:
@@ -28,11 +28,11 @@ class SponsorMaster(Base):
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     industry_sector: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     
@@ -65,11 +65,11 @@ class SponsorBrand(Base):
     brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
     default_hex_color: Mapped[str] = mapped_column(String(7), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     
@@ -127,11 +127,11 @@ class TeamSponsorLink(Base):
     rank_order: Mapped[int] = mapped_column(Integer, nullable=False)
     prominence_percent: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False
     )
     

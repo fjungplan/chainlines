@@ -3,7 +3,7 @@ from google.auth.transport import requests
 from typing import Optional, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token, hash_token
@@ -47,8 +47,8 @@ class AuthService:
         
         if user:
             # Update last login
-            user.last_login_at = datetime.utcnow()
-            user.updated_at = datetime.utcnow()
+            user.last_login_at = datetime.now(timezone.utc)
+            user.updated_at = datetime.now(timezone.utc)
         else:
             # Create new user
             user = User(
@@ -81,7 +81,7 @@ class AuthService:
         
         # Store refresh token in database
         token_hash = hash_token(refresh_token)
-        expires_at = datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
         
         db_refresh_token = RefreshToken(
             user_id=user.user_id,

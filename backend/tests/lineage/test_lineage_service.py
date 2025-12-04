@@ -5,10 +5,11 @@ import pathlib
 import sys
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from src.lineage.service import LineageService
-from src.lineage.schemas import LineageCreate
-from src.models.lineage import Lineage
-from src import config
+from app.services.lineage_service import LineageService
+from app.models.lineage import LineageEvent
+from app.models.team import TeamNode
+from app.models.enums import EventType
+from app.core.config import settings as config
 
 
 @pytest.mark.asyncio
@@ -21,15 +22,11 @@ async def test_add_lineage(tmp_path, monkeypatch):
     # Patch the environment for the alembic subprocess
     monkeypatch.setenv("DATABASE_URL", db_url)
 
-    # The project root is where pytest.ini is. Pytest provides this via the config.
-    project_root = pathlib.Path(monkeypatch.config.rootpath)
-    backend_dir = project_root / "backend"
+    # Get backend directory - it's the current directory since we're in backend
+    backend_dir = pathlib.Path(__file__).parent.parent.parent
 
     # Run Alembic migrations in a subprocess to avoid event loop conflicts
     # between pytest-asyncio and Alembic's async setup in env.py.
-    # We set the subprocess's working directory to `backend` so it can find `alembic.ini`.
-    # The `prepend_sys_path = .` in alembic.ini will then correctly add the `backend`
-    # directory to the Python path, allowing it to find the `src` module.
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         capture_output=True,
@@ -49,28 +46,36 @@ async def test_add_lineage(tmp_path, monkeypatch):
     # Verify that the table was created
     async with engine.connect() as conn:
         has_table = await conn.run_sync(
-            lambda sync_conn: sync_conn.dialect.has_table(sync_conn, "lineage")
+            lambda sync_conn: sync_conn.dialect.has_table(sync_conn, "lineage_event")
         )
     assert has_table
 
-    # Exercise: Call the service to add lineage data
-    lineage_data = LineageCreate(
-        source_table="source",
-        target_table="target",
-        source_columns=["a", "b"],
-        target_columns=["c", "d"],
-        transformation="SELECT a, b FROM source",
-    )
+    # Exercise: Call the service to add lineage data by creating team nodes and event
     async with AsyncSession(engine) as session:
-        service = LineageService(session)
-        await service.add_lineage(lineage_data)
+        # Create two team nodes
+        node1 = TeamNode(founding_year=2000)
+        node2 = TeamNode(founding_year=2010)
+        session.add_all([node1, node2])
+        await session.flush()
+        await session.refresh(node1)
+        await session.refresh(node2)
+        
+        # Create a lineage event
+        event = LineageEvent(
+            previous_node_id=node1.node_id,
+            next_node_id=node2.node_id,
+            event_year=2015,
+            event_type=EventType.LEGAL_TRANSFER,
+            notes="Test transfer"
+        )
+        session.add(event)
+        await session.commit()
 
         # Verification: Query the database to ensure the data was inserted correctly.
-        stmt = select(Lineage).where(Lineage.source_table == "source")
+        stmt = select(LineageEvent).where(LineageEvent.event_year == 2015)
         result = await session.execute(stmt)
-        saved_lineage = result.scalar_one_or_none()
+        saved_event = result.scalar_one_or_none()
 
-        assert saved_lineage is not None
-        assert saved_lineage.target_table == "target"
-        assert saved_lineage.source_columns == ["a", "b"]
-        assert saved_lineage.transformation == "SELECT a, b FROM source"
+        assert saved_event is not None
+        assert saved_event.event_type == EventType.LEGAL_TRANSFER
+        assert saved_event.notes == "Test transfer"

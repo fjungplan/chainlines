@@ -17,14 +17,30 @@ depends_on = None
 
 
 def upgrade() -> None:
+    dialect = op.get_context().dialect
+    
+    if dialect.name == 'postgresql':
+        id_type = postgresql.UUID(as_uuid=True)
+        server_default_arg = sa.text('gen_random_uuid()')
+        created_at_default = sa.text('NOW()')
+        # PostgreSQL regex constraint for hex color
+        hex_color_constraint = sa.CheckConstraint("default_hex_color ~ '^#[0-9A-Fa-f]{6}$'", name='check_hex_color_format')
+    else:
+        # SQLite: use CHAR(36) for UUID, None for server defaults
+        id_type = sa.CHAR(36)
+        server_default_arg = None
+        created_at_default = None
+        # SQLite GLOB pattern for hex color
+        hex_color_constraint = sa.CheckConstraint("default_hex_color GLOB '^#[0-9A-Fa-f]{6}$'", name='check_hex_color_format')
+
     # Create sponsor_master table
     op.create_table(
         'sponsor_master',
-        sa.Column('master_id', postgresql.UUID(as_uuid=True), server_default=sa.text('gen_random_uuid()'), nullable=False),
+        sa.Column('master_id', id_type, server_default=server_default_arg, nullable=False),
         sa.Column('legal_name', sa.String(length=255), nullable=False),
         sa.Column('industry_sector', sa.String(length=100), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=created_at_default, nullable=False),
+        sa.Column('updated_at', sa.DateTime(), server_default=created_at_default, nullable=False),
         sa.PrimaryKeyConstraint('master_id'),
         sa.UniqueConstraint('legal_name')
     )
@@ -32,13 +48,13 @@ def upgrade() -> None:
     # Create sponsor_brand table
     op.create_table(
         'sponsor_brand',
-        sa.Column('brand_id', postgresql.UUID(as_uuid=True), server_default=sa.text('gen_random_uuid()'), nullable=False),
-        sa.Column('master_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('brand_id', id_type, server_default=server_default_arg, nullable=False),
+        sa.Column('master_id', id_type, nullable=False),
         sa.Column('brand_name', sa.String(length=255), nullable=False),
         sa.Column('default_hex_color', sa.String(length=7), nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
-        sa.CheckConstraint("default_hex_color ~ '^#[0-9A-Fa-f]{6}$'", name='check_hex_color_format'),
+        sa.Column('created_at', sa.DateTime(), server_default=created_at_default, nullable=False),
+        sa.Column('updated_at', sa.DateTime(), server_default=created_at_default, nullable=False),
+        hex_color_constraint,
         sa.ForeignKeyConstraint(['master_id'], ['sponsor_master.master_id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('brand_id'),
         sa.UniqueConstraint('master_id', 'brand_name', name='uq_master_brand')
@@ -48,13 +64,13 @@ def upgrade() -> None:
     # Create team_sponsor_link table
     op.create_table(
         'team_sponsor_link',
-        sa.Column('link_id', postgresql.UUID(as_uuid=True), server_default=sa.text('gen_random_uuid()'), nullable=False),
-        sa.Column('era_id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('brand_id', postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column('link_id', id_type, server_default=server_default_arg, nullable=False),
+        sa.Column('era_id', id_type, nullable=False),
+        sa.Column('brand_id', id_type, nullable=False),
         sa.Column('rank_order', sa.Integer(), nullable=False),
         sa.Column('prominence_percent', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(), server_default=created_at_default, nullable=False),
+        sa.Column('updated_at', sa.DateTime(), server_default=created_at_default, nullable=False),
         sa.CheckConstraint('rank_order >= 1', name='check_rank_order_positive'),
         sa.CheckConstraint('prominence_percent > 0 AND prominence_percent <= 100', name='check_prominence_range'),
         sa.ForeignKeyConstraint(['era_id'], ['team_era.era_id'], ondelete='CASCADE'),

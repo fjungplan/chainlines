@@ -1,9 +1,14 @@
 """
 Base database models and mixins for SQLAlchemy.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+def utc_now() -> datetime:
+    """Get current UTC time (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
@@ -22,12 +27,12 @@ class TimestampMixin:
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow, 
+        default=utc_now, 
         nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow, 
+        default=utc_now, 
+        onupdate=utc_now, 
         nullable=False
     )

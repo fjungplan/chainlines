@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +40,7 @@ class TeamDetailService:
             return None
 
         eras_sorted = sorted(team.eras, key=lambda e: e.season_year)
-        current_year = datetime.utcnow().year
+        current_year = datetime.now(timezone.utc).year
 
         timeline: List[TeamHistoryEra] = []
         for era in eras_sorted:
