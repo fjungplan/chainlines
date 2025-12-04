@@ -1,9 +1,13 @@
 import pytest
 import subprocess
+import os
+import pathlib
 import sys
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from src.lineage.service import LineageService
 from src.lineage.schemas import LineageCreate
+from src.models.lineage import Lineage
 from src import config
 
 
@@ -17,14 +21,21 @@ async def test_add_lineage(tmp_path, monkeypatch):
     # Patch the environment for the alembic subprocess
     monkeypatch.setenv("DATABASE_URL", db_url)
 
+    # The project root is where pytest.ini is. Pytest provides this via the config.
+    project_root = pathlib.Path(monkeypatch.config.rootpath)
+    backend_dir = project_root / "backend"
+
     # Run Alembic migrations in a subprocess to avoid event loop conflicts
     # between pytest-asyncio and Alembic's async setup in env.py.
-    # The pytest working directory is 'backend/', where alembic.ini is located.
+    # We set the subprocess's working directory to `backend` so it can find `alembic.ini`.
+    # The `prepend_sys_path = .` in alembic.ini will then correctly add the `backend`
+    # directory to the Python path, allowing it to find the `src` module.
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         capture_output=True,
         text=True,
         check=False,
+        cwd=str(backend_dir),
     )
 
     if result.returncode != 0:
@@ -54,5 +65,12 @@ async def test_add_lineage(tmp_path, monkeypatch):
         service = LineageService(session)
         await service.add_lineage(lineage_data)
 
-        # A full verification would query the data to ensure it was inserted correctly.
-        # For now, we assume if no exception is raised, the insertion was successful.
+        # Verification: Query the database to ensure the data was inserted correctly.
+        stmt = select(Lineage).where(Lineage.source_table == "source")
+        result = await session.execute(stmt)
+        saved_lineage = result.scalar_one_or_none()
+
+        assert saved_lineage is not None
+        assert saved_lineage.target_table == "target"
+        assert saved_lineage.source_columns == ["a", "b"]
+        assert saved_lineage.transformation == "SELECT a, b FROM source"

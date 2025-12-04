@@ -263,7 +263,7 @@
 - [x] **Service**: Implement `AuthService` (verify Google token, create user).
 - [x] **Endpoints**: `POST /auth/google`, `POST /auth/refresh`, `GET /me`.
 - [x] **Dependencies**: Added python-jose, passlib, google-auth, email-validator.
- - [x] **Testing**: 31 auth tests added; all auth API tests passing (16/16). Resolved bcrypt 72-byte limit by switching refresh token hashing to SHA-256 and added `jti` for uniqueness. 
+- [x] **Testing**: 31 auth tests added; all auth API tests passing (16/16). Resolved bcrypt 72-byte limit by switching refresh token hashing to SHA-256 and added `jti` for uniqueness. 
 
 ✅ Status: Implemented on branch `feature/prompt-21-google-oauth`. Google OAuth backend with JWT tokens, user roles (GUEST, NEW_USER, TRUSTED_USER, ADMIN), refresh token management, auth dependencies (get_current_user, require_admin, require_editor). User model compatible with both PostgreSQL and SQLite. Tests cover token verification, user creation, JWT security, role checks, and API endpoints.
 

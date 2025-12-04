@@ -11,7 +11,7 @@ class TestAuthEndpoints:
     """Test auth API endpoints"""
     
     @pytest.mark.asyncio
-    async def test_google_auth_success(self, client: AsyncClient, db_session):
+    async def test_google_auth_success(self, test_client: AsyncClient, db_session):
         """Test successful Google authentication"""
         mock_google_info = {
             'google_id': 'google_123',
@@ -21,7 +21,7 @@ class TestAuthEndpoints:
         }
         
         with patch('app.services.auth_service.AuthService.verify_google_token', return_value=mock_google_info):
-            response = await client.post(
+            response = await test_client.post(
                 "/api/v1/auth/google",
                 json={"id_token": "fake_google_token"}
             )
@@ -77,7 +77,7 @@ class TestAuthEndpoints:
         assert "banned" in response.json()["detail"].lower()
     
     @pytest.mark.asyncio
-    async def test_refresh_token_success(self, client: AsyncClient, db_session):
+    async def test_refresh_token_success(self, test_client: AsyncClient, db_session):
         """Test successful token refresh"""
         # Create user
         user = User(
@@ -100,7 +100,7 @@ class TestAuthEndpoints:
         db_session.add(db_refresh)
         await db_session.commit()
         
-        response = await client.post(
+        response = await test_client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": refresh_token}
         )
@@ -122,7 +122,7 @@ class TestAuthEndpoints:
         assert "Invalid refresh token" in response.json()["detail"]
     
     @pytest.mark.asyncio
-    async def test_refresh_token_access_token_used(self, client: AsyncClient, db_session):
+    async def test_refresh_token_access_token_used(self, test_client: AsyncClient, db_session):
         """Test refresh endpoint rejects access tokens"""
         user = User(
             google_id='access_test_123',
@@ -136,7 +136,7 @@ class TestAuthEndpoints:
         # Try to use access token instead of refresh token
         access_token = create_access_token(data={"sub": str(user.user_id), "email": user.email, "role": user.role.value})
         
-        response = await client.post(
+        response = await test_client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": access_token}
         )
@@ -145,7 +145,7 @@ class TestAuthEndpoints:
         assert "Invalid refresh token" in response.json()["detail"]
     
     @pytest.mark.asyncio
-    async def test_get_me_success(self, client: AsyncClient, db_session):
+    async def test_get_me_success(self, test_client: AsyncClient, db_session):
         """Test getting current user info"""
         # Create user
         user = User(
@@ -165,7 +165,7 @@ class TestAuthEndpoints:
             data={"sub": str(user.user_id), "email": user.email, "role": user.role.value}
         )
         
-        response = await client.get(
+        response = await test_client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {access_token}"}
         )
@@ -196,7 +196,7 @@ class TestAuthEndpoints:
         assert response.status_code == 401
     
     @pytest.mark.asyncio
-    async def test_get_me_banned_user(self, client: AsyncClient, db_session):
+    async def test_get_me_banned_user(self, test_client: AsyncClient, db_session):
         """Test /me endpoint with banned user"""
         user = User(
             google_id='banned_me_123',
@@ -213,7 +213,7 @@ class TestAuthEndpoints:
             data={"sub": str(user.user_id), "email": user.email, "role": user.role.value}
         )
         
-        response = await client.get(
+        response = await test_client.get(
             "/api/v1/auth/me",
             headers={"Authorization": f"Bearer {access_token}"}
         )

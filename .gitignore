@@ -15,6 +15,12 @@ frontend/build/
 frontend/.env
 frontend/.env.local
 
+# Virtual Environment
+.venv/
+venv/
+*.pyc
+__pycache__/
+
 # Database
 postgres_data/
 *.db
