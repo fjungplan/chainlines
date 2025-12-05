@@ -64,9 +64,25 @@ class MergeEventRequest(BaseModel):
             raise ValueError(f'Year must be between 1900 and {current_year + 1}')
         return v
     
+    @field_validator('new_team_name')
+    @classmethod
+    def validate_team_name(cls, v):
+        if not v or len(v.strip()) < 3:
+            raise ValueError('Team name must be at least 3 characters')
+        if len(v) > 200:
+            raise ValueError('Team name cannot exceed 200 characters')
+        return v.strip()
+    
     @field_validator('new_team_tier')
     @classmethod
     def validate_tier(cls, v):
         if v not in [1, 2, 3]:
             raise ValueError('Tier must be 1, 2, or 3')
         return v
+    
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v.strip()

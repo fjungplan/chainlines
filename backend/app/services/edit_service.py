@@ -107,7 +107,20 @@ class EditService:
         user: User,
         request: MergeEventRequest
     ) -> EditMetadataResponse:
-        """Create a merge event edit"""
+        """
+        Create a merge event edit.
+        
+        Args:
+            session: Database session
+            user: User creating the merge
+            request: Merge request with source nodes and new team details
+            
+        Returns:
+            EditMetadataResponse with edit_id, status, and message
+            
+        Raises:
+            ValueError: If validation fails (invalid UUIDs, missing teams, inactive teams)
+        """
         # Validate source nodes exist
         source_nodes = []
         for node_id_str in request.source_node_ids:
@@ -150,8 +163,8 @@ class EditService:
             edit.reviewed_by = user.user_id
             edit.reviewed_at = datetime.utcnow()
             
-            # Apply merge immediately
-            await EditService._apply_merge(session, request, user)
+            # Apply merge immediately with validated nodes
+            await EditService._apply_merge(session, request, user, source_nodes)
             
             user.approved_edits_count += 1
             message = "Merge created successfully"
@@ -173,7 +186,8 @@ class EditService:
     async def _apply_merge(
         session: AsyncSession,
         request: MergeEventRequest,
-        user: User
+        user: User,
+        validated_source_nodes: list[TeamNode]
     ):
         """Apply a merge: close old nodes, create new node with links"""
         # Create new team node
@@ -194,18 +208,15 @@ class EditService:
         )
         session.add(new_era)
         
-        # Close source nodes and create lineage links
-        for source_node_id_str in request.source_node_ids:
-            source_node_id = UUID(source_node_id_str)
-            source_node = await session.get(TeamNode, source_node_id)
-            
+        # Close source nodes and create lineage links using validated nodes
+        for source_node in validated_source_nodes:
             # Set dissolution year
             source_node.dissolution_year = request.merge_year
             source_node.updated_at = datetime.utcnow()
             
             # Create MERGE lineage event
             lineage_event = LineageEvent(
-                previous_node_id=source_node_id,
+                previous_node_id=source_node.node_id,
                 next_node_id=new_node.node_id,
                 event_year=request.merge_year,
                 event_type=EventType.MERGE,

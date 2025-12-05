@@ -74,7 +74,7 @@ async def test_create_merge_basic(async_session, test_user_trusted, sample_teams
 
 
 @pytest.mark.asyncio
-async def test_create_merge_five_teams(async_session, test_user_admin):
+async def test_create_merge_five_teams(isolated_session, test_user_admin):
     """Test merge with maximum 5 teams."""
     from app.services.edit_service import EditService
     from app.schemas.edits import MergeEventRequest
@@ -84,8 +84,8 @@ async def test_create_merge_five_teams(async_session, test_user_admin):
     teams = []
     for i in range(5):
         node = TeamNode(founding_year=2010)
-        async_session.add(node)
-        await async_session.flush()
+        isolated_session.add(node)
+        await isolated_session.flush()
         
         era = TeamEra(
             node_id=node.node_id,
@@ -93,10 +93,10 @@ async def test_create_merge_five_teams(async_session, test_user_admin):
             registered_name=f"Team {i+1}",
             tier_level=1
         )
-        async_session.add(era)
+        isolated_session.add(era)
         teams.append(node)
     
-    await async_session.commit()
+    await isolated_session.commit()
     
     request = MergeEventRequest(
         source_node_ids=[str(t.node_id) for t in teams],
@@ -107,7 +107,7 @@ async def test_create_merge_five_teams(async_session, test_user_admin):
     )
     
     result = await EditService.create_merge_edit(
-        async_session,
+        isolated_session,
         test_user_admin,
         request
     )
@@ -116,7 +116,7 @@ async def test_create_merge_five_teams(async_session, test_user_admin):
     
     # Verify all 5 nodes are dissolved
     for team in teams:
-        await async_session.refresh(team)
+        await isolated_session.refresh(team)
         assert team.dissolution_year == 2015
 
 
@@ -318,3 +318,57 @@ async def test_merge_manual_override_flag(async_session, test_user_trusted, samp
     assert new_node is not None
     assert new_node.eras[0].is_manual_override is True
     assert f"user_{test_user_trusted.user_id}" in new_node.eras[0].source_origin
+
+
+@pytest.mark.asyncio
+async def test_merge_validation_team_name_too_short(async_session, test_user_trusted, sample_teams):
+    """Test merge validation: team name must be at least 3 characters."""
+    from app.schemas.edits import MergeEventRequest
+    from pydantic import ValidationError
+    
+    with pytest.raises(ValidationError) as exc_info:
+        MergeEventRequest(
+            source_node_ids=[str(sample_teams[0].node_id), str(sample_teams[1].node_id)],
+            merge_year=2020,
+            new_team_name="AB",
+            new_team_tier=1,
+            reason="Testing short name"
+        )
+    
+    assert "at least 3 characters" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_merge_validation_team_name_too_long(async_session, test_user_trusted, sample_teams):
+    """Test merge validation: team name cannot exceed 200 characters."""
+    from app.schemas.edits import MergeEventRequest
+    from pydantic import ValidationError
+    
+    with pytest.raises(ValidationError) as exc_info:
+        MergeEventRequest(
+            source_node_ids=[str(sample_teams[0].node_id), str(sample_teams[1].node_id)],
+            merge_year=2020,
+            new_team_name="A" * 201,
+            new_team_tier=1,
+            reason="Testing long name"
+        )
+    
+    assert "cannot exceed 200 characters" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_merge_validation_reason_too_short(async_session, test_user_trusted, sample_teams):
+    """Test merge validation: reason must be at least 10 characters."""
+    from app.schemas.edits import MergeEventRequest
+    from pydantic import ValidationError
+    
+    with pytest.raises(ValidationError) as exc_info:
+        MergeEventRequest(
+            source_node_ids=[str(sample_teams[0].node_id), str(sample_teams[1].node_id)],
+            merge_year=2020,
+            new_team_name="United Team",
+            new_team_tier=1,
+            reason="Short"
+        )
+    
+    assert "at least 10 characters" in str(exc_info.value).lower()

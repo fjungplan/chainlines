@@ -91,7 +91,15 @@ export default function MergeWizard({ initialNode, onClose, onSuccess }) {
       
       onSuccess(response.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create merge');
+      const errorDetail = err.response?.data?.detail;
+      if (Array.isArray(errorDetail)) {
+        // Pydantic validation errors
+        setError(errorDetail.map(e => e.msg).join(', '));
+      } else if (typeof errorDetail === 'string') {
+        setError(errorDetail);
+      } else {
+        setError('Failed to create merge. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -118,12 +126,15 @@ export default function MergeWizard({ initialNode, onClose, onSuccess }) {
               
               <div className="selected-teams">
                 <h4>Selected Teams ({formData.source_nodes.length}/5)</h4>
-                {formData.source_nodes.map(team => (
-                  <div key={team.id} className="selected-team">
-                    <span>{team.eras[team.eras.length - 1].name}</span>
-                    <button onClick={() => removeSourceTeam(team.id)}>Remove</button>
-                  </div>
-                ))}
+                {formData.source_nodes.map(team => {
+                  const latestEra = team.eras?.[team.eras.length - 1];
+                  return (
+                    <div key={team.id} className="selected-team">
+                      <span>{latestEra?.name || 'Unknown Team'}</span>
+                      <button onClick={() => removeSourceTeam(team.id)}>Remove</button>
+                    </div>
+                  );
+                })}
               </div>
               
               <div className="team-search">
@@ -215,11 +226,14 @@ export default function MergeWizard({ initialNode, onClose, onSuccess }) {
               <div className="review-section">
                 <h4>Teams Being Merged</h4>
                 <ul>
-                  {formData.source_nodes.map(team => (
-                    <li key={team.id}>
-                      {team.eras[team.eras.length - 1].name}
-                    </li>
-                  ))}
+                  {formData.source_nodes.map(team => {
+                    const latestEra = team.eras?.[team.eras.length - 1];
+                    return (
+                      <li key={team.id}>
+                        {latestEra?.name || 'Unknown Team'}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
               
