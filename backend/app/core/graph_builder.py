@@ -22,6 +22,7 @@ class GraphBuilder:
 
     def build_nodes(self, teams: List[TeamNode]) -> List[Dict]:
         nodes: List[Dict] = []
+        print(f"DEBUG: build_nodes called with {len(teams)} teams")
         for node in teams:
             # Build base node in snake_case for API schema
             base = {
@@ -34,9 +35,11 @@ class GraphBuilder:
             eras: List[Dict] = []
             for era in getattr(node, "eras", []) or []:
                 eras.append({
+                    "era_id": str(getattr(era, "era_id", "")),
                     "year": getattr(era, "season_year", None),
                     "name": getattr(era, "registered_name", None),
                     "tier": getattr(era, "tier_level", None),
+                    "uci_code": getattr(era, "uci_code", None),
                     "sponsors": self.build_jersey_composition(era),
                 })
 

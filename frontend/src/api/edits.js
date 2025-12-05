@@ -4,6 +4,9 @@ export const editsApi = {
   editMetadata: (data) => 
     apiClient.post('/api/v1/edits/metadata', data),
   
+  createTeam: (data) =>
+    apiClient.post('/api/v1/edits/create-team', data),
+  
   createMerge: (data) =>
     apiClient.post('/api/v1/edits/merge', data),
   

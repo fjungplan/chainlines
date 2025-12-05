@@ -15,9 +15,24 @@ export class LayoutCalculator {
   }
   
   calculateYearRange() {
-    const allYears = this.nodes.flatMap(node => 
-      node.eras.map(era => era.year)
-    );
+    const allYears = [];
+    
+    // Get years from eras
+    this.nodes.forEach(node => {
+      node.eras.forEach(era => {
+        allYears.push(era.year);
+      });
+      // Also include founding and dissolution years
+      allYears.push(node.founding_year);
+      if (node.dissolution_year) {
+        allYears.push(node.dissolution_year);
+      }
+    });
+    
+    // Include current year so active teams extend to today
+    const currentYear = new Date().getFullYear();
+    allYears.push(currentYear);
+    
     return {
       min: Math.min(...allYears),
       max: Math.max(...allYears)
@@ -68,24 +83,57 @@ export class LayoutCalculator {
     
     return Math.max(
       VISUALIZATION.MIN_NODE_WIDTH,
-      yearSpan * (VISUALIZATION.YEAR_WIDTH / 10)
+      yearSpan * VISUALIZATION.YEAR_WIDTH
     );
   }
   
   assignYPositions(nodes) {
-    // Simple tier-based layout for now
-    // Will improve with crossing minimization later
+    // Tier-based layout with collision detection
     const tiers = this.groupNodesByTier(nodes);
     const tierHeight = this.height / (tiers.length + 1);
     
     let positioned = [];
+    const rows = []; // Track occupied space for each tier
+    
     tiers.forEach((tierNodes, tierIndex) => {
-      tierNodes.forEach((node, nodeIndex) => {
-        positioned.push({
+      rows[tierIndex] = []; // Initialize row tracking for this tier
+      const baseY = (tierIndex + 1) * tierHeight;
+      
+      // Sort nodes by X position to process left to right
+      const sortedNodes = tierNodes.sort((a, b) => a.x - b.x);
+      
+      sortedNodes.forEach((node) => {
+        let yOffset = 0;
+        let rowIndex = 0;
+        let hasCollision = true;
+        
+        // Find first available row (vertically offset) that doesn't collide
+        while (hasCollision) {
+          hasCollision = false;
+          const candidateY = baseY + (rowIndex * (VISUALIZATION.NODE_HEIGHT + 10));
+          
+          // Check collision with all nodes already positioned in this tier group
+          for (const placed of rows[tierIndex]) {
+            const xOverlap = !(node.x + node.width < placed.x || node.x > placed.x + placed.width);
+            const yClose = Math.abs(candidateY - placed.y) < (VISUALIZATION.NODE_HEIGHT + 15);
+            
+            if (xOverlap && yClose) {
+              hasCollision = true;
+              rowIndex++;
+              break;
+            }
+          }
+        }
+        
+        const finalY = baseY + (rowIndex * (VISUALIZATION.NODE_HEIGHT + 10));
+        const positionedNode = {
           ...node,
-          y: (tierIndex + 1) * tierHeight,
+          y: finalY,
           height: VISUALIZATION.NODE_HEIGHT
-        });
+        };
+        
+        rows[tierIndex].push(positionedNode);
+        positioned.push(positionedNode);
       });
     });
     

@@ -3,12 +3,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { editsApi } from '../api/edits';
 import './EditMetadataWizard.css';
 
-export default function EditMetadataWizard({ era, onClose, onSuccess }) {
+export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
   const { user } = useAuth();
+  
+  console.log('EditMetadataWizard - node:', node);
+  console.log('EditMetadataWizard - era:', era);
+  
   const [formData, setFormData] = useState({
     registered_name: era.name || '',
     uci_code: era.uci_code || '',
     tier_level: era.tier || '',
+    founding_year: node?.founding_year || '',
+    dissolution_year: node?.dissolution_year || '',
     reason: ''
   });
   const [submitting, setSubmitting] = useState(false);
@@ -30,11 +36,21 @@ export default function EditMetadataWizard({ era, onClose, onSuccess }) {
       if (formData.registered_name !== era.name) {
         changes.registered_name = formData.registered_name;
       }
-      if (formData.uci_code !== era.uci_code) {
-        changes.uci_code = formData.uci_code;
+      if (formData.uci_code !== (era.uci_code || '')) {
+        // Only include if not empty (empty string means remove UCI code)
+        if (formData.uci_code && formData.uci_code.trim()) {
+          changes.uci_code = formData.uci_code.toUpperCase();
+        }
       }
       if (formData.tier_level && parseInt(formData.tier_level) !== era.tier) {
         changes.tier_level = parseInt(formData.tier_level);
+      }
+      if (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) {
+        changes.founding_year = parseInt(formData.founding_year);
+      }
+      if (formData.dissolution_year !== (node?.dissolution_year || '')) {
+        // Only include if there's a value to send
+        changes.dissolution_year = formData.dissolution_year ? parseInt(formData.dissolution_year) : null;
       }
       
       if (Object.keys(changes).length === 0) {
@@ -43,15 +59,38 @@ export default function EditMetadataWizard({ era, onClose, onSuccess }) {
         return;
       }
       
+      // Validate reason
+      if (!formData.reason || formData.reason.length < 10) {
+        setError('Reason must be at least 10 characters');
+        setSubmitting(false);
+        return;
+      }
+      
       const response = await editsApi.editMetadata({
         era_id: era.era_id,
-        ...changes,
-        reason: formData.reason
+        reason: formData.reason,
+        ...changes  // Spread changes after reason so they override if present
       });
       
       onSuccess(response.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit edit');
+      console.error('Edit submission error:', err.response?.data);
+      
+      // Handle different error formats
+      let errorMessage = 'Failed to submit edit';
+      if (err.response?.data) {
+        const data = err.response.data;
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          errorMessage = data.detail.map(e => `${e.loc?.join('.') || 'field'}: ${e.msg}`).join(', ');
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +99,9 @@ export default function EditMetadataWizard({ era, onClose, onSuccess }) {
   const isChanged = () => {
     return formData.registered_name !== era.name ||
            formData.uci_code !== era.uci_code ||
-           (formData.tier_level && parseInt(formData.tier_level) !== era.tier);
+           (formData.tier_level && parseInt(formData.tier_level) !== era.tier) ||
+           (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) ||
+           formData.dissolution_year !== (node?.dissolution_year || '');
   };
   
   return (
@@ -106,6 +147,38 @@ export default function EditMetadataWizard({ era, onClose, onSuccess }) {
                 <option value="3">UCI Continental</option>
               </select>
             </label>
+          </div>
+
+          <div className="form-section">
+            <h3>Team Duration</h3>
+            <div className="form-row">
+              <label>
+                Founding Year
+                <input
+                  type="number"
+                  value={formData.founding_year}
+                  onChange={(e) => handleChange('founding_year', e.target.value)}
+                  min="1900"
+                  max="2100"
+                  required
+                />
+              </label>
+              
+              <label>
+                Dissolution Year (optional)
+                <input
+                  type="number"
+                  value={formData.dissolution_year}
+                  onChange={(e) => handleChange('dissolution_year', e.target.value)}
+                  min={formData.founding_year || "1900"}
+                  max="2100"
+                  placeholder="Leave empty if still active"
+                />
+              </label>
+            </div>
+            <div className="help-text">
+              Changing these years affects the team's timeline visualization
+            </div>
           </div>
           
           <div className="form-section">

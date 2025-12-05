@@ -18,7 +18,9 @@ import { OptimizedRenderer } from '../utils/optimizedRenderer';
 import EditMetadataWizard from './EditMetadataWizard';
 import MergeWizard from './MergeWizard';
 import SplitWizard from './SplitWizard';
+import CreateTeamWizard from './CreateTeamWizard';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function TimelineGraph({ 
   data, 
@@ -26,7 +28,8 @@ export default function TimelineGraph({
   onTierFilterChange,
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
-  initialTiers = [1, 2, 3]
+  initialTiers = [1, 2, 3],
+  onEditSuccess
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
@@ -45,9 +48,12 @@ export default function TimelineGraph({
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showMergeWizard, setShowMergeWizard] = useState(false);
   const [showSplitWizard, setShowSplitWizard] = useState(false);
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   
-  const { user, isAuthenticated } = useAuth();
+  const { user, canEdit } = useAuth();
+  const navigate = useNavigate();
   
   useEffect(() => {
     // Initialize zoom manager
@@ -91,12 +97,21 @@ export default function TimelineGraph({
   useEffect(() => {
     if (!data || !data.nodes || !data.links) return;
     
-      try {
-        validateGraphData(data);
-        renderGraph(data);
-      } catch (error) {
-        console.error('Graph render error:', error);
-      }
+    // Log raw API data to check for duplicates at source
+    const nodeIds = data.nodes.map(n => n.id);
+    const uniqueNodeIds = new Set(nodeIds);
+    console.log('API Response - Total nodes:', nodeIds.length, 'Unique IDs:', uniqueNodeIds.size);
+    if (nodeIds.length !== uniqueNodeIds.size) {
+      const duplicates = nodeIds.filter((id, idx) => nodeIds.indexOf(id) !== idx);
+      console.error('DUPLICATES IN API RESPONSE:', [...new Set(duplicates)]);
+    }
+    
+    try {
+      validateGraphData(data);
+      renderGraph(data);
+    } catch (error) {
+      console.error('Graph render error:', error);
+    }
   }, [data]);
   
   const updateDetailLevel = useCallback((level, scale) => {
@@ -136,19 +151,78 @@ export default function TimelineGraph({
       .call(zoomBehavior.current.transform, d3.zoomIdentity);
   }, []);
   
-  const handleTeamSelect = useCallback((node) => {
-    if (navigationRef.current) {
-      navigationRef.current.focusOnNode(node);
+  const renderBackgroundGrid = (g, layout) => {
+    const gridGroup = g.append('g')
+      .attr('class', 'grid')
+      .style('pointer-events', 'none');
+    
+    // Estimate year boundaries from node positions
+    const yearRange = currentLayout.current?.nodes?.length > 0
+      ? {
+          min: Math.min(...currentLayout.current.nodes.map(n => n.x)),
+          max: Math.max(...currentLayout.current.nodes.map(n => n.x + n.width))
+        }
+      : { min: 0, max: 1000 };
+    
+    // Calculate year spacing (roughly 120px per year from YEAR_WIDTH)
+    const yearWidth = VISUALIZATION.YEAR_WIDTH;
+    const gridSpacing = yearWidth;
+    
+    // Draw vertical grid lines
+    for (let x = yearRange.min; x <= yearRange.max; x += gridSpacing) {
+      gridGroup.append('line')
+        .attr('x1', x)
+        .attr('y1', -100)
+        .attr('x2', x)
+        .attr('y2', containerRef.current?.clientHeight || 1000)
+        .attr('stroke', '#e0e0e0')
+        .attr('stroke-width', 0.5)
+        .attr('stroke-dasharray', '2,2');
     }
-  }, []);
+  };
+  
   
   const renderGraph = (graphData) => {
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
     
+    // Deduplicate nodes by ID
+    const deduplicatedNodes = [];
+    const seenIds = new Set();
+    const duplicateMap = {};
+    
+    for (const node of graphData.nodes) {
+      if (!seenIds.has(node.id)) {
+        deduplicatedNodes.push(node);
+        seenIds.add(node.id);
+      } else {
+        duplicateMap[node.id] = (duplicateMap[node.id] || 1) + 1;
+      }
+    }
+    
+    if (deduplicatedNodes.length < graphData.nodes.length) {
+      const removedCount = graphData.nodes.length - deduplicatedNodes.length;
+      console.warn('Found duplicate nodes:', removedCount, duplicateMap);
+      console.log('Original nodes:', graphData.nodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
+      console.log('Deduplicated nodes:', deduplicatedNodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
+    }
+    
+    console.log('Rendering with nodes:', deduplicatedNodes.map(n => ({
+      id: n.id,
+      name: n.eras?.[0]?.name,
+      founding: n.founding_year,
+      dissolution: n.dissolution_year,
+      eras: n.eras?.length
+    })));
+    
+    const dedupedData = {
+      ...graphData,
+      nodes: deduplicatedNodes
+    };
+    
     const layoutStart = performanceMonitor.current.startTiming('layout');
-    const calculator = new LayoutCalculator(graphData, width, height);
+    const calculator = new LayoutCalculator(dedupedData, width, height);
     const layout = calculator.calculateLayout();
     performanceMonitor.current.endTiming('layout', layoutStart);
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
@@ -175,6 +249,10 @@ export default function TimelineGraph({
     svg.attr('width', width).attr('height', height);
 
     const g = svg.append('g').attr('transform', transform);
+    
+    // Add background grid
+    renderBackgroundGrid(g, layout);
+    
     renderLinks(g, visibleLinks);
     renderNodes(g, visibleNodes, svg);
 
@@ -343,6 +421,8 @@ export default function TimelineGraph({
   };
   
   const renderNodes = (g, nodes, svg) => {
+    console.log('renderNodes called with', nodes.length, 'nodes:', nodes.map(n => ({ id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })));
+    
     // Create shadow filter once
     JerseyRenderer.createShadowFilter(svg);
 
@@ -379,23 +459,32 @@ export default function TimelineGraph({
     });
   };
 
+  const handleTeamSelect = useCallback((node) => {
+    if (navigationRef.current) {
+      navigationRef.current.focusOnNode(node);
+    }
+  }, []);
+
   const handleNodeClick = (node) => {
     console.log('Clicked node:', node);
     
-    // Only allow edits if user is authenticated and has editor role or higher
-    if (isAuthenticated && (user?.role === 'EDITOR' || user?.role === 'TRUSTED_USER' || user?.role === 'ADMIN')) {
+    // Only allow edits if user can edit (authenticated with proper role)
+    if (canEdit()) {
       setSelectedNode(node);
       setShowEditWizard(true);
     } else {
-      // TODO: Navigate to team detail page when that's implemented
-      console.log('View team detail for:', node.id);
+      // Navigate to team detail page for non-editors
+      navigate(`/team/${node.id}`);
     }
   };
   
-  const canUseWizards = () => {
-    return isAuthenticated && (user?.role === 'EDITOR' || user?.role === 'TRUSTED_USER' || user?.role === 'ADMIN');
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ visible: true, message, type });
+    setTimeout(() => {
+      setToast({ visible: false, message: '', type: 'success' });
+    }, duration);
   };
-  
+
   const handleWizardSuccess = (result) => {
     console.log('Edit submitted successfully:', result);
     setShowEditWizard(false);
@@ -403,13 +492,15 @@ export default function TimelineGraph({
     setShowSplitWizard(false);
     setSelectedNode(null);
     
-    // Show success message
-    // TODO: Add toast notification
+    // Show toast notification (no browser dialog)
     if (result.status === 'APPROVED') {
-      alert('Edit applied successfully!');
-      // Could refetch timeline data here to show changes
+      showToast('Edit applied successfully!', 'success');
+      // Refetch data to show changes immediately
+      if (onEditSuccess) {
+        onEditSuccess();
+      }
     } else {
-      alert('Edit submitted for moderation!');
+      showToast('Edit submitted for moderation', 'info');
     }
   };
 
@@ -463,6 +554,7 @@ export default function TimelineGraph({
       {/* Wizard Modals */}
       {showEditWizard && selectedNode && selectedNode.eras && selectedNode.eras.length > 0 && (
         <EditMetadataWizard
+          node={selectedNode}
           era={selectedNode.eras[selectedNode.eras.length - 1]}
           onClose={() => {
             setShowEditWizard(false);
@@ -494,9 +586,23 @@ export default function TimelineGraph({
         />
       )}
       
-      {/* Action buttons for merge/split - only show if user can edit */}
-      {canUseWizards() && (
+      {showCreateWizard && (
+        <CreateTeamWizard
+          onClose={() => setShowCreateWizard(false)}
+          onSuccess={handleWizardSuccess}
+        />
+      )}
+      
+      {/* Action buttons for merge/split/create - only show if user can edit */}
+      {canEdit() && (
         <div className="wizard-actions">
+          <button 
+            className="wizard-action-btn wizard-create"
+            onClick={() => setShowCreateWizard(true)}
+            title="Create a new team from scratch"
+          >
+            + Create Team
+          </button>
           <button 
             className="wizard-action-btn"
             onClick={() => setShowMergeWizard(true)}
@@ -511,6 +617,18 @@ export default function TimelineGraph({
           >
             Split Team
           </button>
+        </div>
+      )}
+      
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className={`toast toast-${toast.type}`}>
+          <div className="toast-content">
+            {toast.type === 'success' && <span className="toast-icon">✓</span>}
+            {toast.type === 'info' && <span className="toast-icon">ℹ</span>}
+            {toast.type === 'error' && <span className="toast-icon">✕</span>}
+            <span className="toast-message">{toast.message}</span>
+          </div>
         </div>
       )}
     </div>

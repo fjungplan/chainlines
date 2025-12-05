@@ -8,6 +8,8 @@ class EditMetadataRequest(BaseModel):
     registered_name: Optional[str] = None
     uci_code: Optional[str] = None
     tier_level: Optional[int] = None
+    founding_year: Optional[int] = None
+    dissolution_year: Optional[int] = None
     reason: str  # Why this edit is being made
     
     @field_validator('uci_code')
@@ -24,6 +26,20 @@ class EditMetadataRequest(BaseModel):
             raise ValueError('Tier must be 1, 2, or 3')
         return v
     
+    @field_validator('founding_year')
+    @classmethod
+    def validate_founding_year(cls, v):
+        if v and (v < 1900 or v > 2100):
+            raise ValueError('Founding year must be between 1900 and 2100')
+        return v
+    
+    @field_validator('dissolution_year')
+    @classmethod
+    def validate_dissolution_year(cls, v):
+        if v and (v < 1900 or v > 2100):
+            raise ValueError('Dissolution year must be between 1900 and 2100')
+        return v
+    
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
@@ -31,6 +47,48 @@ class EditMetadataRequest(BaseModel):
             raise ValueError('Reason must be at least 10 characters')
         return v
 
+
+class CreateTeamRequest(BaseModel):
+    registered_name: str  # Team name
+    founding_year: int
+    uci_code: Optional[str] = None
+    tier_level: int  # Initial tier
+    reason: str  # Why this team is being added
+    
+    @field_validator('registered_name')
+    @classmethod
+    def validate_name(cls, v):
+        if not v or len(v.strip()) == 0:
+            raise ValueError('Team name is required')
+        return v
+    
+    @field_validator('founding_year')
+    @classmethod
+    def validate_founding_year(cls, v):
+        if v < 1900 or v > 2100:
+            raise ValueError('Founding year must be between 1900 and 2100')
+        return v
+    
+    @field_validator('uci_code')
+    @classmethod
+    def validate_uci_code(cls, v):
+        if v and (len(v) != 3 or not v.isupper()):
+            raise ValueError('UCI code must be exactly 3 uppercase letters')
+        return v
+    
+    @field_validator('tier_level')
+    @classmethod
+    def validate_tier(cls, v):
+        if v not in [1, 2, 3]:
+            raise ValueError('Tier must be 1, 2, or 3')
+        return v
+    
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if len(v) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v
 
 class EditMetadataResponse(BaseModel):
     model_config = {"from_attributes": True}
