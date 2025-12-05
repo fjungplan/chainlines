@@ -379,10 +379,20 @@ async def test_split_creates_new_eras_with_manual_override(async_session, test_u
         request
     )
     
-    # Get all nodes created in 2020
-    stmt = select(TeamNode).where(TeamNode.founding_year == 2020).options(selectinload(TeamNode.eras))
-    result_nodes = await async_session.execute(stmt)
+    # Get nodes created from this split via lineage events
+    from app.models.lineage import LineageEvent
+
+    stmt_events = select(LineageEvent.next_node_id).where(
+        LineageEvent.previous_node_id == source_team.node_id,
+        LineageEvent.event_type == EventType.SPLIT
+    )
+    event_results = await async_session.execute(stmt_events)
+    next_node_ids = [row[0] for row in event_results.all()]
+
+    stmt_nodes = select(TeamNode).where(TeamNode.node_id.in_(next_node_ids)).options(selectinload(TeamNode.eras))
+    result_nodes = await async_session.execute(stmt_nodes)
     new_nodes = result_nodes.scalars().all()
+    assert len(new_nodes) == len(request.new_teams)
     
     # Verify new eras have manual_override=True
     for node in new_nodes:
