@@ -1,7 +1,7 @@
 """add edits and moderation tables
 
-Revision ID: 006
-Revises: 005
+Revision ID: 006_add_edits
+Revises: 005_add_users
 Create Date: 2025-12-05
 """
 from alembic import op
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers, used by Alembic.
-revision = '006'
-down_revision = '005'
+revision = '006_add_edits'
+down_revision = '005_add_users'
 branch_labels = None
 depends_on = None
 
