@@ -30,12 +30,9 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting up application...")
-    try:
-        await create_tables()
-        logger.info("Database tables created/verified successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {e}", exc_info=True)
-        raise
+    # Note: We use Alembic migrations, so we don't call create_tables() here
+    # Tables are created via: docker-compose run backend alembic upgrade head
+    logger.info("Application startup complete - using Alembic migrations")
     
     yield
     
