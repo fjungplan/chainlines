@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { editsApi } from '../api/edits';
-import './EditMetadataWizard.css';
+import './CreateTeamWizard.css';
 
-export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
+export default function CreateTeamWizard({ onClose, onSuccess }) {
   const { user } = useAuth();
+  const currentYear = new Date().getFullYear();
+  
   const [formData, setFormData] = useState({
-    registered_name: era.name || '',
-    uci_code: era.uci_code || '',
-    tier_level: era.tier || '',
-    founding_year: node?.founding_year || '',
-    dissolution_year: node?.dissolution_year || '',
+    registered_name: '',
+    founding_year: currentYear,
+    uci_code: '',
+    tier_level: '2',
     reason: ''
   });
   const [submitting, setSubmitting] = useState(false);
@@ -27,76 +28,77 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
     setError(null);
     
     try {
-      // Only send changed fields
-      const changes = {};
-      if (formData.registered_name !== era.name) {
-        changes.registered_name = formData.registered_name;
-      }
-      if (formData.uci_code !== era.uci_code) {
-        changes.uci_code = formData.uci_code;
-      }
-      if (formData.tier_level && parseInt(formData.tier_level) !== era.tier) {
-        changes.tier_level = parseInt(formData.tier_level);
-      }
-      if (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) {
-        changes.founding_year = parseInt(formData.founding_year);
-      }
-      if (formData.dissolution_year !== (node?.dissolution_year || '')) {
-        // Only include if there's a value to send
-        changes.dissolution_year = formData.dissolution_year ? parseInt(formData.dissolution_year) : null;
-      }
-      
-      if (Object.keys(changes).length === 0) {
-        setError('No changes detected');
+      // Validate required fields
+      if (!formData.registered_name || formData.registered_name.trim().length === 0) {
+        setError('Team name is required');
         setSubmitting(false);
         return;
       }
       
-      // Validate reason
+      if (!formData.founding_year) {
+        setError('Founding year is required');
+        setSubmitting(false);
+        return;
+      }
+      
+      if (!formData.tier_level) {
+        setError('Tier level is required');
+        setSubmitting(false);
+        return;
+      }
+      
       if (!formData.reason || formData.reason.length < 10) {
         setError('Reason must be at least 10 characters');
         setSubmitting(false);
         return;
       }
       
-      const response = await editsApi.editMetadata({
-        era_id: era.era_id,
-        reason: formData.reason,
-        ...changes  // Spread changes after reason so they override if present
+      // Send request to create team (uses EditService behind the scenes)
+      const response = await editsApi.createTeam({
+        registered_name: formData.registered_name,
+        founding_year: parseInt(formData.founding_year),
+        uci_code: formData.uci_code || null,
+        tier_level: parseInt(formData.tier_level),
+        reason: formData.reason
       });
       
       onSuccess(response.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit edit');
+      setError(err.response?.data?.detail || 'Failed to create team');
     } finally {
       setSubmitting(false);
     }
-  };
-  
-  const isChanged = () => {
-    return formData.registered_name !== era.name ||
-           formData.uci_code !== era.uci_code ||
-           (formData.tier_level && parseInt(formData.tier_level) !== era.tier) ||
-           (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) ||
-           formData.dissolution_year !== (node?.dissolution_year || '');
   };
   
   return (
     <div className="wizard-overlay" onClick={onClose}>
       <div className="wizard-modal" onClick={(e) => e.stopPropagation()}>
         <div className="wizard-header">
-          <h2>Edit Team Information</h2>
+          <h2>Create New Team</h2>
           <button className="close-button" onClick={onClose}>×</button>
         </div>
         
         <form onSubmit={handleSubmit}>
           <div className="form-section">
             <label>
-              Team Name
+              Team Name *
               <input
                 type="text"
                 value={formData.registered_name}
                 onChange={(e) => handleChange('registered_name', e.target.value)}
+                placeholder="e.g., Team Sky, Ineos Grenadiers"
+                required
+              />
+            </label>
+            
+            <label>
+              Founding Year *
+              <input
+                type="number"
+                value={formData.founding_year}
+                onChange={(e) => handleChange('founding_year', e.target.value)}
+                min="1900"
+                max="2100"
                 required
               />
             </label>
@@ -109,14 +111,16 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
                 onChange={(e) => handleChange('uci_code', e.target.value.toUpperCase())}
                 maxLength={3}
                 pattern="[A-Z]{3}"
+                placeholder="Optional"
               />
             </label>
             
             <label>
-              Tier Level
+              Initial Tier Level *
               <select
                 value={formData.tier_level}
                 onChange={(e) => handleChange('tier_level', e.target.value)}
+                required
               >
                 <option value="">Select tier...</option>
                 <option value="1">UCI WorldTour</option>
@@ -125,53 +129,22 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
               </select>
             </label>
           </div>
-
-          <div className="form-section">
-            <h3>Team Duration</h3>
-            <div className="form-row">
-              <label>
-                Founding Year
-                <input
-                  type="number"
-                  value={formData.founding_year}
-                  onChange={(e) => handleChange('founding_year', e.target.value)}
-                  min="1900"
-                  max="2100"
-                  required
-                />
-              </label>
-              
-              <label>
-                Dissolution Year (optional)
-                <input
-                  type="number"
-                  value={formData.dissolution_year}
-                  onChange={(e) => handleChange('dissolution_year', e.target.value)}
-                  min={formData.founding_year || "1900"}
-                  max="2100"
-                  placeholder="Leave empty if still active"
-                />
-              </label>
-            </div>
-            <div className="help-text">
-              Changing these years affects the team's timeline visualization
-            </div>
-          </div>
           
           <div className="form-section">
             <label>
-              Reason for Edit (required)
+              Reason for Creation (required) *
               <textarea
                 value={formData.reason}
                 onChange={(e) => handleChange('reason', e.target.value)}
-                placeholder="Explain why this edit is needed..."
+                placeholder="Explain why this team is being added to the system..."
                 rows={4}
                 required
                 minLength={10}
               />
             </label>
             <div className="help-text">
-              Please provide a clear explanation. Include sources if available.
+              Please provide context: Is this a team that existed historically but wasn't in the system? 
+              Is this a newly formed team? Include sources if available.
             </div>
           </div>
           
@@ -183,11 +156,11 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
             <div className="moderation-notice">
               {user?.role === 'NEW_USER' ? (
                 <span className="notice-warning">
-                  ⚠️ Your edit will be reviewed by moderators
+                  ⚠️ This team creation will be reviewed by moderators
                 </span>
               ) : (
                 <span className="notice-success">
-                  ✓ Your edit will be applied immediately
+                  ✓ This team will be created immediately
                 </span>
               )}
             </div>
@@ -202,10 +175,10 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
               </button>
               <button 
                 type="submit"
-                disabled={!isChanged() || !formData.reason || submitting}
+                disabled={submitting || !formData.registered_name || !formData.reason || formData.reason.length < 10}
                 className="primary"
               >
-                {submitting ? 'Submitting...' : 'Submit Edit'}
+                {submitting ? 'Creating...' : 'Create Team'}
               </button>
             </div>
           </div>

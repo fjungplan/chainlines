@@ -18,6 +18,7 @@ import { OptimizedRenderer } from '../utils/optimizedRenderer';
 import EditMetadataWizard from './EditMetadataWizard';
 import MergeWizard from './MergeWizard';
 import SplitWizard from './SplitWizard';
+import CreateTeamWizard from './CreateTeamWizard';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -46,6 +47,7 @@ export default function TimelineGraph({
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showMergeWizard, setShowMergeWizard] = useState(false);
   const [showSplitWizard, setShowSplitWizard] = useState(false);
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   
   const { user, canEdit } = useAuth();
@@ -493,12 +495,19 @@ export default function TimelineGraph({
         />
       )}
       
+      {showCreateWizard && (
+        <CreateTeamWizard
+          onClose={() => setShowCreateWizard(false)}
+          onSuccess={handleWizardSuccess}
+        />
+      )}
+      
       {/* Action buttons for merge/split/create - only show if user can edit */}
       {canEdit() && (
         <div className="wizard-actions">
           <button 
             className="wizard-action-btn wizard-create"
-            onClick={() => {/* TODO: Open create team wizard */}}
+            onClick={() => setShowCreateWizard(true)}
             title="Create a new team from scratch"
           >
             + Create Team

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.api.dependencies import get_current_user, require_editor
 from app.models.user import User
-from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest
+from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest, CreateTeamRequest
 from app.services.edit_service import EditService
 
 router = APIRouter(prefix="/api/v1/edits", tags=["edits"])
@@ -73,6 +73,30 @@ async def create_split(
     """
     try:
         result = await EditService.create_split_edit(
+            session,
+            current_user,
+            request
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/create-team", response_model=EditMetadataResponse)
+async def create_team(
+    request: CreateTeamRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Create a new team from scratch.
+    
+    This endpoint allows authenticated users to create a new team node.
+    - NEW_USER: Team creation goes to moderation queue (PENDING status)
+    - TRUSTED_USER/ADMIN: Team is auto-created immediately
+    """
+    try:
+        result = await EditService.create_team_edit(
             session,
             current_user,
             request

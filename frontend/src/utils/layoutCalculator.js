@@ -15,9 +15,24 @@ export class LayoutCalculator {
   }
   
   calculateYearRange() {
-    const allYears = this.nodes.flatMap(node => 
-      node.eras.map(era => era.year)
-    );
+    const allYears = [];
+    
+    // Get years from eras
+    this.nodes.forEach(node => {
+      node.eras.forEach(era => {
+        allYears.push(era.year);
+      });
+      // Also include founding and dissolution years
+      allYears.push(node.founding_year);
+      if (node.dissolution_year) {
+        allYears.push(node.dissolution_year);
+      }
+    });
+    
+    // Include current year so active teams extend to today
+    const currentYear = new Date().getFullYear();
+    allYears.push(currentYear);
+    
     return {
       min: Math.min(...allYears),
       max: Math.max(...allYears)
