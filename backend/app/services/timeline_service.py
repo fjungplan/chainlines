@@ -39,7 +39,10 @@ class TimelineService:
         if settings.TIMELINE_CACHE_ENABLED:
             cached = self._cache.get(cache_key)
             if cached and cached[0] > now:
+                print(f"DEBUG: Returning cached timeline data")
                 return cached[1]
+        
+        print(f"DEBUG: Cache miss or disabled, building fresh timeline data")
 
         repo = TimelineRepository()
         eras, events = await repo.fetch_eras_and_events(

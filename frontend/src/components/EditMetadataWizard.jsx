@@ -5,6 +5,10 @@ import './EditMetadataWizard.css';
 
 export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
   const { user } = useAuth();
+  
+  console.log('EditMetadataWizard - node:', node);
+  console.log('EditMetadataWizard - era:', era);
+  
   const [formData, setFormData] = useState({
     registered_name: era.name || '',
     uci_code: era.uci_code || '',
@@ -32,8 +36,11 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
       if (formData.registered_name !== era.name) {
         changes.registered_name = formData.registered_name;
       }
-      if (formData.uci_code !== era.uci_code) {
-        changes.uci_code = formData.uci_code;
+      if (formData.uci_code !== (era.uci_code || '')) {
+        // Only include if not empty (empty string means remove UCI code)
+        if (formData.uci_code && formData.uci_code.trim()) {
+          changes.uci_code = formData.uci_code.toUpperCase();
+        }
       }
       if (formData.tier_level && parseInt(formData.tier_level) !== era.tier) {
         changes.tier_level = parseInt(formData.tier_level);
@@ -67,7 +74,23 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
       
       onSuccess(response.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit edit');
+      console.error('Edit submission error:', err.response?.data);
+      
+      // Handle different error formats
+      let errorMessage = 'Failed to submit edit';
+      if (err.response?.data) {
+        const data = err.response.data;
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          errorMessage = data.detail.map(e => `${e.loc?.join('.') || 'field'}: ${e.msg}`).join(', ');
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
