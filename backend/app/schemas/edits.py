@@ -38,3 +38,35 @@ class EditMetadataResponse(BaseModel):
     edit_id: str
     status: str  # 'PENDING' or 'APPROVED'
     message: str
+
+
+class MergeEventRequest(BaseModel):
+    source_node_ids: list[str]  # Team IDs being merged
+    merge_year: int
+    new_team_name: str
+    new_team_tier: int
+    reason: str
+    
+    @field_validator('source_node_ids')
+    @classmethod
+    def validate_sources(cls, v):
+        if len(v) < 2:
+            raise ValueError('Merge requires at least 2 source teams')
+        if len(v) > 5:
+            raise ValueError('Cannot merge more than 5 teams at once')
+        return v
+    
+    @field_validator('merge_year')
+    @classmethod
+    def validate_year(cls, v):
+        current_year = datetime.now().year
+        if v < 1900 or v > current_year + 1:
+            raise ValueError(f'Year must be between 1900 and {current_year + 1}')
+        return v
+    
+    @field_validator('new_team_tier')
+    @classmethod
+    def validate_tier(cls, v):
+        if v not in [1, 2, 3]:
+            raise ValueError('Tier must be 1, 2, or 3')
+        return v
