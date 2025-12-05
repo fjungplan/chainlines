@@ -44,12 +44,13 @@ def upgrade():
         'edits',
         sa.Column('edit_id', UUID, primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('user_id', UUID, sa.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False),
-        sa.Column('edit_type', sa.Enum('METADATA', 'MERGE', 'SPLIT', 'DISSOLVE', name='edit_type_enum'), nullable=False),
+        # Enum type is created above; create_type=False prevents a second CREATE TYPE
+        sa.Column('edit_type', sa.Enum('METADATA', 'MERGE', 'SPLIT', 'DISSOLVE', name='edit_type_enum', create_type=False), nullable=False),
         sa.Column('target_era_id', UUID, sa.ForeignKey('team_era.era_id', ondelete='CASCADE'), nullable=True),
         sa.Column('target_node_id', UUID, sa.ForeignKey('team_node.node_id', ondelete='CASCADE'), nullable=True),
         sa.Column('changes', JSONB, nullable=False),  # Store the changes
         sa.Column('reason', sa.Text, nullable=False),
-        sa.Column('status', sa.Enum('PENDING', 'APPROVED', 'REJECTED', name='edit_status_enum'), default='PENDING'),
+        sa.Column('status', sa.Enum('PENDING', 'APPROVED', 'REJECTED', name='edit_status_enum', create_type=False), default='PENDING'),
         sa.Column('reviewed_by', UUID, sa.ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True),
         sa.Column('reviewed_at', sa.TIMESTAMP, nullable=True),
         sa.Column('review_notes', sa.Text, nullable=True),
