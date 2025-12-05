@@ -4,6 +4,7 @@ backend/**/__pycache__/
 backend/*.pyc
 backend/**/*.pyc
 backend/.env
+backend/.venv/
 backend/alembic/versions/*.pyc
 *.py[cod]
 *$py.class
