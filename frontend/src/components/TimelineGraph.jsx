@@ -98,10 +98,24 @@ export default function TimelineGraph({
   // Helper to compute responsive minimum zoom
   const computeMinScale = useCallback((layout) => {
     const containerWidth = containerRef.current?.clientWidth || 1;
-    const span = layout?.xScale ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min) : 0;
-    if (!span || span <= 0) return VISUALIZATION.ZOOM_MIN;
-    // Allow zoom to go below 1 if content is wider than container
-    return Math.max(containerWidth / span, 0.05);
+    const containerHeight = containerRef.current?.clientHeight || 1;
+
+    const spanX = layout?.xScale
+      ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min)
+      : 0;
+    const nodes = layout?.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : 0;
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+    const spanY = Math.max(1, maxNodeBottom - minNodeTop);
+
+    if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
+
+    const scaleX = containerWidth / spanX;
+    const scaleY = containerHeight / spanY;
+
+    return Math.max(Math.min(scaleX, scaleY), 0.05);
   }, []);
 
   // Log performance metrics in development
@@ -275,18 +289,22 @@ export default function TimelineGraph({
     const interval = getGridInterval(scale);
     const gridSpacingYears = interval;
     
-    // Draw vertical grid lines
+    // Draw vertical grid lines - extend to actual node bounds, not just viewport
     const start = Math.floor(yearRange.min / gridSpacingYears) * gridSpacingYears;
     const end = Math.ceil(yearRange.max / gridSpacingYears) * gridSpacingYears;
-    const containerHeight = containerRef.current?.clientHeight || 1000;
+    const nodes = layout?.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : (containerRef.current?.clientHeight || 1000);
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : -100;
 
     for (let year = start; year <= end; year += gridSpacingYears) {
       const x = xScale(year);
       gridGroup.append('line')
         .attr('x1', x)
-        .attr('y1', -100)
+        .attr('y1', minNodeTop - 100)
         .attr('x2', x)
-        .attr('y2', containerHeight + 100)
+        .attr('y2', maxNodeBottom + 100)
         .attr('stroke', '#444')
         .attr('stroke-width', Math.max(0.7, 0.7 / scale))
         .attr('stroke-dasharray', scale >= 1.5 ? '1,3' : '3,3');
@@ -365,22 +383,42 @@ export default function TimelineGraph({
       const x2 = layout.xScale(currentFilters.endYear);
       const yearRangeWidth = Math.max(1, x2 - x1);
       const padding = 80;
-      const rawScale = (width - 2 * padding) / yearRangeWidth;
+      const nodes = layout.nodes || [];
+      const maxNodeBottom = nodes.length
+        ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+        : 0;
+      const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+      const spanY = Math.max(1, maxNodeBottom - minNodeTop);
+
+      const rawScaleX = (width - 2 * padding) / yearRangeWidth;
+      const rawScaleY = (height - 2 * padding) / spanY;
       const minScale = computeMinScale(layout);
-      const targetScale = Math.min(VISUALIZATION.ZOOM_MAX, Math.max(minScale, rawScale));
+      const targetScale = Math.min(
+        VISUALIZATION.ZOOM_MAX,
+        Math.max(minScale, Math.min(rawScaleX, rawScaleY))
+      );
+
       const centerX = (x1 + x2) / 2;
+      const centerY = (minNodeTop + maxNodeBottom) / 2;
       const targetX = width / 2 - centerX * targetScale;
+      const targetY = height / 2 - centerY * targetScale;
       
       console.log('🎯 INITIAL TRANSFORM CALC:', {
         yearRange: [currentFilters.startYear, currentFilters.endYear],
         x1, x2, yearRangeWidth,
         containerWidth: width,
+        containerHeight: height,
         targetScale,
         centerX,
-        targetX
+        centerY,
+        targetX,
+        targetY,
+        spanY,
+        minNodeTop,
+        maxNodeBottom
       });
       
-      currentTransform.current = d3.zoomIdentity.translate(targetX, 0).scale(targetScale);
+      currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
     }
 
     // Use current transform
@@ -418,11 +456,17 @@ export default function TimelineGraph({
     const span = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
     const yearMin = layout.xScale(layout.yearRange.min);
     const yearMax = layout.xScale(layout.yearRange.max);
-    
-    // Small margins in world coordinates (5px at full zoom out = barely perceptible overshoot)
+
+    const nodes = layout.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : containerHeight;
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+
+    // Margins in world coordinates; allow panning to fully reveal top/bottom nodes
     const extent = [
-      [yearMin - 5, -20],
-      [yearMax + 5, containerHeight + 20]
+      [yearMin - 5, minNodeTop - 40],
+      [yearMax + 5, maxNodeBottom + 40]
     ];
     
     console.log('🔧 ZOOM SETUP:', {
@@ -442,7 +486,10 @@ export default function TimelineGraph({
       .scaleExtent([minScale, VISUALIZATION.ZOOM_MAX])
       .translateExtent(extent)
       .filter((event) => {
-        return !event.ctrlKey && !event.button;
+        // Allow mouse wheel, touch gestures, but block right-click drag
+        if (event.type === 'wheel') return !event.ctrlKey;
+        if (event.type === 'mousedown') return !event.button;
+        return true; // Allow touch events
       })
       .on('zoom', (event) => {
         console.log('🎯 ZOOM EVENT:', { k: event.transform.k, x: event.transform.x, y: event.transform.y });

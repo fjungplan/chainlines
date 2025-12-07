@@ -27,6 +27,18 @@ export class JerseyRenderer {
         .attr('stop-color', sponsor.color);
       cumulativePercent = endPercent;
     });
+    
+    // If sponsors don't add up to 100%, fill the rest with the last sponsor's color
+    if (cumulativePercent < 100) {
+      const lastSponsor = sponsors[sponsors.length - 1];
+      gradient.append('stop')
+        .attr('offset', `${cumulativePercent}%`)
+        .attr('stop-color', lastSponsor.color);
+      gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', lastSponsor.color);
+    }
+    
     return gradientId;
   }
 
@@ -38,7 +50,10 @@ export class JerseyRenderer {
       .attr('rx', 6)
       .attr('ry', 6)
       .attr('stroke', '#666')
-      .attr('stroke-width', 2);
+      .attr('stroke-width', 1.5)
+      .attr('stroke-linejoin', 'round')
+      .attr('stroke-linecap', 'round')
+      .attr('shape-rendering', 'crispEdges');
     if (gradientId) {
       rect.attr('fill', `url(#${gradientId})`);
     } else {

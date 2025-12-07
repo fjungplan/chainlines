@@ -74,7 +74,8 @@ export class OptimizedRenderer {
     });
 
     nodes.forEach((node) => {
-      ctx.fillStyle = node.eras?.[node.eras.length - 1]?.sponsors?.[0]?.color || '#4A90E2';
+      // Match JerseyRenderer fallback color
+      ctx.fillStyle = node.eras?.[node.eras.length - 1]?.sponsors?.[0]?.color || '#5a5a5a';
       ctx.fillRect(node.x, node.y, node.width, node.height);
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 2 / scale;
