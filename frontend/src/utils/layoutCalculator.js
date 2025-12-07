@@ -32,10 +32,14 @@ export class LayoutCalculator {
     // Include current year so active teams extend to today
     const currentYear = new Date().getFullYear();
     allYears.push(currentYear);
+
+    // Clamp overall range to a sensible viewport (requested 1900–2040)
+    const minYear = Math.min(1900, ...allYears);
+    const maxYear = Math.max(2040, ...allYears);
     
     return {
-      min: Math.min(...allYears),
-      max: Math.max(...allYears)
+      min: minYear,
+      max: maxYear
     };
   }
   
@@ -63,7 +67,9 @@ export class LayoutCalculator {
     
     return {
       nodes: nodesWithXY,
-      links: linkPaths
+      links: linkPaths,
+      yearRange: this.yearRange,
+      xScale: this.xScale
     };
   }
   
@@ -76,14 +82,13 @@ export class LayoutCalculator {
   }
   
   calculateNodeWidth(node) {
-    // Width based on years active
-    const yearSpan = node.dissolution_year 
-      ? node.dissolution_year - node.founding_year
-      : this.yearRange.max - node.founding_year;
-    
+    // Width based on the shared x-scale so duration matches the rendered horizontal spacing
+    const endYear = node.dissolution_year ?? this.yearRange.max;
+    const scaledWidth = this.xScale(endYear) - this.xScale(node.founding_year);
+
     return Math.max(
       VISUALIZATION.MIN_NODE_WIDTH,
-      yearSpan * VISUALIZATION.YEAR_WIDTH
+      scaledWidth
     );
   }
   

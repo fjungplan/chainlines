@@ -37,12 +37,12 @@ export class JerseyRenderer {
       .attr('height', node.height)
       .attr('rx', 6)
       .attr('ry', 6)
-      .attr('stroke', '#333')
+      .attr('stroke', '#666')
       .attr('stroke-width', 2);
     if (gradientId) {
       rect.attr('fill', `url(#${gradientId})`);
     } else {
-      rect.attr('fill', '#4A90E2');
+      rect.attr('fill', '#5a5a5a');
     }
     rect.attr('filter', 'url(#drop-shadow)');
     return rect;

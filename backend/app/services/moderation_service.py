@@ -37,6 +37,14 @@ class ModerationService:
                     'node_id': str(node.node_id),
                     'founding_year': node.founding_year
                 }
+        elif 'create_team' in edit.changes:
+            payload = edit.changes['create_team']
+            target_info = {
+                'type': 'new_team',
+                'team_name': payload.get('registered_name'),
+                'founding_year': payload.get('founding_year'),
+                'tier_level': payload.get('tier_level')
+            }
         return PendingEditResponse(
             edit_id=str(edit.edit_id),
             edit_type=edit.edit_type.value,
@@ -99,34 +107,54 @@ class ModerationService:
 
     @staticmethod
     async def _apply_metadata_edit(session: AsyncSession, edit: Edit):
-        era = await session.get(TeamEra, edit.target_era_id)
-        if not era:
-            raise ValueError("Target era not found")
-        
-        # Get the node if we need to update node-level fields
-        node = None
-        if edit.target_node_id:
-            node = await session.get(TeamNode, edit.target_node_id)
-            if not node:
-                raise ValueError("Target node not found")
-        
         changes = edit.changes
-        
-        # Apply era-level changes
-        if 'registered_name' in changes:
-            era.registered_name = changes['registered_name']
-        if 'uci_code' in changes:
-            era.uci_code = changes['uci_code']
-        if 'tier_level' in changes:
-            era.tier_level = changes['tier_level']
-        
-        # Apply node-level changes
-        if node:
-            if 'founding_year' in changes:
-                node.founding_year = changes['founding_year']
-            if 'dissolution_year' in changes:
-                node.dissolution_year = changes['dissolution_year']
-            node.updated_at = datetime.utcnow()
+
+        # Creation flow (no existing era/node)
+        if 'create_team' in changes and not edit.target_era_id:
+            payload = changes['create_team']
+            node = TeamNode(founding_year=payload['founding_year'])
+            session.add(node)
+            await session.flush()
+
+            era = TeamEra(
+                node_id=node.node_id,
+                season_year=payload['founding_year'],
+                registered_name=payload['registered_name'],
+                uci_code=payload.get('uci_code'),
+                tier_level=payload['tier_level'],
+                source_origin=f"user_{edit.user_id}",
+                is_manual_override=True
+            )
+            session.add(era)
+            edit.target_node_id = node.node_id
+            edit.target_era_id = era.era_id
+        else:
+            era = await session.get(TeamEra, edit.target_era_id)
+            if not era:
+                raise ValueError("Target era not found")
+            
+            # Get the node if we need to update node-level fields
+            node = None
+            if edit.target_node_id:
+                node = await session.get(TeamNode, edit.target_node_id)
+                if not node:
+                    raise ValueError("Target node not found")
+            
+            # Apply era-level changes
+            if 'registered_name' in changes:
+                era.registered_name = changes['registered_name']
+            if 'uci_code' in changes:
+                era.uci_code = changes['uci_code']
+            if 'tier_level' in changes:
+                era.tier_level = changes['tier_level']
+            
+            # Apply node-level changes
+            if node:
+                if 'founding_year' in changes:
+                    node.founding_year = changes['founding_year']
+                if 'dissolution_year' in changes:
+                    node.dissolution_year = changes['dissolution_year']
+                node.updated_at = datetime.utcnow()
         
         era.is_manual_override = True
         era.source_origin = f"user_{edit.user_id}"

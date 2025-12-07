@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import SearchBar from './SearchBar';
 import './ControlPanel.css';
 
 export default function ControlPanel({ 
   onYearRangeChange, 
   onTierFilterChange,
   onZoomReset,
+  onTeamSelect,
+  searchNodes = [],
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
   initialTiers = [1, 2, 3]
@@ -29,6 +32,16 @@ export default function ControlPanel({
   
   return (
     <div className="control-panel">
+      {searchNodes.length > 0 && (
+        <div className="control-section">
+          <h3>Find Team</h3>
+          <SearchBar 
+            nodes={searchNodes}
+            onTeamSelect={onTeamSelect}
+          />
+        </div>
+      )}
+
       <div className="control-section">
         <h3>Year Range</h3>
         <div className="year-inputs">

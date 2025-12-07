@@ -10,7 +10,13 @@ from app.models.team import TeamEra, TeamNode
 from app.models.lineage import LineageEvent
 from app.models.enums import EventType
 from app.models.user import User, UserRole
-from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest
+from app.schemas.edits import (
+    EditMetadataRequest,
+    EditMetadataResponse,
+    MergeEventRequest,
+    SplitEventRequest,
+    CreateTeamRequest,
+)
 
 
 class EditService:
@@ -246,6 +252,78 @@ class EditService:
         
         await session.commit()
     
+    @staticmethod
+    async def create_team_edit(
+        session: AsyncSession,
+        user: User,
+        request: CreateTeamRequest
+    ) -> EditMetadataResponse:
+        """Create a brand new team (node + initial era).
+
+        Trusted/Admin: apply immediately and mark edit approved.
+        New users: create a pending edit to be reviewed.
+        """
+
+        changes = {
+            "create_team": {
+                "registered_name": request.registered_name,
+                "founding_year": request.founding_year,
+                "tier_level": request.tier_level,
+                "uci_code": request.uci_code,
+            }
+        }
+
+        reason = request.reason or "Admin-created team"
+
+        edit = Edit(
+            user_id=user.user_id,
+            edit_type=EditType.METADATA,
+            changes=changes,
+            reason=reason
+        )
+
+        if user.role in [UserRole.TRUSTED_USER, UserRole.ADMIN]:
+            # Apply immediately
+            edit.status = EditStatus.APPROVED
+            edit.reviewed_by = user.user_id
+            edit.reviewed_at = datetime.utcnow()
+
+            node = TeamNode(founding_year=request.founding_year)
+            session.add(node)
+            await session.flush()
+
+            era = TeamEra(
+                node_id=node.node_id,
+                season_year=request.founding_year,
+                registered_name=request.registered_name,
+                uci_code=request.uci_code,
+                tier_level=request.tier_level,
+                source_origin=f"user_{user.user_id}",
+                is_manual_override=True
+            )
+            session.add(era)
+
+            await session.flush()
+
+            edit.target_node_id = node.node_id
+            edit.target_era_id = era.era_id
+
+            user.approved_edits_count += 1
+            message = "Team created successfully"
+        else:
+            edit.status = EditStatus.PENDING
+            message = "Team creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
     @staticmethod
     async def create_split_edit(
         session: AsyncSession,
