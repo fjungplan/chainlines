@@ -61,6 +61,8 @@ export default function TimelineGraph({
     endYear: currentEndYear || initialEndYear
   });
   
+  const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
+  
   const { user, canEdit } = useAuth();
   const navigate = useNavigate();
   
@@ -96,6 +98,7 @@ export default function TimelineGraph({
   }, []);
 
   // Helper to compute responsive minimum zoom
+  // This is the "fit everything" scale - can't zoom out further than this
   const computeMinScale = useCallback((layout) => {
     const containerWidth = containerRef.current?.clientWidth || 1;
     const containerHeight = containerRef.current?.clientHeight || 1;
@@ -108,14 +111,19 @@ export default function TimelineGraph({
       ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
       : 0;
     const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
-    const spanY = Math.max(1, maxNodeBottom - minNodeTop);
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+    const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
     if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
 
+    // Minimum scale is the one that fits BOTH dimensions
+    // (the smaller of the two - more zoomed out)
     const scaleX = containerWidth / spanX;
     const scaleY = containerHeight / spanY;
 
-    return Math.max(Math.min(scaleX, scaleY), 0.05);
+    // Add safety floor of 0.01 to prevent invalid transforms
+    return Math.max(0.01, Math.min(scaleX, scaleY));
   }, []);
 
   // Log performance metrics in development
@@ -297,14 +305,16 @@ export default function TimelineGraph({
       ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
       : (containerRef.current?.clientHeight || 1000);
     const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : -100;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
 
     for (let year = start; year <= end; year += gridSpacingYears) {
       const x = xScale(year);
       gridGroup.append('line')
         .attr('x1', x)
-        .attr('y1', minNodeTop - 100)
+        .attr('y1', paddedMinY - 100)
         .attr('x2', x)
-        .attr('y2', maxNodeBottom + 100)
+        .attr('y2', paddedMaxY + 100)
         .attr('stroke', '#444')
         .attr('stroke-width', Math.max(0.7, 0.7 / scale))
         .attr('stroke-dasharray', scale >= 1.5 ? '1,3' : '3,3');
@@ -354,8 +364,28 @@ export default function TimelineGraph({
     const layoutStart = performanceMonitor.current.startTiming('layout');
     // Extend the filter range by 1 year to show full span of the end year
     const filterYearRange = { min: currentFilters.startYear, max: currentFilters.endYear + 1 };
-    const calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange);
-    const layout = calculator.calculateLayout();
+    let calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange);
+    let layout = calculator.calculateLayout();
+
+    // If the container is wider relative to content height, stretch the x-axis to eliminate horizontal gutters
+    const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
+    const nodesForSpan = layout.nodes || [];
+    const maxNodeBottom = nodesForSpan.length
+      ? Math.max(...nodesForSpan.map(n => (n.y || 0) + (n.height || 0)))
+      : height;
+    const minNodeTop = nodesForSpan.length ? Math.min(...nodesForSpan.map(n => n.y || 0)) : 0;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+    const spanY = Math.max(1, paddedMaxY - paddedMinY);
+    const scaleX = width / spanX;
+    const scaleY = height / spanY;
+
+    if (scaleX > scaleY * 1.001) {
+      const stretchFactor = scaleX / scaleY;
+      console.log('Applying x-axis stretch for aspect fit', { scaleX, scaleY, stretchFactor, spanX, spanY });
+      calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, stretchFactor);
+      layout = calculator.calculateLayout();
+    }
     performanceMonitor.current.endTiming('layout', layoutStart);
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
     performanceMonitor.current.metrics.linkCount = layout.links.length;
@@ -379,46 +409,52 @@ export default function TimelineGraph({
 
     // Calculate initial transform if this is first render (identity transform)
     if (currentTransform.current.k === 1 && currentTransform.current.x === 0 && currentTransform.current.y === 0) {
-      const x1 = layout.xScale(currentFilters.startYear);
-      const x2 = layout.xScale(currentFilters.endYear);
-      const yearRangeWidth = Math.max(1, x2 - x1);
-      const padding = 80;
       const nodes = layout.nodes || [];
-      const maxNodeBottom = nodes.length
-        ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
-        : 0;
-      const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
-      const spanY = Math.max(1, maxNodeBottom - minNodeTop);
+      
+      if (nodes.length === 0) {
+        console.error('No nodes to display!');
+        return;
+      }
+      
+      const maxNodeBottom = Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)));
+      const minNodeTop = Math.min(...nodes.map(n => n.y || 0));
+      const paddedMinY = minNodeTop - VERTICAL_PADDING;
+      const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+      
+      const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
+      const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
-      const rawScaleX = (width - 2 * padding) / yearRangeWidth;
-      const rawScaleY = (height - 2 * padding) / spanY;
-      const minScale = computeMinScale(layout);
-      const targetScale = Math.min(
-        VISUALIZATION.ZOOM_MAX,
-        Math.max(minScale, Math.min(rawScaleX, rawScaleY))
-      );
+      // Initial scale: fit ALL content (both width and height)
+      const scaleX = width / spanX;
+      const scaleY = height / spanY;
+      const targetScale = Math.max(0.01, Math.min(scaleX, scaleY));
 
-      const centerX = (x1 + x2) / 2;
-      const centerY = (minNodeTop + maxNodeBottom) / 2;
+      // Center the content in the viewport using padded bounds so labels don't overlap
+      const centerX = (layout.xScale(layout.yearRange.min) + layout.xScale(layout.yearRange.max)) / 2;
+      const centerY = (paddedMinY + paddedMaxY) / 2;
       const targetX = width / 2 - centerX * targetScale;
       const targetY = height / 2 - centerY * targetScale;
       
       console.log('🎯 INITIAL TRANSFORM CALC:', {
-        yearRange: [currentFilters.startYear, currentFilters.endYear],
-        x1, x2, yearRangeWidth,
+        nodeCount: nodes.length,
+        yearRange: [layout.yearRange.min, layout.yearRange.max],
+        spanX,
+        spanY,
         containerWidth: width,
         containerHeight: height,
+        scaleX,
+        scaleY,
         targetScale,
+        minScale,
         centerX,
         centerY,
         targetX,
         targetY,
-        spanY,
         minNodeTop,
-        maxNodeBottom
-      });
-      
-      currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
+        maxNodeBottom,
+        paddedMinY,
+        paddedMaxY
+      });      currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
     }
 
     // Use current transform
@@ -433,7 +469,8 @@ export default function TimelineGraph({
     svg.attr('width', width).attr('height', height);
 
     const g = svg.append('g');
-    // Don't manually set transform - let D3 zoom handle it in setupZoomWithVirtualization
+    // Apply current transform immediately to avoid initial flash before zoom attaches
+    g.attr('transform', currentTransform.current);
     
     // Add background grid
     renderBackgroundGrid(g, layout);
@@ -462,11 +499,15 @@ export default function TimelineGraph({
       ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
       : containerHeight;
     const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
 
-    // Margins in world coordinates; allow panning to fully reveal top/bottom nodes
+    // translateExtent defines the area that can be panned to
+    // [[x0, y0], [x1, y1]] means: top-left corner can pan from x0,y0 to x1,y1
+    // We want the viewport to never see empty space; keep extent tight to content + padding
     const extent = [
-      [yearMin - 5, minNodeTop - 40],
-      [yearMax + 5, maxNodeBottom + 40]
+      [yearMin, paddedMinY],
+      [yearMax, paddedMaxY]
     ];
     
     console.log('🔧 ZOOM SETUP:', {

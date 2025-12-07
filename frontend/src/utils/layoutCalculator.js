@@ -4,11 +4,12 @@ import { VISUALIZATION } from '../constants/visualization';
  * Calculate positions for all nodes using Sankey-like layout
  */
 export class LayoutCalculator {
-  constructor(graphData, width, height, yearRange = null) {
+  constructor(graphData, width, height, yearRange = null, stretchFactor = 1) {
     this.nodes = graphData.nodes;
     this.links = graphData.links;
     this.width = width;
     this.height = height;
+    this.stretchFactor = stretchFactor;
     
     console.log('LayoutCalculator constructor:');
     console.log('  Total nodes:', this.nodes.length);
@@ -76,9 +77,9 @@ export class LayoutCalculator {
     const { min, max } = this.yearRange;
     const span = max - min;
     const availableWidth = this.width - 2 * padding;
-    const pixelsPerYear = availableWidth / span;
+    const pixelsPerYear = (availableWidth / span) * this.stretchFactor;
     
-    console.log(`createXScale: this.width=${this.width}, padding=${padding}, availableWidth=${availableWidth}`);
+    console.log(`createXScale: this.width=${this.width}, padding=${padding}, availableWidth=${availableWidth}, stretchFactor=${this.stretchFactor}`);
     console.log(`  yearRange=${min}-${max}, span=${span}`);
     console.log(`  pixelsPerYear=${pixelsPerYear.toFixed(4)}`);
     console.log(`  Example: year 2000 should map to ${padding + ((2000 - min) / span) * availableWidth}, year 2008 should map to ${padding + ((2008 - min) / span) * availableWidth}`);
@@ -86,7 +87,7 @@ export class LayoutCalculator {
     return (year) => {
       const range = max - min;
       const position = (year - min) / range;
-      const result = padding + (position * (this.width - 2 * padding));
+      const result = padding + (position * (this.width - 2 * padding) * this.stretchFactor);
       // Only log for key years to avoid spam
       if ([1900, 2000, 2007, 2008, 2025, 2026, this.yearRange.max - 1].includes(year)) {
         console.log(`  xScale(${year}) = ${result.toFixed(2)} [position=${position.toFixed(4)}, effective_width=${this.width - 2 * padding}]`);
