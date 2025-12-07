@@ -116,11 +116,11 @@ export class JerseyRenderer {
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
       .attr('fill', 'white')
+      .attr('font-family', 'Montserrat, sans-serif')
       .attr('font-size', '11px')
-      .attr('font-weight', 'bold')
+      .attr('font-weight', '700')
       .text(displayName);
-    // Font used: inherits from CSS (typically system default sans-serif or custom from index.css)
-    // font-size: 11px, font-weight: bold
+    // Font: Montserrat bold (weight 700), size 11px
     const yearRange = node.dissolution_year
       ? `${node.founding_year}-${node.dissolution_year}`
       : `${node.founding_year}-`;
@@ -130,8 +130,10 @@ export class JerseyRenderer {
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'middle')
       .attr('fill', 'white')
+      .attr('font-family', 'Montserrat, sans-serif')
       .attr('font-size', '9px')
+      .attr('font-weight', '400')
       .text(yearRange);
-    // Year range font: inherits from CSS, font-size: 9px, font-weight: normal (default)
+    // Font: Montserrat regular (weight 400), size 9px
   }
 }

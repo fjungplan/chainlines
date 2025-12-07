@@ -5,6 +5,9 @@
   padding: 0;
 }
 
+/* ===== FONT IMPORTS ===== */
+@import url('/fonts/fonts.css');
+
 /* ===== CSS VARIABLES ===== */
 :root {
   /* Colors */
@@ -30,10 +33,11 @@
   --color-border-dark: #cccccc;
   
   /* Typography */
-  --font-family-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --font-family-base: Montserrat, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-mono: 'Courier New', Courier, monospace;
   --font-size-base: 16px;
   --line-height-base: 1.6;
+
   
   /* Spacing */
   --spacing-xs: 0.25rem;

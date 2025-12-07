@@ -199,3 +199,17 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+================================================================================
+THIRD-PARTY LICENSES
+================================================================================
+
+Montserrat Font
+  Source: https://github.com/JulietaUlanova/Montserrat
+  License: SIL Open Font License (OFL) 1.1
+  Link: https://opensource.org/licenses/OFL-1.1
+  
+  Montserrat is self-hosted to ensure GDPR compliance (German legislation DSGVO).
+  Font files are stored locally in /frontend/public/fonts/ and do not require
+  external network requests to CDNs or Google's servers, ensuring user data
+  privacy.
