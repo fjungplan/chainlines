@@ -5,6 +5,8 @@ import TeamDetailPage from './pages/TeamDetailPage';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ModerationQueuePage from './pages/ModerationQueuePage';
+import MyEditsPage from './pages/MyEditsPage';
+import AdminPanelPage from './pages/AdminPanelPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
 
 function App() {
@@ -17,6 +19,8 @@ function App() {
             <Route path="team/:nodeId" element={<TeamDetailPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="moderation" element={<ModerationQueuePage />} />
+            <Route path="me/edits" element={<MyEditsPage />} />
+            <Route path="admin" element={<AdminPanelPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

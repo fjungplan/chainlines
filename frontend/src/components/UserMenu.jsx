@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './UserMenu.css';
 
@@ -6,6 +7,7 @@ export default function UserMenu() {
   const { user, logout, isAdmin, canEdit, needsModeration } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -25,8 +27,11 @@ export default function UserMenu() {
     setIsOpen(false);
   };
 
-  const handleMenuItemClick = () => {
+  const handleMenuItemClick = (path) => {
     setIsOpen(false);
+    if (path) {
+      navigate(path);
+    }
   };
 
   return (
@@ -68,7 +73,7 @@ export default function UserMenu() {
 
           {canEdit() && (
             <>
-              <button className="menu-item" onClick={handleMenuItemClick}>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/me/edits')}>
                 My Edits
               </button>
               <div className="menu-divider" />
@@ -77,10 +82,10 @@ export default function UserMenu() {
 
           {isAdmin() && (
             <>
-              <button className="menu-item" onClick={handleMenuItemClick}>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/moderation')}>
                 Moderation Queue
               </button>
-              <button className="menu-item" onClick={handleMenuItemClick}>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/admin')}>
                 Admin Panel
               </button>
               <div className="menu-divider" />

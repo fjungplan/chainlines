@@ -490,6 +490,7 @@ export default function TimelineGraph({
     setShowEditWizard(false);
     setShowMergeWizard(false);
     setShowSplitWizard(false);
+    setShowCreateWizard(false);
     setSelectedNode(null);
     
     // Show toast notification (no browser dialog)
@@ -523,28 +524,57 @@ export default function TimelineGraph({
   };
 
   return (
-    <div className="timeline-graph-wrapper">
-      <SearchBar 
-        nodes={data?.nodes || []}
-        onTeamSelect={handleTeamSelect}
-      />
-      <ControlPanel 
-        onYearRangeChange={onYearRangeChange}
-        onTierFilterChange={onTierFilterChange}
-        onZoomReset={handleZoomReset}
-        initialStartYear={initialStartYear}
-        initialEndYear={initialEndYear}
-        initialTiers={initialTiers}
-      />
-      <div className="zoom-indicator">
-        Zoom Level: {zoomLevel}
-      </div>
+    <div className="timeline-layout">
       <div 
         ref={containerRef} 
         className="timeline-graph-container"
       >
+        <SearchBar 
+          nodes={data?.nodes || []}
+          onTeamSelect={handleTeamSelect}
+        />
         <svg ref={svgRef}></svg>
       </div>
+
+      {/* Right sidebar with controls and actions */}
+      <div className="timeline-sidebar">
+        <ControlPanel 
+          onYearRangeChange={onYearRangeChange}
+          onTierFilterChange={onTierFilterChange}
+          onZoomReset={handleZoomReset}
+          initialStartYear={initialStartYear}
+          initialEndYear={initialEndYear}
+          initialTiers={initialTiers}
+        />
+        
+        {/* Action buttons for merge/split/create - only show if user can edit */}
+        {canEdit() && (
+          <div className="wizard-actions">
+            <button 
+              className="wizard-action-btn wizard-create"
+              onClick={() => setShowCreateWizard(true)}
+              title="Create a new team from scratch"
+            >
+              + Create Team
+            </button>
+            <button 
+              className="wizard-action-btn"
+              onClick={() => setShowMergeWizard(true)}
+              title="Create a merge event"
+            >
+              Merge Teams
+            </button>
+            <button 
+              className="wizard-action-btn"
+              onClick={() => setShowSplitWizard(true)}
+              title="Create a split event"
+            >
+              Split Team
+            </button>
+          </div>
+        )}
+      </div>
+
       <Tooltip 
         content={tooltip.content}
         position={tooltip.position}
@@ -591,33 +621,6 @@ export default function TimelineGraph({
           onClose={() => setShowCreateWizard(false)}
           onSuccess={handleWizardSuccess}
         />
-      )}
-      
-      {/* Action buttons for merge/split/create - only show if user can edit */}
-      {canEdit() && (
-        <div className="wizard-actions">
-          <button 
-            className="wizard-action-btn wizard-create"
-            onClick={() => setShowCreateWizard(true)}
-            title="Create a new team from scratch"
-          >
-            + Create Team
-          </button>
-          <button 
-            className="wizard-action-btn"
-            onClick={() => setShowMergeWizard(true)}
-            title="Create a merge event"
-          >
-            Merge Teams
-          </button>
-          <button 
-            className="wizard-action-btn"
-            onClick={() => setShowSplitWizard(true)}
-            title="Create a split event"
-          >
-            Split Team
-          </button>
-        </div>
       )}
       
       {/* Toast Notification */}

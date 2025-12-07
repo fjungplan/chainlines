@@ -1,14 +1,11 @@
 .control-panel {
-  position: fixed;
-  top: 80px;
-  right: 20px;
-  width: 280px;
+  width: 100%;
   background: white;
   border: 1px solid #ddd;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  flex-shrink: 0;
 }
 
 .control-section {
@@ -112,9 +109,6 @@
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .control-panel {
-    position: static;
-    width: 100%;
-    margin-bottom: 20px;
     border-radius: 0;
   }
 }

@@ -11,7 +11,7 @@ function HomePage() {
   const currentYear = new Date().getFullYear();
   
   const [filters, setFilters] = useState({
-    start_year: 2020,
+    start_year: 1900,
     end_year: currentYear,
     tier_filter: [1, 2, 3]
   });

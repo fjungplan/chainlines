@@ -4,7 +4,7 @@ import { editsApi } from '../api/edits';
 import './CreateTeamWizard.css';
 
 export default function CreateTeamWizard({ onClose, onSuccess }) {
-  const { user } = useAuth();
+  const { user, isAdmin, needsModeration } = useAuth();
   const currentYear = new Date().getFullYear();
   
   const [formData, setFormData] = useState({
@@ -47,10 +47,12 @@ export default function CreateTeamWizard({ onClose, onSuccess }) {
         return;
       }
       
-      if (!formData.reason || formData.reason.length < 10) {
-        setError('Reason must be at least 10 characters');
-        setSubmitting(false);
-        return;
+      if (!isAdmin()) {
+        if (!formData.reason || formData.reason.length < 10) {
+          setError('Reason must be at least 10 characters');
+          setSubmitting(false);
+          return;
+        }
       }
       
       // Send request to create team (uses EditService behind the scenes)
@@ -59,7 +61,7 @@ export default function CreateTeamWizard({ onClose, onSuccess }) {
         founding_year: parseInt(formData.founding_year),
         uci_code: formData.uci_code || null,
         tier_level: parseInt(formData.tier_level),
-        reason: formData.reason
+        reason: isAdmin() ? (formData.reason || 'Admin-created team') : formData.reason
       });
       
       onSuccess(response.data);
@@ -132,14 +134,14 @@ export default function CreateTeamWizard({ onClose, onSuccess }) {
           
           <div className="form-section">
             <label>
-              Reason for Creation (required) *
+              {isAdmin() ? 'Reason for Creation (optional for admins)' : 'Reason for Creation (required) *'}
               <textarea
                 value={formData.reason}
                 onChange={(e) => handleChange('reason', e.target.value)}
-                placeholder="Explain why this team is being added to the system..."
+                placeholder={isAdmin() ? 'Optional for admins. Provide context if you want.' : 'Explain why this team is being added to the system...'}
                 rows={4}
-                required
-                minLength={10}
+                required={!isAdmin()}
+                minLength={isAdmin() ? undefined : 10}
               />
             </label>
             <div className="help-text">
@@ -154,7 +156,7 @@ export default function CreateTeamWizard({ onClose, onSuccess }) {
           
           <div className="wizard-footer">
             <div className="moderation-notice">
-              {user?.role === 'NEW_USER' ? (
+              {needsModeration() ? (
                 <span className="notice-warning">
                   ⚠️ This team creation will be reviewed by moderators
                 </span>

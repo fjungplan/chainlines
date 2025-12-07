@@ -53,7 +53,7 @@ class CreateTeamRequest(BaseModel):
     founding_year: int
     uci_code: Optional[str] = None
     tier_level: int  # Initial tier
-    reason: str  # Why this team is being added
+    reason: Optional[str] = None  # Optional for admins
     
     @field_validator('registered_name')
     @classmethod
@@ -86,6 +86,8 @@ class CreateTeamRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
+        if v is None:
+            return v
         if len(v) < 10:
             raise ValueError('Reason must be at least 10 characters')
         return v
