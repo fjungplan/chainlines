@@ -10,7 +10,6 @@ import { DetailRenderer } from '../utils/detailRenderer';
 import ControlPanel from './ControlPanel';
 import Tooltip from './Tooltip';
 import { TooltipBuilder } from '../utils/tooltipBuilder.jsx';
-import SearchBar from './SearchBar';
 import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
@@ -33,6 +32,8 @@ export default function TimelineGraph({
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
+  const rulerTopRef = useRef(null);
+  const rulerBottomRef = useRef(null);
   const zoomManager = useRef(null);
   const zoomBehavior = useRef(null);
   const currentLayout = useRef(null);
@@ -41,6 +42,7 @@ export default function TimelineGraph({
   const performanceMonitor = useRef(new PerformanceMonitor());
   const optimizedRenderer = useRef(null);
   const currentTransform = useRef(d3.zoomIdentity);
+  const graphDataRef = useRef(null);
   const virtualizationTimeout = useRef(null);
   
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
@@ -84,6 +86,14 @@ export default function TimelineGraph({
     }
   }, []);
 
+  // Helper to compute responsive minimum zoom
+  const computeMinScale = useCallback((layout) => {
+    const containerWidth = containerRef.current?.clientWidth || 1;
+    const span = layout?.xScale ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min) : 0;
+    if (!span || span <= 0) return VISUALIZATION.ZOOM_MIN;
+    return Math.min(1, Math.max(containerWidth / span, 0.05));
+  }, []);
+
   // Log performance metrics in development
   useEffect(() => {
     if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
@@ -113,6 +123,44 @@ export default function TimelineGraph({
       console.error('Graph render error:', error);
     }
   }, [data]);
+
+  // Recalculate layout/zoom bounds on resize so minimum zoom remains responsive
+  useEffect(() => {
+    const handleResize = () => {
+      if (currentLayout.current) {
+        // Re-render with current layout when viewport changes
+        if (viewportManager.current && svgRef.current && containerRef.current) {
+          const container = containerRef.current;
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+
+          const layout = currentLayout.current;
+          const minScale = computeMinScale(layout);
+          zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
+          
+          // Trigger full re-render
+          renderGraph(graphDataRef.current);
+        }
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [computeMinScale]);
+
+  // Prevent browser zoom on SVG container
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const preventBrowserZoom = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+
+    container.addEventListener('wheel', preventBrowserZoom, { passive: false });
+    return () => container.removeEventListener('wheel', preventBrowserZoom);
+  }, []);
   
   const updateDetailLevel = useCallback((level, scale) => {
     if (!currentLayout.current) return;
@@ -151,33 +199,49 @@ export default function TimelineGraph({
       .call(zoomBehavior.current.transform, d3.zoomIdentity);
   }, []);
   
-  const renderBackgroundGrid = (g, layout) => {
-    const gridGroup = g.append('g')
-      .attr('class', 'grid')
-      .style('pointer-events', 'none');
+  const getGridInterval = (scale) => {
+    // Only years or decades based on zoom level (grid switches earlier)
+    return scale >= 1.2 ? 1 : 10;
+  };
+
+  const getLabelInterval = (scale) => {
+    // Labels switch later to avoid overlap; stay on decades until more zoomed in
+    return scale >= 1.8 ? 1 : 10;
+  };
+
+  const renderBackgroundGrid = (g, layout, scale = 1) => {
+    let gridGroup = g.select('.grid');
+    if (gridGroup.empty()) {
+      gridGroup = g.append('g')
+        .attr('class', 'grid')
+        .style('pointer-events', 'none');
+    } else {
+      gridGroup.selectAll('*').remove();
+    }
     
-    // Estimate year boundaries from node positions
-    const yearRange = currentLayout.current?.nodes?.length > 0
-      ? {
-          min: Math.min(...currentLayout.current.nodes.map(n => n.x)),
-          max: Math.max(...currentLayout.current.nodes.map(n => n.x + n.width))
-        }
-      : { min: 0, max: 1000 };
+    // Use actual year bounds and the same scale as layout
+    const yearRange = layout?.yearRange ?? { min: 0, max: 1 };
+    const xScale = layout?.xScale ?? ((year) => year);
     
-    // Calculate year spacing (roughly 120px per year from YEAR_WIDTH)
-    const yearWidth = VISUALIZATION.YEAR_WIDTH;
-    const gridSpacing = yearWidth;
+    // Dynamic spacing by zoom level for grid only
+    const interval = getGridInterval(scale);
+    const gridSpacingYears = interval;
     
     // Draw vertical grid lines
-    for (let x = yearRange.min; x <= yearRange.max; x += gridSpacing) {
+    const start = Math.floor(yearRange.min / gridSpacingYears) * gridSpacingYears;
+    const end = Math.ceil(yearRange.max / gridSpacingYears) * gridSpacingYears;
+    const containerHeight = containerRef.current?.clientHeight || 1000;
+
+    for (let year = start; year <= end; year += gridSpacingYears) {
+      const x = xScale(year);
       gridGroup.append('line')
         .attr('x1', x)
         .attr('y1', -100)
         .attr('x2', x)
-        .attr('y2', containerRef.current?.clientHeight || 1000)
-        .attr('stroke', '#e0e0e0')
-        .attr('stroke-width', 0.5)
-        .attr('stroke-dasharray', '2,2');
+        .attr('y2', containerHeight + 100)
+        .attr('stroke', '#444')
+        .attr('stroke-width', Math.max(0.7, 0.7 / scale))
+        .attr('stroke-dasharray', scale >= 1.5 ? '1,3' : '3,3');
     }
   };
   
@@ -228,15 +292,22 @@ export default function TimelineGraph({
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
     performanceMonitor.current.metrics.linkCount = layout.links.length;
     currentLayout.current = layout;
+    graphDataRef.current = graphData;
 
-    renderWithVirtualization(layout);
+    // Perform actual rendering (will be called after all render functions are defined)
+    renderGraphVirtualized(layout);
   };
 
-  const renderWithVirtualization = useCallback((layout) => {
-    if (!viewportManager.current) return;
+  // This will be defined later after helper functions, but called from renderGraph
+  const renderGraphVirtualized = (layout) => {
+    if (!viewportManager.current || !layout) return;
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
+
+    // Update zoom min scale when layout recalculates
+    const minScale = computeMinScale(layout);
+    zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
 
     const transform = currentTransform.current;
 
@@ -256,13 +327,33 @@ export default function TimelineGraph({
     renderLinks(g, visibleLinks);
     renderNodes(g, visibleNodes, svg);
 
+    renderRulers(layout, transform);
+
     setupZoomWithVirtualization(svg, g, layout);
-  }, []);
+  };
 
   const setupZoomWithVirtualization = (svg, g, layout) => {
+    const containerWidth = containerRef.current?.clientWidth || 1;
+    const containerHeight = containerRef.current?.clientHeight || 1;
+    const minScale = computeMinScale(layout);
+
+    // Constrain panning to the timeline bounds
+    const padding = 20;
+    const nodes = layout.nodes || [];
+    const hasNodes = nodes.length > 0;
+    const nodeMinX = hasNodes ? Math.min(...nodes.map(n => n.x)) : 0;
+    const nodeMaxX = hasNodes ? Math.max(...nodes.map(n => n.x + n.width)) : containerWidth;
+    const nodeMinY = hasNodes ? Math.min(...nodes.map(n => n.y)) : 0;
+    const nodeMaxY = hasNodes ? Math.max(...nodes.map(n => n.y + n.height)) : containerHeight;
+    const extent = [[nodeMinX - padding, nodeMinY - padding], [nodeMaxX + padding, nodeMaxY + padding]];
+
     const zoom = d3
       .zoom()
-      .scaleExtent([VISUALIZATION.ZOOM_MIN, VISUALIZATION.ZOOM_MAX])
+      .scaleExtent([minScale, VISUALIZATION.ZOOM_MAX])
+      .translateExtent(extent)
+      .filter((event) => {
+        return !event.ctrlKey && !event.button;
+      })
       .on('zoom', (event) => {
         currentTransform.current = event.transform;
         g.attr('transform', event.transform);
@@ -278,6 +369,10 @@ export default function TimelineGraph({
             event.transform.k
           );
         }
+
+        // Update grid density with zoom
+        renderBackgroundGrid(g, layout, event.transform.k);
+        renderRulers(layout, event.transform);
 
         // Debounce virtualization updates
         clearTimeout(virtualizationTimeout.current);
@@ -380,6 +475,39 @@ export default function TimelineGraph({
         (exit) => exit.remove()
       );
   };
+
+  const renderRulers = useCallback((layout, transform = d3.zoomIdentity) => {
+    if (!layout || !layout.xScale || !layout.yearRange) return;
+    if (!rulerTopRef.current || !rulerBottomRef.current || !containerRef.current) return;
+
+    const containerWidth = containerRef.current.clientWidth;
+    const interval = getLabelInterval(transform.k || 1);
+    const start = Math.floor(layout.yearRange.min / interval) * interval;
+    const end = Math.ceil(layout.yearRange.max / interval) * interval;
+
+    const positions = [];
+    for (let year = start; year <= end; year += interval) {
+      const midYear = year + interval / 2;
+      const screenX = layout.xScale(midYear) * transform.k + transform.x;
+      if (screenX < -100 || screenX > containerWidth + 100) continue;
+      const label = interval >= 10 ? `${year}s` : `${year}`;
+      positions.push({ x: screenX, label });
+    }
+
+    const renderInto = (ref) => {
+      ref.innerHTML = '';
+      positions.forEach(({ x, label }) => {
+        const span = document.createElement('span');
+        span.className = 'timeline-ruler-label';
+        span.style.left = `${x}px`;
+        span.textContent = label;
+        ref.appendChild(span);
+      });
+    };
+
+    renderInto(rulerTopRef.current);
+    renderInto(rulerBottomRef.current);
+  }, []);
   
   const renderLinks = (g, links) => {
     g.append('g')
@@ -529,10 +657,11 @@ export default function TimelineGraph({
         ref={containerRef} 
         className="timeline-graph-container"
       >
-        <SearchBar 
-          nodes={data?.nodes || []}
-          onTeamSelect={handleTeamSelect}
-        />
+        <div className="timeline-ruler top" ref={rulerTopRef} aria-hidden="true" />
+        <div className="timeline-ruler bottom" ref={rulerBottomRef} aria-hidden="true" />
+        <div className="timeline-copyright" aria-label="Copyright">
+          © 2025 - {new Date().getFullYear()} ChainLines
+        </div>
         <svg ref={svgRef}></svg>
       </div>
 
@@ -542,6 +671,8 @@ export default function TimelineGraph({
           onYearRangeChange={onYearRangeChange}
           onTierFilterChange={onTierFilterChange}
           onZoomReset={handleZoomReset}
+          onTeamSelect={handleTeamSelect}
+          searchNodes={data?.nodes || []}
           initialStartYear={initialStartYear}
           initialEndYear={initialEndYear}
           initialTiers={initialTiers}
@@ -555,13 +686,23 @@ export default function TimelineGraph({
               onClick={() => setShowCreateWizard(true)}
               title="Create a new team from scratch"
             >
-              + Create Team
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="16"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              Create Team
             </button>
             <button 
               className="wizard-action-btn"
               onClick={() => setShowMergeWizard(true)}
               title="Create a merge event"
             >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
+                <path d="m8 6 4-4 4 4"/>
+                <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/>
+                <path d="m20 22-5-5"/>
+              </svg>
               Merge Teams
             </button>
             <button 
@@ -569,6 +710,12 @@ export default function TimelineGraph({
               onClick={() => setShowSplitWizard(true)}
               title="Create a split event"
             >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
+                <path d="M16 3h5v5"/>
+                <path d="M8 3H3v5"/>
+                <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/>
+                <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22"/>
+              </svg>
               Split Team
             </button>
           </div>

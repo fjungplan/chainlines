@@ -8,8 +8,8 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 2px solid #ddd;
-  background: white;
+  border: 2px solid #444;
+  background: #3a3a3a;
   cursor: pointer;
   overflow: hidden;
   padding: 0;
@@ -20,7 +20,7 @@
 }
 
 .user-avatar:hover {
-  border-color: #4A90E2;
+  border-color: #555;
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
 }
 
@@ -46,9 +46,10 @@
   position: absolute;
   top: 50px;
   right: 0;
-  background: white;
+  background: #3a3a3a;
+  border: 1px solid #444;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   min-width: 250px;
   z-index: 1000;
   overflow: hidden;
@@ -56,12 +57,12 @@
 
 .user-info {
   padding: 16px;
-  background: #f9f9f9;
+  background: #444;
 }
 
 .user-name {
   font-weight: 600;
-  color: #333;
+  color: #ffffff;
   margin-bottom: 4px;
   word-break: break-word;
 }
@@ -105,30 +106,31 @@
 
 .user-stats {
   font-size: 12px;
-  color: #666;
+  color: #999;
 }
 
 .menu-divider {
   height: 1px;
-  background: #eee;
+  background: #444;
   margin: 0;
 }
 
 .menu-item {
   width: 100%;
   padding: 12px 16px;
-  background: white;
+  background: #3a3a3a;
   border: none;
   text-align: left;
   cursor: pointer;
   font-size: 14px;
-  color: #333;
+  color: #cccccc;
   transition: background 0.2s;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #444;
 }
 
 .menu-item:hover {
-  background: #f9f9f9;
+  background: #444;
+  color: #ffffff;
 }
 
 .menu-item:last-of-type {
@@ -136,12 +138,12 @@
 }
 
 .menu-item.logout {
-  color: #d32f2f;
+  color: #ff6b6b;
   font-weight: 600;
 }
 
 .menu-item.logout:hover {
-  background: #ffebee;
+  background: #444;
 }
 
 @media (max-width: 768px) {

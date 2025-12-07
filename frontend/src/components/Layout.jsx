@@ -1,6 +1,7 @@
 import { Outlet, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import UserMenu from './UserMenu';
+import HamburgerMenu from './HamburgerMenu';
 import './Layout.css';
 
 function Layout() {
@@ -22,6 +23,7 @@ function Layout() {
             <h1 className="layout-title">ChainLines</h1>
           </Link>
           <nav className="layout-nav">
+            <HamburgerMenu />
             {isAuthenticated ? (
               <UserMenu />
             ) : (
@@ -36,10 +38,6 @@ function Layout() {
       <main className="layout-main">
         <Outlet />
       </main>
-
-      <footer className="layout-footer">
-        <p>&copy; {new Date().getFullYear()} ChainLines. Open Source Project.</p>
-      </footer>
     </div>
   );
 }

@@ -1,15 +1,18 @@
 .control-panel {
   width: 100%;
-  background: white;
-  border: 1px solid #ddd;
+  background: #3a3a3a;
+  border: 1px solid #444;
   border-radius: 8px;
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .control-section {
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 .control-section:last-of-type {
@@ -20,7 +23,11 @@
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #ffffff;
+}
+
+.control-section .search-bar {
+  width: 100%;
 }
 
 .year-inputs {
@@ -34,19 +41,23 @@
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #666;
+  color: #cccccc;
 }
 
 .year-inputs input[type="number"] {
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid #444;
   border-radius: 4px;
   font-size: 14px;
+  background: #2a2a2a;
+  color: #ffffff;
 }
 
 .year-inputs input[type="number"]:focus {
   outline: none;
   border-color: #4A90E2;
+  background: #2a2a2a;
+  color: #ffffff;
 }
 
 .tier-checkboxes {
@@ -60,13 +71,14 @@
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #333;
+  color: #cccccc;
   cursor: pointer;
   user-select: none;
 }
 
 .tier-checkboxes input[type="checkbox"] {
   cursor: pointer;
+  accent-color: #4A90E2;
 }
 
 .control-actions {
@@ -75,7 +87,7 @@
   gap: 8px;
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #444;
 }
 
 .control-actions button {
@@ -89,21 +101,24 @@
 }
 
 .control-actions button:first-child {
-  background-color: #4A90E2;
-  color: white;
+  background-color: #3a3a3a;
+  color: #cccccc;
+  border: 1px solid #555;
 }
 
 .control-actions button:first-child:hover {
-  background-color: #357ABD;
+  background-color: #444;
+  color: #ffffff;
+  border-color: #666;
 }
 
 .control-actions button:last-child {
-  background-color: #f5f5f5;
-  color: #333;
+  background-color: #444;
+  color: #cccccc;
 }
 
 .control-actions button:last-child:hover {
-  background-color: #e0e0e0;
+  background-color: #555;
 }
 
 /* Responsive adjustments */

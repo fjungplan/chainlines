@@ -16,17 +16,18 @@
   flex: 1;
   text-align: center;
   padding: 10px;
-  background: #f5f5f5;
+  background: #3a3a3a;
   margin: 0 5px;
   border-radius: 4px;
   font-size: 14px;
-  color: #666;
+  color: #cccccc;
 }
 
 .wizard-progress .step.active {
-  background: #4A90E2;
-  color: white;
+  background: #3a3a3a;
+  color: #ffffff;
   font-weight: bold;
+  border: 2px solid #666;
 }
 
 .wizard-content {
