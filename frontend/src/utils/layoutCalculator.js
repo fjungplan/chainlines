@@ -293,7 +293,7 @@ export class LayoutCalculator {
         sourceY: source.y + source.height / 2,
         targetX: target.x,
         targetY: target.y + target.height / 2,
-        path: this.generateLinkPath(source, target)
+        path: this.generateLinkPath(source, target, link)
       };
       
       // Debug log first few links
@@ -310,19 +310,42 @@ export class LayoutCalculator {
     return links;
   }
   
-  generateLinkPath(source, target) {
-    const sx = source.x + source.width;
-    const sy = source.y + source.height / 2;
-    const tx = target.x;
-    const ty = target.y + target.height / 2;
-    
-    // Cubic Bezier curve
-    const dx = tx - sx;
+  generateLinkPath(source, target, link) {
+    const sxEnd = source.x + source.width;
+    const syMid = source.y + source.height / 2;
+    const txStart = target.x;
+    const tyMid = target.y + target.height / 2;
+    const minGap = 4;
+
+    // Helper to clamp an x to a node's span
+    const clampToNodeX = (node, x) => Math.min(Math.max(x, node.x), node.x + node.width);
+
+    // Determine event X (year) if available
+    const eventYear = link?.year ?? target.founding_year ?? source.dissolution_year ?? this.yearRange.max;
+    const eventX = this.xScale ? this.xScale(eventYear) : txStart;
+
+    if (link?.type === 'MERGE' || link?.type === 'SPLIT') {
+      // Mid-life merges/splits: attach at event year to top/bottom of target, avoid backward arrows
+      const anchorX = clampToNodeX(target, eventX);
+      const sourceAnchorX = clampToNodeX(source, Math.max(eventX, source.x));
+      const targetY = source.y < target.y ? target.y : target.y + target.height; // top if source above, else bottom
+      const controlOffset = Math.abs(anchorX - sourceAnchorX) * 0.3;
+
+      return `M ${sourceAnchorX},${syMid}
+              C ${sourceAnchorX + controlOffset},${syMid}
+                ${anchorX - controlOffset},${targetY}
+                ${anchorX},${targetY}`;
+    }
+
+    // Default (succession/transfer): enforce forward direction
+    const tx = Math.max(txStart, sxEnd + minGap);
+    const ty = tyMid;
+    const dx = tx - sxEnd;
     const controlPointOffset = Math.abs(dx) * 0.3;
-    
-    return `M ${sx},${sy} 
-            C ${sx + controlPointOffset},${sy} 
-              ${tx - controlPointOffset},${ty} 
+
+    return `M ${sxEnd},${syMid}
+            C ${sxEnd + controlPointOffset},${syMid}
+              ${tx - controlPointOffset},${ty}
               ${tx},${ty}`;
   }
 }
