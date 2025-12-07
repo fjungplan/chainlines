@@ -585,7 +585,7 @@ export default function TimelineGraph({
     const linkSel = g
       .select('.links')
       .selectAll('path')
-      .data(visibleLinks, (d, i) => `link-${i}`);
+      .data(visibleLinks, (d) => d.id || `${d.source}-${d.target}-${d.year || ''}-${d.type || ''}`);
 
     linkSel
       .join(
@@ -701,7 +701,7 @@ export default function TimelineGraph({
     g.append('g')
       .attr('class', 'links')
       .selectAll('path')
-      .data(links)
+      .data(links, (d) => d.id || `${d.source}-${d.target}-${d.year || ''}-${d.type || ''}`)
       .join('path')
         .attr('data-id', (d, i) => `link-${i}`)
         .attr('d', d => d.path)

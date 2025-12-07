@@ -152,74 +152,99 @@ export class LayoutCalculator {
   }
   
   assignYPositions(nodes) {
-    // Build lineage chains: each node gets its own swimlane unless it's in a direct succession chain
-    const linkMap = new Map();
-    this.links.forEach(link => {
-      if (!linkMap.has(link.source)) linkMap.set(link.source, []);
-      linkMap.get(link.source).push(link.target);
+    // Build lineage families: groups of nodes connected by any link (direct succession, splits, merges)
+    const adjacencyMap = new Map();
+    
+    // Initialize adjacency map with all nodes
+    nodes.forEach(node => {
+      if (!adjacencyMap.has(node.id)) {
+        adjacencyMap.set(node.id, new Set());
+      }
     });
     
-    // Find all chains (sequences of connected nodes)
-    const visited = new Set();
-    const chains = [];
+    // Add all links (both directions for undirected family grouping)
+    this.links.forEach(link => {
+      if (!adjacencyMap.has(link.source)) adjacencyMap.set(link.source, new Set());
+      if (!adjacencyMap.has(link.target)) adjacencyMap.set(link.target, new Set());
+      adjacencyMap.get(link.source).add(link.target);
+      adjacencyMap.get(link.target).add(link.source);
+    });
     
-    const buildChain = (nodeId) => {
-      const chain = [];
-      let current = nodeId;
+    // Find connected components (families) using BFS/DFS
+    const visited = new Set();
+    const families = [];
+    
+    const buildFamily = (startNodeId) => {
+      const family = [];
+      const queue = [startNodeId];
+      const familyVisited = new Set();
       
-      // Walk backwards to find chain start
-      const reverseMap = new Map();
-      this.links.forEach(link => {
-        if (!reverseMap.has(link.target)) reverseMap.set(link.target, []);
-        reverseMap.get(link.target).push(link.source);
-      });
-      
-      while (reverseMap.has(current) && reverseMap.get(current).length === 1) {
-        const prev = reverseMap.get(current)[0];
-        if (visited.has(prev)) break;
-        current = prev;
+      while (queue.length > 0) {
+        const nodeId = queue.shift();
+        if (familyVisited.has(nodeId)) continue;
+        
+        familyVisited.add(nodeId);
+        family.push(nodeId);
+        visited.add(nodeId);
+        
+        // Add all neighbors to queue
+        const neighbors = adjacencyMap.get(nodeId) || new Set();
+        neighbors.forEach(neighborId => {
+          if (!familyVisited.has(neighborId)) {
+            queue.push(neighborId);
+          }
+        });
       }
       
-      // Walk forwards from start
-      chain.push(current);
-      visited.add(current);
-      
-      while (linkMap.has(current) && linkMap.get(current).length === 1) {
-        const next = linkMap.get(current)[0];
-        if (visited.has(next)) break;
-        chain.push(next);
-        visited.add(next);
-        current = next;
-      }
-      
-      return chain;
+      return family;
     };
     
-    // Build all chains
+    // Build all families
     nodes.forEach(node => {
       if (!visited.has(node.id)) {
-        const chain = buildChain(node.id);
-        chains.push(chain);
+        const family = buildFamily(node.id);
+        families.push(family);
       }
     });
     
-    // Assign each chain to a swimlane
+    // Sort families by earliest founding year in each family
+    families.sort((familyA, familyB) => {
+      const earliestA = Math.min(...familyA.map(nodeId => 
+        nodes.find(n => n.id === nodeId)?.founding_year || Infinity
+      ));
+      const earliestB = Math.min(...familyB.map(nodeId => 
+        nodes.find(n => n.id === nodeId)?.founding_year || Infinity
+      ));
+      return earliestA - earliestB;
+    });
+    
+    // Within each family, sort nodes by founding year
+    families.forEach(family => {
+      family.sort((nodeIdA, nodeIdB) => {
+        const nodeA = nodes.find(n => n.id === nodeIdA);
+        const nodeB = nodes.find(n => n.id === nodeIdB);
+        return (nodeA?.founding_year || 0) - (nodeB?.founding_year || 0);
+      });
+    });
+    
+    // Assign each node to a swimlane based on family and position within family
     const rowHeight = VISUALIZATION.NODE_HEIGHT + 20;
     const positioned = [];
     const nodePositions = new Map();
+    let swimlaneIndex = 0;
     
-    chains.forEach((chain, swimlaneIndex) => {
-      const y = 50 + swimlaneIndex * rowHeight;
-      
-      chain.forEach(nodeId => {
+    families.forEach(family => {
+      family.forEach(nodeId => {
         const node = nodes.find(n => n.id === nodeId);
         if (node) {
+          const y = 50 + swimlaneIndex * rowHeight;
           nodePositions.set(nodeId, {
             ...node,
             y,
             height: VISUALIZATION.NODE_HEIGHT
           });
           positioned.push(nodePositions.get(nodeId));
+          swimlaneIndex++;
         }
       });
     });
@@ -253,7 +278,7 @@ export class LayoutCalculator {
     // Create node position lookup
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
     
-    return this.links.map(link => {
+    const links = this.links.map(link => {
       const source = nodeMap.get(link.source);
       const target = nodeMap.get(link.target);
       
@@ -262,7 +287,7 @@ export class LayoutCalculator {
         return null;
       }
       
-      return {
+      const result = {
         ...link,
         sourceX: source.x + source.width,
         sourceY: source.y + source.height / 2,
@@ -270,7 +295,19 @@ export class LayoutCalculator {
         targetY: target.y + target.height / 2,
         path: this.generateLinkPath(source, target)
       };
+      
+      // Debug log first few links
+      if (this.links.indexOf(link) < 3) {
+        const sourceName = source.eras?.[source.eras.length - 1]?.name || `Node ${link.source}`;
+        const targetName = target.eras?.[0]?.name || `Node ${link.target}`;
+        console.log(`Link ${link.source}->${link.target} (${sourceName}->${targetName}): sourceY=${source.y}, targetY=${target.y}`);
+      }
+      
+      return result;
     }).filter(Boolean);
+    
+    console.log('calculateLinkPaths: regenerated', links.length, 'links with updated positions');
+    return links;
   }
   
   generateLinkPath(source, target) {
