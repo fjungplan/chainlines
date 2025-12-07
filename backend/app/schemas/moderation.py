@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -12,8 +13,7 @@ class PendingEditResponse(BaseModel):
     reason: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewEditRequest(BaseModel):
     approved: bool
