@@ -28,7 +28,10 @@ export default function TimelineGraph({
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
   initialTiers = [1, 2, 3],
-  onEditSuccess
+  onEditSuccess,
+  currentStartYear,
+  currentEndYear,
+  filtersVersion = 0
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
@@ -53,9 +56,17 @@ export default function TimelineGraph({
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+  const [currentFilters, setCurrentFilters] = useState({
+    startYear: currentStartYear || initialStartYear,
+    endYear: currentEndYear || initialEndYear
+  });
+  
+  const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
   
   const { user, canEdit } = useAuth();
   const navigate = useNavigate();
+  
+  // Note: props-change effect moved below zoomToYearRange definition to avoid TDZ
   
   useEffect(() => {
     // Initialize zoom manager
@@ -87,11 +98,32 @@ export default function TimelineGraph({
   }, []);
 
   // Helper to compute responsive minimum zoom
+  // This is the "fit everything" scale - can't zoom out further than this
   const computeMinScale = useCallback((layout) => {
     const containerWidth = containerRef.current?.clientWidth || 1;
-    const span = layout?.xScale ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min) : 0;
-    if (!span || span <= 0) return VISUALIZATION.ZOOM_MIN;
-    return Math.min(1, Math.max(containerWidth / span, 0.05));
+    const containerHeight = containerRef.current?.clientHeight || 1;
+
+    const spanX = layout?.xScale
+      ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min)
+      : 0;
+    const nodes = layout?.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : 0;
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+    const spanY = Math.max(1, paddedMaxY - paddedMinY);
+
+    if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
+
+    // Minimum scale is the one that fits BOTH dimensions
+    // (the smaller of the two - more zoomed out)
+    const scaleX = containerWidth / spanX;
+    const scaleY = containerHeight / spanY;
+
+    // Add safety floor of 0.01 to prevent invalid transforms
+    return Math.max(0.01, Math.min(scaleX, scaleY));
   }, []);
 
   // Log performance metrics in development
@@ -193,11 +225,49 @@ export default function TimelineGraph({
   }, []);
   
   const handleZoomReset = useCallback(() => {
+    zoomToYearRange(currentFilters.startYear, currentFilters.endYear);
+  }, [currentFilters]);
+  
+  const zoomToYearRange = useCallback((startYear, endYear) => {
+    if (!currentLayout.current || !svgRef.current || !containerRef.current || !zoomBehavior.current) return;
+    
+    const layout = currentLayout.current;
+    const containerWidth = containerRef.current.clientWidth;
+    
+    const x1 = layout.xScale(startYear);
+    const x2 = layout.xScale(endYear);
+    const yearRangeWidth = Math.max(1, x2 - x1);
+    
+    const padding = 80;
+    const rawScale = (containerWidth - 2 * padding) / yearRangeWidth;
+    const minScale = computeMinScale(layout);
+    const targetScale = Math.min(VISUALIZATION.ZOOM_MAX, Math.max(minScale, rawScale));
+    
+    const centerX = (x1 + x2) / 2;
+    const targetX = containerWidth / 2 - centerX * targetScale;
+    const targetY = 0;
+    
     const svg = d3.select(svgRef.current);
+    const transform = d3.zoomIdentity
+      .translate(targetX, targetY)
+      .scale(targetScale);
+    
     svg.transition()
       .duration(750)
-      .call(zoomBehavior.current.transform, d3.zoomIdentity);
-  }, []);
+      .call(zoomBehavior.current.transform, transform);
+  }, [computeMinScale]);
+
+  // Update filters when props change and trigger zoom (defined after zoomToYearRange to avoid TDZ)
+  useEffect(() => {
+    if (currentStartYear !== undefined && currentEndYear !== undefined) {
+      setCurrentFilters({ startYear: currentStartYear, endYear: currentEndYear });
+      if (currentLayout.current) {
+        setTimeout(() => {
+          zoomToYearRange(currentStartYear, currentEndYear);
+        }, 50);
+      }
+    }
+  }, [currentStartYear, currentEndYear, filtersVersion, zoomToYearRange]);
   
   const getGridInterval = (scale) => {
     // Only years or decades based on zoom level (grid switches earlier)
@@ -227,18 +297,24 @@ export default function TimelineGraph({
     const interval = getGridInterval(scale);
     const gridSpacingYears = interval;
     
-    // Draw vertical grid lines
+    // Draw vertical grid lines - extend to actual node bounds, not just viewport
     const start = Math.floor(yearRange.min / gridSpacingYears) * gridSpacingYears;
     const end = Math.ceil(yearRange.max / gridSpacingYears) * gridSpacingYears;
-    const containerHeight = containerRef.current?.clientHeight || 1000;
+    const nodes = layout?.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : (containerRef.current?.clientHeight || 1000);
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : -100;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
 
     for (let year = start; year <= end; year += gridSpacingYears) {
       const x = xScale(year);
       gridGroup.append('line')
         .attr('x1', x)
-        .attr('y1', -100)
+        .attr('y1', paddedMinY - 100)
         .attr('x2', x)
-        .attr('y2', containerHeight + 100)
+        .attr('y2', paddedMaxY + 100)
         .attr('stroke', '#444')
         .attr('stroke-width', Math.max(0.7, 0.7 / scale))
         .attr('stroke-dasharray', scale >= 1.5 ? '1,3' : '3,3');
@@ -286,8 +362,30 @@ export default function TimelineGraph({
     };
     
     const layoutStart = performanceMonitor.current.startTiming('layout');
-    const calculator = new LayoutCalculator(dedupedData, width, height);
-    const layout = calculator.calculateLayout();
+    // Extend the filter range by 1 year to show full span of the end year
+    const filterYearRange = { min: currentFilters.startYear, max: currentFilters.endYear + 1 };
+    let calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange);
+    let layout = calculator.calculateLayout();
+
+    // If the container is wider relative to content height, stretch the x-axis to eliminate horizontal gutters
+    const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
+    const nodesForSpan = layout.nodes || [];
+    const maxNodeBottom = nodesForSpan.length
+      ? Math.max(...nodesForSpan.map(n => (n.y || 0) + (n.height || 0)))
+      : height;
+    const minNodeTop = nodesForSpan.length ? Math.min(...nodesForSpan.map(n => n.y || 0)) : 0;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+    const spanY = Math.max(1, paddedMaxY - paddedMinY);
+    const scaleX = width / spanX;
+    const scaleY = height / spanY;
+
+    if (scaleX > scaleY * 1.001) {
+      const stretchFactor = scaleX / scaleY;
+      console.log('Applying x-axis stretch for aspect fit', { scaleX, scaleY, stretchFactor, spanX, spanY });
+      calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, stretchFactor);
+      layout = calculator.calculateLayout();
+    }
     performanceMonitor.current.endTiming('layout', layoutStart);
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
     performanceMonitor.current.metrics.linkCount = layout.links.length;
@@ -309,6 +407,57 @@ export default function TimelineGraph({
     const minScale = computeMinScale(layout);
     zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
 
+    // Calculate initial transform if this is first render (identity transform)
+    if (currentTransform.current.k === 1 && currentTransform.current.x === 0 && currentTransform.current.y === 0) {
+      const nodes = layout.nodes || [];
+      
+      if (nodes.length === 0) {
+        console.error('No nodes to display!');
+        return;
+      }
+      
+      const maxNodeBottom = Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)));
+      const minNodeTop = Math.min(...nodes.map(n => n.y || 0));
+      const paddedMinY = minNodeTop - VERTICAL_PADDING;
+      const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+      
+      const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
+      const spanY = Math.max(1, paddedMaxY - paddedMinY);
+
+      // Initial scale: fit ALL content (both width and height)
+      const scaleX = width / spanX;
+      const scaleY = height / spanY;
+      const targetScale = Math.max(0.01, Math.min(scaleX, scaleY));
+
+      // Center the content in the viewport using padded bounds so labels don't overlap
+      const centerX = (layout.xScale(layout.yearRange.min) + layout.xScale(layout.yearRange.max)) / 2;
+      const centerY = (paddedMinY + paddedMaxY) / 2;
+      const targetX = width / 2 - centerX * targetScale;
+      const targetY = height / 2 - centerY * targetScale;
+      
+      console.log('🎯 INITIAL TRANSFORM CALC:', {
+        nodeCount: nodes.length,
+        yearRange: [layout.yearRange.min, layout.yearRange.max],
+        spanX,
+        spanY,
+        containerWidth: width,
+        containerHeight: height,
+        scaleX,
+        scaleY,
+        targetScale,
+        minScale,
+        centerX,
+        centerY,
+        targetX,
+        targetY,
+        minNodeTop,
+        maxNodeBottom,
+        paddedMinY,
+        paddedMaxY
+      });      currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
+    }
+
+    // Use current transform
     const transform = currentTransform.current;
 
     const visibleNodes = viewportManager.current.getVisibleNodes(layout.nodes, transform);
@@ -319,7 +468,9 @@ export default function TimelineGraph({
     svg.selectAll('*').remove();
     svg.attr('width', width).attr('height', height);
 
-    const g = svg.append('g').attr('transform', transform);
+    const g = svg.append('g');
+    // Apply current transform immediately to avoid initial flash before zoom attaches
+    g.attr('transform', currentTransform.current);
     
     // Add background grid
     renderBackgroundGrid(g, layout);
@@ -337,24 +488,52 @@ export default function TimelineGraph({
     const containerHeight = containerRef.current?.clientHeight || 1;
     const minScale = computeMinScale(layout);
 
-    // Constrain panning to the timeline bounds
-    const padding = 20;
+    // Constrain panning: calculate extent that prevents panning outside year bounds
+    // translateExtent is in world coords, so we need to account for scale and pan
+    const span = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
+    const yearMin = layout.xScale(layout.yearRange.min);
+    const yearMax = layout.xScale(layout.yearRange.max);
+
     const nodes = layout.nodes || [];
-    const hasNodes = nodes.length > 0;
-    const nodeMinX = hasNodes ? Math.min(...nodes.map(n => n.x)) : 0;
-    const nodeMaxX = hasNodes ? Math.max(...nodes.map(n => n.x + n.width)) : containerWidth;
-    const nodeMinY = hasNodes ? Math.min(...nodes.map(n => n.y)) : 0;
-    const nodeMaxY = hasNodes ? Math.max(...nodes.map(n => n.y + n.height)) : containerHeight;
-    const extent = [[nodeMinX - padding, nodeMinY - padding], [nodeMaxX + padding, nodeMaxY + padding]];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : containerHeight;
+    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
+    const paddedMinY = minNodeTop - VERTICAL_PADDING;
+    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
+
+    // translateExtent defines the area that can be panned to
+    // [[x0, y0], [x1, y1]] means: top-left corner can pan from x0,y0 to x1,y1
+    // We want the viewport to never see empty space; keep extent tight to content + padding
+    const extent = [
+      [yearMin, paddedMinY],
+      [yearMax, paddedMaxY]
+    ];
+    
+    console.log('🔧 ZOOM SETUP:', {
+      minScale,
+      maxScale: VISUALIZATION.ZOOM_MAX,
+      extent,
+      currentTransform: { k: currentTransform.current.k, x: currentTransform.current.x, y: currentTransform.current.y },
+      containerWidth,
+      containerHeight,
+      span,
+      yearMin,
+      yearMax
+    });
 
     const zoom = d3
       .zoom()
       .scaleExtent([minScale, VISUALIZATION.ZOOM_MAX])
       .translateExtent(extent)
       .filter((event) => {
-        return !event.ctrlKey && !event.button;
+        // Allow mouse wheel, touch gestures, but block right-click drag
+        if (event.type === 'wheel') return !event.ctrlKey;
+        if (event.type === 'mousedown') return !event.button;
+        return true; // Allow touch events
       })
       .on('zoom', (event) => {
+        console.log('🎯 ZOOM EVENT:', { k: event.transform.k, x: event.transform.x, y: event.transform.y });
         currentTransform.current = event.transform;
         g.attr('transform', event.transform);
 
@@ -381,7 +560,16 @@ export default function TimelineGraph({
         }, 100);
       });
     zoomBehavior.current = zoom;
+    
+    // Initialize zoom behavior and set the current transform
     svg.call(zoom);
+    
+    console.log('📍 BEFORE D3 TRANSFORM:', { k: currentTransform.current.k, x: currentTransform.current.x, y: currentTransform.current.y });
+    
+    // Always apply the current transform to D3's zoom state
+    // This will trigger the zoom event handler which will set g.attr('transform')
+    svg.call(zoom.transform, currentTransform.current);
+    console.log('✅ APPLIED TRANSFORM TO D3');
   };
 
   const updateVirtualization = (layout, transform) => {
@@ -397,7 +585,7 @@ export default function TimelineGraph({
     const linkSel = g
       .select('.links')
       .selectAll('path')
-      .data(visibleLinks, (d, i) => `link-${i}`);
+      .data(visibleLinks, (d) => d.id || `${d.source}-${d.target}-${d.year || ''}-${d.type || ''}`);
 
     linkSel
       .join(
@@ -513,7 +701,7 @@ export default function TimelineGraph({
     g.append('g')
       .attr('class', 'links')
       .selectAll('path')
-      .data(links)
+      .data(links, (d) => d.id || `${d.source}-${d.target}-${d.year || ''}-${d.type || ''}`)
       .join('path')
         .attr('data-id', (d, i) => `link-${i}`)
         .attr('d', d => d.path)
@@ -638,8 +826,7 @@ export default function TimelineGraph({
       .select('rect')
       .transition()
       .duration(200)
-      .attr('stroke-width', 3)
-      .attr('stroke', '#FFD700'); // Gold highlight
+      .attr('filter', 'url(#underglow)');
   };
 
   const handleNodeHoverEnd = (event) => {
@@ -647,8 +834,7 @@ export default function TimelineGraph({
       .select('rect')
       .transition()
       .duration(200)
-      .attr('stroke-width', 2)
-      .attr('stroke', '#333');
+      .attr('filter', 'url(#drop-shadow)');
   };
 
   return (
