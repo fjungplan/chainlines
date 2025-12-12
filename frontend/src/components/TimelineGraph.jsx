@@ -34,7 +34,7 @@ export default function TimelineGraph({
   filtersVersion = 0
 }) {
   // DEBUG_TOGGLE: Set to false to hide viscous connector outlines + debug points
-  const SHOW_VISCOSITY_DEBUG = false;
+  const SHOW_VISCOSITY_DEBUG = true;
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const rulerTopRef = useRef(null);
@@ -565,13 +565,20 @@ export default function TimelineGraph({
     renderBackgroundGrid(g, layout);
     JerseyRenderer.createShadowFilter(svg);
 
-    // Layer order: shadows -> connectors -> nodes
+    // Layer order depends on debug toggle
     renderNodeShadows(g, visibleNodes);
-    renderLinks(g, visibleLinks);
-    renderNodes(g, visibleNodes, svg);
+    if (SHOW_VISCOSITY_DEBUG) {
+      renderNodes(g, visibleNodes, svg);
+      renderLinks(g, visibleLinks);
+    } else {
+      renderLinks(g, visibleLinks);
+      renderNodes(g, visibleNodes, svg);
+    }
     
     // Render transition markers
     renderTransitionMarkers(g, visibleLinks);
+
+    arrangeLinkLayer(g);
 
     renderRulers(layout, transform);
 
@@ -595,6 +602,22 @@ export default function TimelineGraph({
         .attr('fill', '#000')
         .attr('fill-opacity', 1)
         .style('pointer-events', 'none');
+  };
+
+  const arrangeLinkLayer = (g) => {
+    const linksLayer = g.select('.links');
+    const nodesLayer = g.select('.nodes');
+    if (linksLayer.empty() || nodesLayer.empty()) return;
+    const linksNode = linksLayer.node();
+    const nodesNode = nodesLayer.node();
+    const parent = linksNode?.parentNode;
+    if (!parent || !nodesNode) return;
+
+    if (SHOW_VISCOSITY_DEBUG) {
+      parent.appendChild(linksNode);
+    } else {
+      parent.insertBefore(linksNode, nodesNode);
+    }
   };
 
   const setupZoomWithVirtualization = (svg, g, layout) => {
@@ -878,6 +901,8 @@ export default function TimelineGraph({
         (update) => update.attr('transform', (d) => `translate(${d.x},${d.y})`),
         (exit) => exit.remove()
       );
+
+    arrangeLinkLayer(g);
   };
 
   const renderRulers = useCallback((layout, transform = d3.zoomIdentity) => {

@@ -748,25 +748,80 @@ export class LayoutCalculator {
     // Save points to link for debug rendering
     const debugPoints = { st, sb, tt, tb, ct, cb };
 
-    // 2. Generate Arcs Helper
-    // User confirmed: every segment is a perfect semicircle with a VERTICAL diameter.
-    // Therefore, consecutive endpoints must share the same X (we enforce `spineX`).
-    // We choose the sweep flag based on the desired bulge direction.
+    // 2. Generate Bézier helpers that mimic the previous semicircle arcs exactly.
     const generateVerticalSemiCircle = (p1, p2, bulge /* 'right' | 'left' */) => {
       const dy = p2.y - p1.y;
       const absDy = Math.abs(dy);
-      const R = Math.max(0.01, absDy / 2);
+      if (absDy < 0.1) {
+        return `L ${p2.x} ${p2.y}`;
+      }
 
-      // Moving down vs up flips which sweep produces a right/left bulge.
+      const radius = absDy / 2;
+      const cx = p1.x; // diameter is vertical, so center shares the same X
+      const cy = (p1.y + p2.y) / 2;
+
+      const toMath = (pt) => ({ x: pt.x, y: -pt.y });
+      const toSvg = (pt) => ({ x: pt.x, y: -pt.y });
+      const format = (value) => Number(value.toFixed(3));
+
+      const centerMath = toMath({ x: cx, y: cy });
+      const startMath = toMath(p1);
+      const endMath = toMath(p2);
+
+      let startAngle = Math.atan2(startMath.y - centerMath.y, startMath.x - centerMath.x);
+      let endAngle = Math.atan2(endMath.y - centerMath.y, endMath.x - centerMath.x);
+      let delta = endAngle - startAngle;
       const movingDown = dy > 0;
-      const sweep = (() => {
-        if (movingDown) {
-          return bulge === 'right' ? 1 : 0;
-        }
-        return bulge === 'right' ? 0 : 1;
-      })();
+      const desiredSign = bulge === 'right'
+        ? (movingDown ? -1 : 1)
+        : (movingDown ? 1 : -1);
+      if (desiredSign > 0 && delta < 0) {
+        delta += Math.PI * 2;
+      } else if (desiredSign < 0 && delta > 0) {
+        delta -= Math.PI * 2;
+      }
 
-      return `A ${R} ${R} 0 0 ${sweep} ${p2.x} ${p2.y}`;
+      const maxStep = Math.PI / 2; // split into <= 90° spans for perfect cubic conversion
+      const segments = Math.max(1, Math.ceil(Math.abs(delta) / maxStep));
+      const step = delta / segments;
+      let currentAngle = startAngle;
+      let path = '';
+
+      for (let i = 0; i < segments; i++) {
+        const nextAngle = currentAngle + step;
+        const t = (4 / 3) * Math.tan((nextAngle - currentAngle) / 4);
+
+        const cosCurrent = Math.cos(currentAngle);
+        const sinCurrent = Math.sin(currentAngle);
+        const cosNext = Math.cos(nextAngle);
+        const sinNext = Math.sin(nextAngle);
+
+        const p0Math = {
+          x: centerMath.x + radius * cosCurrent,
+          y: centerMath.y + radius * sinCurrent
+        };
+        const p3Math = {
+          x: centerMath.x + radius * cosNext,
+          y: centerMath.y + radius * sinNext
+        };
+        const cp1Math = {
+          x: p0Math.x - t * radius * sinCurrent,
+          y: p0Math.y + t * radius * cosCurrent
+        };
+        const cp2Math = {
+          x: p3Math.x + t * radius * sinNext,
+          y: p3Math.y - t * radius * cosNext
+        };
+
+        const cp1 = toSvg(cp1Math);
+        const cp2 = toSvg(cp2Math);
+        const p3 = toSvg(p3Math);
+
+        path += `C ${format(cp1.x)} ${format(cp1.y)} ${format(cp2.x)} ${format(cp2.y)} ${format(p3.x)} ${format(p3.y)} `;
+        currentAngle = nextAngle;
+      }
+
+      return path.trim();
     };
 
     // Construct boundary arcs
