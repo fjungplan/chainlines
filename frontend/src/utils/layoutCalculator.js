@@ -640,7 +640,8 @@ export class LayoutCalculator {
         path: pathData.d,
         debugPoints: pathData.debugPoints,
         topPathD: pathData.topPathD,
-        bottomPathD: pathData.bottomPathD
+        bottomPathD: pathData.bottomPathD,
+        bezierDebugPoints: pathData.bezierDebugPoints
       };
       
       // Debug log first few links
@@ -747,8 +748,14 @@ export class LayoutCalculator {
     
     // Save points to link for debug rendering
     const debugPoints = { st, sb, tt, tb, ct, cb };
+    const bezierDebugPoints = [];
+    let bezierPointIndex = 0; // unique ID for stable joins
 
     // 2. Generate Bézier helpers that mimic the previous semicircle arcs exactly.
+    const waistCenterY = midY;
+    const waistCenter = { x: spineX, y: waistCenterY };
+    let quarterSequenceIndex = 0;
+
     const generateVerticalSemiCircle = (p1, p2, bulge /* 'right' | 'left' */) => {
       const dy = p2.y - p1.y;
       const absDy = Math.abs(dy);
@@ -757,7 +764,7 @@ export class LayoutCalculator {
       }
 
       const radius = absDy / 2;
-      const cx = p1.x; // diameter is vertical, so center shares the same X
+      const cx = p1.x;
       const cy = (p1.y + p2.y) / 2;
 
       const toMath = (pt) => ({ x: pt.x, y: -pt.y });
@@ -781,13 +788,23 @@ export class LayoutCalculator {
         delta -= Math.PI * 2;
       }
 
-      const maxStep = Math.PI / 2; // split into <= 90° spans for perfect cubic conversion
+      const maxStep = Math.PI / 2;
       const segments = Math.max(1, Math.ceil(Math.abs(delta) / maxStep));
       const step = delta / segments;
       let currentAngle = startAngle;
       let path = '';
+      let overrideStartMath = null;
 
       for (let i = 0; i < segments; i++) {
+        const p0IdealMath = {
+          x: centerMath.x + radius * Math.cos(currentAngle),
+          y: centerMath.y + radius * Math.sin(currentAngle)
+        };
+        let p0Math = overrideStartMath ?? p0IdealMath;
+        overrideStartMath = null;
+        const startDeltaX = p0Math.x - p0IdealMath.x;
+        const startDeltaY = p0Math.y - p0IdealMath.y;
+
         const nextAngle = currentAngle + step;
         const t = (4 / 3) * Math.tan((nextAngle - currentAngle) / 4);
 
@@ -796,29 +813,74 @@ export class LayoutCalculator {
         const cosNext = Math.cos(nextAngle);
         const sinNext = Math.sin(nextAngle);
 
-        const p0Math = {
-          x: centerMath.x + radius * cosCurrent,
-          y: centerMath.y + radius * sinCurrent
+        let cp1Math = {
+          x: centerMath.x + radius * cosCurrent - t * radius * sinCurrent,
+          y: centerMath.y + radius * sinCurrent + t * radius * cosCurrent
         };
-        const p3Math = {
+        cp1Math = {
+          x: cp1Math.x + startDeltaX,
+          y: cp1Math.y + startDeltaY
+        };
+
+        let p3Math = {
           x: centerMath.x + radius * cosNext,
           y: centerMath.y + radius * sinNext
         };
-        const cp1Math = {
-          x: p0Math.x - t * radius * sinCurrent,
-          y: p0Math.y + t * radius * cosCurrent
+        let cp2Math = {
+          x: centerMath.x + radius * cosNext + t * radius * sinNext,
+          y: centerMath.y + radius * sinNext - t * radius * cosNext
         };
-        const cp2Math = {
-          x: p3Math.x + t * radius * sinNext,
-          y: p3Math.y - t * radius * cosNext
-        };
+
+        if (i % 2 === 0) {
+          let p3Screen = toSvg(p3Math);
+          let cp2Screen = toSvg(cp2Math);
+          const dirYSourceScreen = Math.sign(p1.y - waistCenterY);
+          const dirYTargetScreen = Math.sign(p3Screen.y - waistCenterY);
+          const awayDirYScreen = dirYTargetScreen !== 0 ? dirYTargetScreen : (dirYSourceScreen || 1);
+          const shiftYScreen = awayDirYScreen * (radius / 3);
+          const inwardDirXScreen = spineX - p3Screen.x;
+          const shiftXScreen = Math.abs(inwardDirXScreen) < 1e-6 ? 0 : Math.sign(inwardDirXScreen) * ((2 * radius) / 5);
+          p3Screen = {
+            x: p3Screen.x + shiftXScreen,
+            y: p3Screen.y + shiftYScreen
+          };
+          cp2Screen = {
+            x: cp2Screen.x + shiftXScreen,
+            y: cp2Screen.y + shiftYScreen
+          };
+          p3Math = toMath(p3Screen);
+          cp2Math = toMath(cp2Screen);
+        }
+
+        const quarterOrdinal = quarterSequenceIndex++;
+        if (quarterOrdinal % 4 === 0 || quarterOrdinal % 4 === 3) {
+          const pullScreen = radius / 8;
+          const adjustTowardCenter = (pointMath) => {
+            const pointScreen = toSvg(pointMath);
+            const deltaX = waistCenter.x - pointScreen.x;
+            const deltaY = waistCenter.y - pointScreen.y;
+            const shiftX = Math.abs(deltaX) < 1e-6 ? 0 : Math.sign(deltaX) * pullScreen;
+            const shiftY = Math.abs(deltaY) < 1e-6 ? 0 : Math.sign(deltaY) * pullScreen;
+            return toMath({
+              x: pointScreen.x + shiftX,
+              y: pointScreen.y + shiftY
+            });
+          };
+          cp1Math = adjustTowardCenter(cp1Math);
+          cp2Math = adjustTowardCenter(cp2Math);
+        }
 
         const cp1 = toSvg(cp1Math);
         const cp2 = toSvg(cp2Math);
         const p3 = toSvg(p3Math);
 
+        bezierDebugPoints.push({ x: format(cp1.x), y: format(cp1.y), role: 'cp', label: '0', segment: i, index: bezierPointIndex++ });
+        bezierDebugPoints.push({ x: format(cp2.x), y: format(cp2.y), role: 'cp', label: '1', segment: i, index: bezierPointIndex++ });
+        bezierDebugPoints.push({ x: format(p3.x), y: format(p3.y), role: 'anchor', label: '2', segment: i, index: bezierPointIndex++ });
+
         path += `C ${format(cp1.x)} ${format(cp1.y)} ${format(cp2.x)} ${format(cp2.y)} ${format(p3.x)} ${format(p3.y)} `;
         currentAngle = nextAngle;
+        overrideStartMath = p3Math;
       }
 
       return path.trim();
@@ -843,7 +905,7 @@ export class LayoutCalculator {
     // with straight vertical closures at the node attachment edges.
     const d = `M ${st.x},${st.y} ${a1} ${a2} L ${tb.x},${tb.y} ${a4} ${a5} L ${st.x},${st.y} Z`;
     
-    return { d, debugPoints, topPathD, bottomPathD };
+    return { d, debugPoints, topPathD, bottomPathD, bezierDebugPoints };
   }
 
   /**

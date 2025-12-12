@@ -34,7 +34,7 @@ export default function TimelineGraph({
   filtersVersion = 0
 }) {
   // DEBUG_TOGGLE: Set to false to hide viscous connector outlines + debug points
-  const SHOW_VISCOSITY_DEBUG = true;
+  const SHOW_VISCOSITY_DEBUG = false;
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const rulerTopRef = useRef(null);
@@ -786,7 +786,8 @@ export default function TimelineGraph({
             
           // Debug Points Group
           grp.append('g').attr('class', 'debug-points');
-          
+          grp.append('g').attr('class', 'bezier-debug-points');
+
           return grp;
         },
         (update) => update,
@@ -856,6 +857,37 @@ export default function TimelineGraph({
            pointsGroup.style('display', null);
         } else {
            pointsGroup.style('display', 'none');
+        }
+
+        const bezierGroup = group.select('.bezier-debug-points');
+        bezierGroup.selectAll('*').remove();
+        if (SHOW_VISCOSITY_DEBUG && d.bezierDebugPoints?.length) {
+          const bezierPoints = bezierGroup.selectAll('g.bezier-point')
+            .data(d.bezierDebugPoints, (p) => p.index ?? `${p.x}-${p.y}`)
+            .join(
+              (enter) => {
+                const gp = enter.append('g').attr('class', 'bezier-point');
+                gp.append('circle')
+                  .attr('r', 1)
+                  .attr('fill', 'yellow')
+                  .style('pointer-events', 'none');
+                gp.append('text')
+                  .attr('text-anchor', 'middle')
+                  .attr('dominant-baseline', 'central')
+                  .attr('fill', '#000')
+                  .attr('font-size', '2.5px')
+                  .text((p) => p.label ?? '');
+                return gp;
+              },
+              (update) => update,
+              (exit) => exit.remove()
+            )
+            .attr('transform', (p) => `translate(${p.x},${p.y})`);
+
+          bezierPoints.select('text').text((p) => p.label ?? '');
+          bezierGroup.style('display', null);
+        } else {
+          bezierGroup.style('display', 'none');
         }
       });
 
@@ -1026,6 +1058,26 @@ export default function TimelineGraph({
                 });
             } else {
                 group.append('g').attr('class', 'debug-points').style('display', 'none');
+            }
+
+            if (SHOW_VISCOSITY_DEBUG && d.bezierDebugPoints?.length) {
+                const bezierGroup = group.append('g').attr('class', 'bezier-debug-points');
+                d.bezierDebugPoints.forEach((p) => {
+                    const gp = bezierGroup.append('g').attr('class', 'bezier-point')
+                      .attr('transform', `translate(${p.x},${p.y})`);
+                    gp.append('circle')
+                      .attr('r', 1)
+                      .attr('fill', 'yellow')
+                      .style('pointer-events', 'none');
+                    gp.append('text')
+                      .attr('text-anchor', 'middle')
+                      .attr('dominant-baseline', 'central')
+                      .attr('fill', '#000')
+                      .attr('font-size', '2.5px')
+                      .text(p.label ?? '');
+                });
+            } else {
+                group.append('g').attr('class', 'bezier-debug-points').style('display', 'none');
             }
         });
   };
