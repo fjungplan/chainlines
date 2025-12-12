@@ -33,6 +33,8 @@ export default function TimelineGraph({
   currentEndYear,
   filtersVersion = 0
 }) {
+  // DEBUG_TOGGLE: Set to false to hide viscous connector outlines + debug points
+  const SHOW_VISCOSITY_DEBUG = false;
   const svgRef = useRef(null);
   const containerRef = useRef(null);
   const rulerTopRef = useRef(null);
@@ -279,6 +281,72 @@ export default function TimelineGraph({
     return scale >= 1.8 ? 1 : 10;
   };
 
+  // --- Viscous connector fill styling (opaque + node-color gradient) ---
+  const DEFAULT_NODE_COLOR = '#5a5a5a';
+  const sanitizeSvgId = (s) => String(s).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+  const getNodePrimaryColor = (node) => {
+    const latestEra = node?.eras?.[node.eras?.length - 1];
+    const sponsors = latestEra?.sponsors || [];
+    if (!sponsors.length) return DEFAULT_NODE_COLOR;
+
+    // Use the most prominent sponsor color as the representative node color.
+    const best = sponsors.reduce((acc, cur) => {
+      const accP = Number(acc?.prominence ?? 0);
+      const curP = Number(cur?.prominence ?? 0);
+      return curP > accP ? cur : acc;
+    }, sponsors[0]);
+
+    return best?.color || DEFAULT_NODE_COLOR;
+  };
+
+  const ensureLinkGradient = (defs, linkDatum, startColor, endColor) => {
+    const id = sanitizeSvgId(`link-gradient-${linkDatum.source}-${linkDatum.target}-${linkDatum.year ?? 'na'}-${linkDatum.type ?? 'na'}`);
+
+    let grad = defs.select(`#${id}`);
+    if (grad.empty()) {
+      grad = defs.append('linearGradient')
+        .attr('id', id)
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+    }
+
+    // Determine middle color based on link type
+    // SPIRITUAL_SUCCESSION: source → white → target
+    // Others (including LEGAL_TRANSFER): source → black → target
+    const middleColor = linkDatum.type === 'SPIRITUAL_SUCCESSION' ? '#ffffff' : '#000000';
+    const bandWidth = 2; // percentage width for the center band (very narrow highlight)
+    const halfBand = bandWidth / 2;
+    const midStart = Math.max(0, 50 - halfBand);
+    const midEnd = Math.min(100, 50 + halfBand);
+    const fadeWidth = 9; // how far the middle color fades into source/target colors
+    const fadeBefore = Math.max(0, midStart - fadeWidth);
+    const fadeAfter = Math.min(100, midEnd + fadeWidth);
+
+    const stops = [
+      { offset: '0%', color: startColor },
+      { offset: `${fadeBefore}%`, color: startColor },
+      { offset: `${midStart}%`, color: middleColor },
+      { offset: `${midEnd}%`, color: middleColor },
+      { offset: `${fadeAfter}%`, color: endColor },
+      { offset: '100%', color: endColor }
+    ];
+
+    grad.selectAll('stop')
+      .data(stops, (d) => d.offset)
+      .join(
+        (enter) => enter.append('stop'),
+        (update) => update,
+        (exit) => exit.remove()
+      )
+      .attr('offset', (d) => d.offset)
+      .attr('stop-color', (d) => d.color);
+
+    return id;
+  };
+
   const renderBackgroundGrid = (g, layout, scale = 1) => {
     let gridGroup = g.select('.grid');
     if (gridGroup.empty()) {
@@ -495,10 +563,12 @@ export default function TimelineGraph({
     
     // Add background grid
     renderBackgroundGrid(g, layout);
-    
-    // Render nodes first, then links (so links appear on top)
-    renderNodes(g, visibleNodes, svg);
+    JerseyRenderer.createShadowFilter(svg);
+
+    // Layer order: shadows -> connectors -> nodes
+    renderNodeShadows(g, visibleNodes);
     renderLinks(g, visibleLinks);
+    renderNodes(g, visibleNodes, svg);
     
     // Render transition markers
     renderTransitionMarkers(g, visibleLinks);
@@ -506,6 +576,25 @@ export default function TimelineGraph({
     renderRulers(layout, transform);
 
     setupZoomWithVirtualization(svg, g, layout);
+  };
+
+  const renderNodeShadows = (g, nodes) => {
+    const shadowLayer = g.append('g').attr('class', 'node-shadows');
+    shadowLayer
+      .selectAll('.node-shadow')
+      .data(nodes, (d) => d.id)
+      .join('rect')
+        .attr('class', 'node-shadow')
+        .attr('x', (d) => d.x)
+        .attr('y', (d) => d.y)
+        .attr('width', (d) => d.width)
+        .attr('height', (d) => d.height)
+        .attr('rx', 0.5)
+        .attr('ry', 0.5)
+        .attr('filter', 'url(#drop-shadow)')
+        .attr('fill', '#000')
+        .attr('fill-opacity', 1)
+        .style('pointer-events', 'none');
   };
 
   const setupZoomWithVirtualization = (svg, g, layout) => {
@@ -606,6 +695,36 @@ export default function TimelineGraph({
 
     const g = d3.select(svgRef.current).select('g');
 
+    const svg = d3.select(svgRef.current);
+    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
+    const nodesById = new Map((currentLayout.current?.nodes || []).map((n) => [n.id, n]));
+
+    let shadowLayer = g.select('.node-shadows');
+    if (shadowLayer.empty()) {
+      shadowLayer = g.insert('g', '.links').attr('class', 'node-shadows');
+    }
+    const shadowSel = shadowLayer
+      .selectAll('.node-shadow')
+      .data(visibleNodes, (d) => d.id);
+
+    shadowSel
+      .join(
+        (enter) => enter.append('rect')
+          .attr('class', 'node-shadow')
+          .attr('rx', 0.5)
+          .attr('ry', 0.5)
+          .attr('filter', 'url(#drop-shadow)')
+          .attr('fill', '#000')
+          .attr('fill-opacity', 1)
+          .style('pointer-events', 'none'),
+        (update) => update,
+        (exit) => exit.remove()
+      )
+      .attr('x', (d) => d.x)
+      .attr('y', (d) => d.y)
+      .attr('width', (d) => d.width)
+      .attr('height', (d) => d.height);
+
     // Update links
     const linkSel = g
       .select('.links')
@@ -620,7 +739,7 @@ export default function TimelineGraph({
           // Main Fill Path
           grp.append('path')
             .attr('class', 'link-fill')
-            .attr('fill-opacity', 0.25)
+            .attr('fill-opacity', 1)
             .attr('stroke', 'none')
             .style('cursor', 'pointer');
             
@@ -654,11 +773,20 @@ export default function TimelineGraph({
         const group = d3.select(this);
         
         // Update Fill
+        const sourceNode = nodesById.get(d.source);
+        const targetNode = nodesById.get(d.target);
+        const sourceColor = getNodePrimaryColor(sourceNode);
+        const targetColor = getNodePrimaryColor(targetNode);
+        const sourceIsTop = (d.sourceY ?? 0) <= (d.targetY ?? 0);
+        const startColor = sourceIsTop ? sourceColor : targetColor;
+        const endColor = sourceIsTop ? targetColor : sourceColor;
+        const gradId = ensureLinkGradient(defs, d, startColor, endColor);
+
         group.select('.link-fill')
           .attr('d', d.path)
-          .attr('fill', d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL)
+          .attr('fill', `url(#${gradId})`)
+          .attr('fill-opacity', 1)
           .on('mouseenter', (event) => {
-              d3.select(event.currentTarget).attr('fill-opacity', 0.5);
               const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
               if (content) {
                 setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
@@ -669,20 +797,32 @@ export default function TimelineGraph({
                 setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
               }
           })
-          .on('mouseleave', (event) => {
-              d3.select(event.currentTarget).attr('fill-opacity', 0.25);
+          .on('mouseleave', () => {
               setTooltip({ visible: false, content: null, position: null });
           });
 
-        // Update Outlines
-        group.select('.link-outline-top').attr('d', d.topPathD || null);
-        group.select('.link-outline-bottom').attr('d', d.bottomPathD || null);
-        
+        // Update Debug Outlines
+        const topOutline = group.select('.link-outline-top');
+        const bottomOutline = group.select('.link-outline-bottom');
+        if (SHOW_VISCOSITY_DEBUG && d.topPathD) {
+          topOutline
+            .attr('d', d.topPathD)
+            .style('display', null);
+        } else {
+          topOutline.style('display', 'none');
+        }
+        if (SHOW_VISCOSITY_DEBUG && d.bottomPathD) {
+          bottomOutline
+            .attr('d', d.bottomPathD)
+            .style('display', null);
+        } else {
+          bottomOutline.style('display', 'none');
+        }
+
         // Update Debug Points
         const pointsGroup = group.select('.debug-points');
         pointsGroup.selectAll('*').remove();
-        
-        if (d.debugPoints) {
+        if (SHOW_VISCOSITY_DEBUG && d.debugPoints) {
            Object.entries(d.debugPoints).forEach(([key, p]) => {
              const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
              // Smaller and thinner debug visuals
@@ -690,6 +830,9 @@ export default function TimelineGraph({
              pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
              pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
            });
+           pointsGroup.style('display', null);
+        } else {
+           pointsGroup.style('display', 'none');
         }
       });
 
@@ -775,6 +918,10 @@ export default function TimelineGraph({
     const linkData = links.filter(d => d.path !== null);
     
     const container = g.append('g').attr('class', 'links');
+
+    const svg = d3.select(svgRef.current);
+    const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
+    const nodesById = new Map((currentLayout.current?.nodes || []).map((n) => [n.id, n]));
     
     container
       .selectAll('g.link-container')
@@ -784,16 +931,24 @@ export default function TimelineGraph({
         .each(function(d) {
             const group = d3.select(this);
             
-            // Fill
+             // Fill
+            const sourceNode = nodesById.get(d.source);
+            const targetNode = nodesById.get(d.target);
+            const sourceColor = getNodePrimaryColor(sourceNode);
+            const targetColor = getNodePrimaryColor(targetNode);
+            const sourceIsTop = (d.sourceY ?? 0) <= (d.targetY ?? 0);
+            const startColor = sourceIsTop ? sourceColor : targetColor;
+            const endColor = sourceIsTop ? targetColor : sourceColor;
+            const gradId = ensureLinkGradient(defs, d, startColor, endColor);
+
             group.append('path')
                 .attr('class', 'link-fill')
                 .attr('d', d.path)
-                .attr('fill', d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL)
-                .attr('fill-opacity', 0.25)
+                .attr('fill', `url(#${gradId})`)
+                .attr('fill-opacity', 1)
                 .attr('stroke', 'none')
                 .style('cursor', 'pointer')
                 .on('mouseenter', (event) => {
-                    d3.select(event.currentTarget).attr('fill-opacity', 0.5);
                     const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
                     if (content) {
                       setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
@@ -805,12 +960,11 @@ export default function TimelineGraph({
                     }
                 })
                 .on('mouseleave', (event) => {
-                    d3.select(event.currentTarget).attr('fill-opacity', 0.25);
                     setTooltip({ visible: false, content: null, position: null });
                 });
 
-            // Top Outline (Red Dotted)
-            if (d.topPathD) {
+            // DEBUG outlines + points (toggle via SHOW_VISCOSITY_DEBUG)
+            if (SHOW_VISCOSITY_DEBUG && d.topPathD) {
                 group.append('path')
                     .attr('class', 'link-outline-top')
                     .attr('d', d.topPathD)
@@ -819,10 +973,11 @@ export default function TimelineGraph({
                     .attr('stroke-width', 1.5)
                     .attr('stroke-dasharray', '3,2')
                     .style('pointer-events', 'none');
+            } else {
+                group.append('path').attr('class', 'link-outline-top').style('display', 'none');
             }
 
-            // Bottom Outline (Blue Dotted)
-            if (d.bottomPathD) {
+            if (SHOW_VISCOSITY_DEBUG && d.bottomPathD) {
                 group.append('path')
                     .attr('class', 'link-outline-bottom')
                     .attr('d', d.bottomPathD)
@@ -831,10 +986,11 @@ export default function TimelineGraph({
                     .attr('stroke-width', 1.5)
                     .attr('stroke-dasharray', '3,2')
                     .style('pointer-events', 'none');
+            } else {
+                group.append('path').attr('class', 'link-outline-bottom').style('display', 'none');
             }
 
-            // Debug Points
-            if (d.debugPoints) {
+            if (SHOW_VISCOSITY_DEBUG && d.debugPoints) {
                 const pointsGroup = group.append('g').attr('class', 'debug-points');
                 Object.entries(d.debugPoints).forEach(([key, p]) => {
                      const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
@@ -843,6 +999,8 @@ export default function TimelineGraph({
                      pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
                      pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
                 });
+            } else {
+                group.append('g').attr('class', 'debug-points').style('display', 'none');
             }
         });
   };
@@ -906,9 +1064,6 @@ export default function TimelineGraph({
   
   const renderNodes = (g, nodes, svg) => {
     console.log('renderNodes called with', nodes.length, 'nodes:', nodes.map(n => ({ id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })));
-    
-    // Create shadow filter once
-    JerseyRenderer.createShadowFilter(svg);
 
     const nodeGroups = g.append('g')
       .attr('class', 'nodes')
@@ -1002,7 +1157,7 @@ export default function TimelineGraph({
       .select('rect')
       .transition()
       .duration(200)
-      .attr('filter', 'url(#drop-shadow)');
+      .attr('filter', null);
   };
 
   return (

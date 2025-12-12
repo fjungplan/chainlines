@@ -6,17 +6,18 @@ export class DetailRenderer {
    * Render detailed link types when zoomed in
    */
   static renderDetailedLinks(g, links, scale) {
-    g.selectAll('.links path')
+    // IMPORTANT: Viscous connectors have filled blobs + dotted outline paths.
+    // Keep fills fully opaque and avoid changing overall opacity here.
+    g.selectAll('.links path.link-outline-top, .links path.link-outline-bottom')
       .attr('stroke-width', d => {
         const baseWidth = 2;
         // Thicker lines for merges/splits
         const multiplier = (d.type === 'MERGE' || d.type === 'SPLIT') ? 1.5 : 1;
         return baseWidth * multiplier;
-      })
-      .attr('opacity', d => {
-        // Spiritual succession more transparent
-        return d.type === 'SPIRITUAL_SUCCESSION' ? 0.6 : 0.9;
       });
+
+    g.selectAll('.links path.link-fill')
+      .attr('opacity', 1);
     
     // Arrowheads removed for Viscous Connectors
     // this.addArrowheads(g, links);
