@@ -66,6 +66,14 @@ class TeamNode(Base):
             raise ValueError("founding_year must be >= 1900")
         return value
 
+    def get_predecessors(self) -> List["TeamNode"]:
+        """Return list of immediate predecessor nodes via incoming events."""
+        return [event.predecessor_node for event in self.incoming_events if event.predecessor_node]
+
+    def get_successors(self) -> List["TeamNode"]:
+        """Return list of immediate successor nodes via outgoing events."""
+        return [event.successor_node for event in self.outgoing_events if event.successor_node]
+
 class TeamEra(Base):
     """Season-specific team configuration snapshot."""
     __tablename__ = "team_era"

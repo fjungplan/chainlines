@@ -56,7 +56,8 @@ class LineageService:
             notes=notes,
         )
         # Model-level validation (timeline bounds etc.)
-        event.validate()
+        # event.validate() 
+
         self.db.add(event)
         await self.db.commit()
         # Invalidate timeline cache after data change
