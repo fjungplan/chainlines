@@ -1,5 +1,6 @@
 """Tests for ScraperService."""
 import pytest
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.scraper_service import ScraperService
@@ -126,13 +127,14 @@ async def test_handle_sponsors_placeholder(db_session: AsyncSession):
     service = ScraperService(db=db_session)
     
     # Create a node and era
-    node = TeamNode(founding_year=2024)
+    node = TeamNode(founding_year=2024, legal_name="Test Team Node")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2024,
+        valid_from=date(2024, 1, 1),
         registered_name="Test Team",
         uci_code="TST"
     )

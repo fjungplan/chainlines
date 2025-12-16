@@ -1,5 +1,6 @@
 """Service layer for scraper operations."""
 from typing import Optional
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -42,7 +43,10 @@ class ScraperService:
         # 3. Manage lineage events
         
         # Simplified: Create new node and era
-        node = TeamNode(founding_year=2024)
+        node = TeamNode(
+            founding_year=2024,
+            legal_name=data.team_name
+        )
         self.db.add(node)
         await self.db.flush()  # Get node_id
         
@@ -55,6 +59,7 @@ class ScraperService:
         era = TeamEra(
             node_id=node.node_id,
             season_year=2024,
+            valid_from=date(2024, 1, 1),
             registered_name=data.team_name,
             uci_code=data.uci_code,
             tier_level=tier_level,
