@@ -21,9 +21,9 @@ import CreateTeamWizard from './CreateTeamWizard';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-export default function TimelineGraph({ 
-  data, 
-  onYearRangeChange, 
+export default function TimelineGraph({
+  data,
+  onYearRangeChange,
   onTierFilterChange,
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
@@ -49,7 +49,7 @@ export default function TimelineGraph({
   const currentTransform = useRef(d3.zoomIdentity);
   const graphDataRef = useRef(null);
   const virtualizationTimeout = useRef(null);
-  
+
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
   const [showEditWizard, setShowEditWizard] = useState(false);
@@ -62,21 +62,21 @@ export default function TimelineGraph({
     startYear: currentStartYear || initialStartYear,
     endYear: currentEndYear || initialEndYear
   });
-  
+
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
-  
+
   const { user, canEdit } = useAuth();
   const navigate = useNavigate();
-  
+
   // Note: props-change effect moved below zoomToYearRange definition to avoid TDZ
-  
+
   useEffect(() => {
     // Initialize zoom manager
     zoomManager.current = new ZoomLevelManager((level, scale) => {
       setZoomLevel(level);
       updateDetailLevel(level, scale);
     });
-    
+
     // Initialize navigation manager
     if (svgRef.current && containerRef.current) {
       navigationRef.current = new GraphNavigation(
@@ -137,10 +137,10 @@ export default function TimelineGraph({
       return () => clearInterval(interval);
     }
   }, []);
-  
+
   useEffect(() => {
     if (!data || !data.nodes || !data.links) return;
-    
+
     // Log raw API data to check for duplicates at source
     const nodeIds = data.nodes.map(n => n.id);
     const uniqueNodeIds = new Set(nodeIds);
@@ -149,7 +149,7 @@ export default function TimelineGraph({
       const duplicates = nodeIds.filter((id, idx) => nodeIds.indexOf(id) !== idx);
       console.error('DUPLICATES IN API RESPONSE:', [...new Set(duplicates)]);
     }
-    
+
     try {
       validateGraphData(data);
       renderGraph(data);
@@ -171,7 +171,7 @@ export default function TimelineGraph({
           const layout = currentLayout.current;
           const minScale = computeMinScale(layout);
           zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
-          
+
           // Trigger full re-render
           renderGraph(graphDataRef.current);
         }
@@ -195,18 +195,18 @@ export default function TimelineGraph({
     container.addEventListener('wheel', preventBrowserZoom, { passive: false });
     return () => container.removeEventListener('wheel', preventBrowserZoom);
   }, []);
-  
+
   const updateDetailLevel = useCallback((level, scale) => {
     if (!currentLayout.current) return;
-    
+
     const g = d3.select(svgRef.current).select('g');
-    
+
     if (level === 'DETAIL') {
       // Show detailed features
       DetailRenderer.renderDetailedLinks(g, currentLayout.current.links, scale);
-      
+
       // Render era timelines
-      g.selectAll('.node').each(function(d) {
+      g.selectAll('.node').each(function (d) {
         const group = d3.select(this);
         DetailRenderer.renderEraTimeline(group, d, scale);
       });
@@ -216,7 +216,7 @@ export default function TimelineGraph({
       g.selectAll('.links path').attr('marker-end', null);
     }
   }, []);
-  
+
   const handleZoom = useCallback((event) => {
     const { transform } = event;
     const g = d3.select(svgRef.current).select('g');
@@ -225,35 +225,35 @@ export default function TimelineGraph({
       zoomManager.current.updateScale(transform.k);
     }
   }, []);
-  
+
   const handleZoomReset = useCallback(() => {
     zoomToYearRange(currentFilters.startYear, currentFilters.endYear);
   }, [currentFilters]);
-  
+
   const zoomToYearRange = useCallback((startYear, endYear) => {
     if (!currentLayout.current || !svgRef.current || !containerRef.current || !zoomBehavior.current) return;
-    
+
     const layout = currentLayout.current;
     const containerWidth = containerRef.current.clientWidth;
-    
+
     const x1 = layout.xScale(startYear);
     const x2 = layout.xScale(endYear);
     const yearRangeWidth = Math.max(1, x2 - x1);
-    
+
     const padding = 80;
     const rawScale = (containerWidth - 2 * padding) / yearRangeWidth;
     const minScale = computeMinScale(layout);
     const targetScale = Math.min(VISUALIZATION.ZOOM_MAX, Math.max(minScale, rawScale));
-    
+
     const centerX = (x1 + x2) / 2;
     const targetX = containerWidth / 2 - centerX * targetScale;
     const targetY = 0;
-    
+
     const svg = d3.select(svgRef.current);
     const transform = d3.zoomIdentity
       .translate(targetX, targetY)
       .scale(targetScale);
-    
+
     svg.transition()
       .duration(750)
       .call(zoomBehavior.current.transform, transform);
@@ -270,7 +270,7 @@ export default function TimelineGraph({
       }
     }
   }, [currentStartYear, currentEndYear, filtersVersion, zoomToYearRange]);
-  
+
   const getGridInterval = (scale) => {
     // Only years or decades based on zoom level (grid switches earlier)
     return scale >= 1.2 ? 1 : 10;
@@ -286,18 +286,44 @@ export default function TimelineGraph({
   const sanitizeSvgId = (s) => String(s).replace(/[^a-zA-Z0-9_-]/g, '_');
 
   const getNodePrimaryColor = (node) => {
-    const latestEra = node?.eras?.[node.eras?.length - 1];
-    const sponsors = latestEra?.sponsors || [];
-    if (!sponsors.length) return DEFAULT_NODE_COLOR;
+    if (!node?.eras?.length) return DEFAULT_NODE_COLOR;
 
-    // Use the most prominent sponsor color as the representative node color.
-    const best = sponsors.reduce((acc, cur) => {
-      const accP = Number(acc?.prominence ?? 0);
-      const curP = Number(cur?.prominence ?? 0);
-      return curP > accP ? cur : acc;
-    }, sponsors[0]);
+    // Aggregate prominence scores for all sponsors across all eras
+    const sponsorScores = new Map(); // brandId -> { score, color }
 
-    return best?.color || DEFAULT_NODE_COLOR;
+    node.eras.forEach(era => {
+      if (!era.sponsors) return;
+
+      era.sponsors.forEach(sponsor => {
+        // Use brand_id or name as key
+        const key = sponsor.id || sponsor.name;
+        const current = sponsorScores.get(key) || { score: 0, color: sponsor.color };
+
+        // Add prominence to score (default to 0 if missing)
+        // Since eras are annual, simply adding up prominence works as a time-weighted score
+        current.score += Number(sponsor.prominence || 0);
+
+        // Update color just in case (though it should be constant for the brand)
+        if (sponsor.color) current.color = sponsor.color;
+
+        sponsorScores.set(key, current);
+      });
+    });
+
+    if (sponsorScores.size === 0) return DEFAULT_NODE_COLOR;
+
+    // Find the sponsor with the highest total score
+    let bestSponsor = null;
+    let maxScore = -1;
+
+    for (const [_, data] of sponsorScores) {
+      if (data.score > maxScore) {
+        maxScore = data.score;
+        bestSponsor = data;
+      }
+    }
+
+    return bestSponsor?.color || DEFAULT_NODE_COLOR;
   };
 
   const ensureLinkGradient = (defs, linkDatum, startColor, endColor) => {
@@ -356,15 +382,15 @@ export default function TimelineGraph({
     } else {
       gridGroup.selectAll('*').remove();
     }
-    
+
     // Use actual year bounds and the same scale as layout
     const yearRange = layout?.yearRange ?? { min: 0, max: 1 };
     const xScale = layout?.xScale ?? ((year) => year);
-    
+
     // Dynamic spacing by zoom level for grid only
     const interval = getGridInterval(scale);
     const gridSpacingYears = interval;
-    
+
     // Draw vertical grid lines - extend to actual node bounds, not just viewport
     const start = Math.floor(yearRange.min / gridSpacingYears) * gridSpacingYears;
     const end = Math.ceil(yearRange.max / gridSpacingYears) * gridSpacingYears;
@@ -388,18 +414,18 @@ export default function TimelineGraph({
         .attr('stroke-dasharray', scale >= 1.5 ? '1,3' : '3,3');
     }
   };
-  
-  
+
+
   const renderGraph = (graphData) => {
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
-    
+
     // Deduplicate nodes by ID
     const deduplicatedNodes = [];
     const seenIds = new Set();
     const duplicateMap = {};
-    
+
     for (const node of graphData.nodes) {
       if (!seenIds.has(node.id)) {
         deduplicatedNodes.push(node);
@@ -408,14 +434,14 @@ export default function TimelineGraph({
         duplicateMap[node.id] = (duplicateMap[node.id] || 1) + 1;
       }
     }
-    
+
     if (deduplicatedNodes.length < graphData.nodes.length) {
       const removedCount = graphData.nodes.length - deduplicatedNodes.length;
       console.warn('Found duplicate nodes:', removedCount, duplicateMap);
       console.log('Original nodes:', graphData.nodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
       console.log('Deduplicated nodes:', deduplicatedNodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
     }
-    
+
     console.log('Rendering with nodes:', deduplicatedNodes.map(n => ({
       id: n.id,
       name: n.eras?.[0]?.name,
@@ -423,12 +449,12 @@ export default function TimelineGraph({
       dissolution: n.dissolution_year,
       eras: n.eras?.length
     })));
-    
+
     const dedupedData = {
       ...graphData,
       nodes: deduplicatedNodes
     };
-    
+
     const layoutStart = performanceMonitor.current.startTiming('layout');
     // Extend the filter range by 1 year to show full span of the end year
     const filterYearRange = { min: currentFilters.startYear, max: currentFilters.endYear + 1 };
@@ -478,17 +504,17 @@ export default function TimelineGraph({
     // Calculate initial transform if this is first render (identity transform)
     if (currentTransform.current.k === 1 && currentTransform.current.x === 0 && currentTransform.current.y === 0) {
       const nodes = layout.nodes || [];
-      
+
       if (nodes.length === 0) {
         console.error('No nodes to display!');
         return;
       }
-      
+
       const maxNodeBottom = Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)));
       const minNodeTop = Math.min(...nodes.map(n => n.y || 0));
       const paddedMinY = minNodeTop - VERTICAL_PADDING;
       const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
-      
+
       const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
       const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
@@ -502,7 +528,7 @@ export default function TimelineGraph({
       const centerY = (paddedMinY + paddedMaxY) / 2;
       const targetX = width / 2 - centerX * targetScale;
       const targetY = height / 2 - centerY * targetScale;
-      
+
       console.log('🎯 INITIAL TRANSFORM CALC:', {
         nodeCount: nodes.length,
         yearRange: [layout.yearRange.min, layout.yearRange.max],
@@ -522,7 +548,7 @@ export default function TimelineGraph({
         maxNodeBottom,
         paddedMinY,
         paddedMaxY
-      });      currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
+      }); currentTransform.current = d3.zoomIdentity.translate(targetX, targetY).scale(targetScale);
     }
 
     // Use current transform
@@ -538,7 +564,7 @@ export default function TimelineGraph({
 
     // Add gradient definitions for different link styles
     const defs = svg.append('defs');
-    
+
     // Gradient for MERGE connections (multiple sources converging)
     const mergeGradient = defs.append('linearGradient')
       .attr('id', 'mergeGradient')
@@ -546,12 +572,12 @@ export default function TimelineGraph({
       .attr('y1', '0%')
       .attr('x2', '100%')
       .attr('y2', '0%');
-    
+
     mergeGradient.append('stop')
       .attr('offset', '0%')
       .attr('stop-color', VISUALIZATION.LINK_COLOR_LEGAL)
       .attr('stop-opacity', 0.6);
-    
+
     mergeGradient.append('stop')
       .attr('offset', '100%')
       .attr('stop-color', VISUALIZATION.LINK_COLOR_LEGAL)
@@ -560,7 +586,7 @@ export default function TimelineGraph({
     const g = svg.append('g');
     // Apply current transform immediately to avoid initial flash before zoom attaches
     g.attr('transform', currentTransform.current);
-    
+
     // Add background grid
     renderBackgroundGrid(g, layout);
     JerseyRenderer.createShadowFilter(svg);
@@ -574,7 +600,7 @@ export default function TimelineGraph({
       renderLinks(g, visibleLinks);
       renderNodes(g, visibleNodes, svg);
     }
-    
+
     // Render transition markers
     renderTransitionMarkers(g, visibleLinks);
 
@@ -591,17 +617,17 @@ export default function TimelineGraph({
       .selectAll('.node-shadow')
       .data(nodes, (d) => d.id)
       .join('rect')
-        .attr('class', 'node-shadow')
-        .attr('x', (d) => d.x)
-        .attr('y', (d) => d.y)
-        .attr('width', (d) => d.width)
-        .attr('height', (d) => d.height)
-        .attr('rx', 0.5)
-        .attr('ry', 0.5)
-        .attr('filter', 'url(#drop-shadow)')
-        .attr('fill', '#000')
-        .attr('fill-opacity', 1)
-        .style('pointer-events', 'none');
+      .attr('class', 'node-shadow')
+      .attr('x', (d) => d.x)
+      .attr('y', (d) => d.y)
+      .attr('width', (d) => d.width)
+      .attr('height', (d) => d.height)
+      .attr('rx', 0.5)
+      .attr('ry', 0.5)
+      .attr('filter', 'url(#drop-shadow)')
+      .attr('fill', '#000')
+      .attr('fill-opacity', 1)
+      .style('pointer-events', 'none');
   };
 
   const arrangeLinkLayer = (g) => {
@@ -646,7 +672,7 @@ export default function TimelineGraph({
       [yearMin, paddedMinY],
       [yearMax, paddedMaxY]
     ];
-    
+
     console.log('🔧 ZOOM SETUP:', {
       minScale,
       maxScale: VISUALIZATION.ZOOM_MAX,
@@ -697,12 +723,12 @@ export default function TimelineGraph({
         }, 100);
       });
     zoomBehavior.current = zoom;
-    
+
     // Initialize zoom behavior and set the current transform
     svg.call(zoom);
-    
+
     console.log('📍 BEFORE D3 TRANSFORM:', { k: currentTransform.current.k, x: currentTransform.current.x, y: currentTransform.current.y });
-    
+
     // Always apply the current transform to D3's zoom state
     // This will trigger the zoom event handler which will set g.attr('transform')
     svg.call(zoom.transform, currentTransform.current);
@@ -758,14 +784,14 @@ export default function TimelineGraph({
       .join(
         (enter) => {
           const grp = enter.append('g').attr('class', 'link-container');
-          
+
           // Main Fill Path
           grp.append('path')
             .attr('class', 'link-fill')
             .attr('fill-opacity', 1)
             .attr('stroke', 'none')
             .style('cursor', 'pointer');
-            
+
           // Top Outline (Red Dotted)
           grp.append('path')
             .attr('class', 'link-outline-top')
@@ -783,7 +809,7 @@ export default function TimelineGraph({
             .attr('stroke-width', 1.5)
             .attr('stroke-dasharray', '3,2')
             .style('pointer-events', 'none');
-            
+
           // Debug Points Group
           grp.append('g').attr('class', 'debug-points');
           grp.append('g').attr('class', 'bezier-debug-points');
@@ -793,9 +819,9 @@ export default function TimelineGraph({
         (update) => update,
         (exit) => exit.remove()
       )
-      .each(function(d) {
+      .each(function (d) {
         const group = d3.select(this);
-        
+
         // Update Fill
         const sourceNode = nodesById.get(d.source);
         const targetNode = nodesById.get(d.target);
@@ -811,18 +837,18 @@ export default function TimelineGraph({
           .attr('fill', `url(#${gradId})`)
           .attr('fill-opacity', 1)
           .on('mouseenter', (event) => {
-              const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
-              if (content) {
-                setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
-              }
+            const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
+            if (content) {
+              setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+            }
           })
           .on('mousemove', (event) => {
-              if (tooltip.visible) {
-                setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
-              }
+            if (tooltip.visible) {
+              setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
+            }
           })
           .on('mouseleave', () => {
-              setTooltip({ visible: false, content: null, position: null });
+            setTooltip({ visible: false, content: null, position: null });
           });
 
         // Update Debug Outlines
@@ -847,16 +873,16 @@ export default function TimelineGraph({
         const pointsGroup = group.select('.debug-points');
         pointsGroup.selectAll('*').remove();
         if (SHOW_VISCOSITY_DEBUG && d.debugPoints) {
-           Object.entries(d.debugPoints).forEach(([key, p]) => {
-             const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
-             // Smaller and thinner debug visuals
-             pg.append('line').attr('x1', -1.5).attr('y1', -1.5).attr('x2', 1.5).attr('y2', 1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
-             pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
-             pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
-           });
-           pointsGroup.style('display', null);
+          Object.entries(d.debugPoints).forEach(([key, p]) => {
+            const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
+            // Smaller and thinner debug visuals
+            pg.append('line').attr('x1', -1.5).attr('y1', -1.5).attr('x2', 1.5).attr('y2', 1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
+            pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
+            pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
+          });
+          pointsGroup.style('display', null);
         } else {
-           pointsGroup.style('display', 'none');
+          pointsGroup.style('display', 'none');
         }
 
         const bezierGroup = group.select('.bezier-debug-points');
@@ -969,149 +995,149 @@ export default function TimelineGraph({
     renderInto(rulerTopRef.current);
     renderInto(rulerBottomRef.current);
   }, []);
-  
+
   const renderLinks = (g, links) => {
     // Only render links with paths
     const linkData = links.filter(d => d.path !== null);
-    
+
     const container = g.append('g').attr('class', 'links');
 
     const svg = d3.select(svgRef.current);
     const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
     const nodesById = new Map((currentLayout.current?.nodes || []).map((n) => [n.id, n]));
-    
+
     container
       .selectAll('g.link-container')
       .data(linkData, (d) => d.id || `${d.source}-${d.target}-${d.year || ''}-${d.type || ''}`)
       .join('g')
-        .attr('class', 'link-container')
-        .each(function(d) {
-            const group = d3.select(this);
-            
-             // Fill
-            const sourceNode = nodesById.get(d.source);
-            const targetNode = nodesById.get(d.target);
-            const sourceColor = getNodePrimaryColor(sourceNode);
-            const targetColor = getNodePrimaryColor(targetNode);
-            const sourceIsTop = (d.sourceY ?? 0) <= (d.targetY ?? 0);
-            const startColor = sourceIsTop ? sourceColor : targetColor;
-            const endColor = sourceIsTop ? targetColor : sourceColor;
-            const gradId = ensureLinkGradient(defs, d, startColor, endColor);
+      .attr('class', 'link-container')
+      .each(function (d) {
+        const group = d3.select(this);
 
-            group.append('path')
-                .attr('class', 'link-fill')
-                .attr('d', d.path)
-                .attr('fill', `url(#${gradId})`)
-                .attr('fill-opacity', 1)
-                .attr('stroke', 'none')
-                .style('cursor', 'pointer')
-                .on('mouseenter', (event) => {
-                    const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
-                    if (content) {
-                      setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
-                    }
-                })
-                .on('mousemove', (event) => {
-                    if (tooltip.visible) {
-                      setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
-                    }
-                })
-                .on('mouseleave', (event) => {
-                    setTooltip({ visible: false, content: null, position: null });
-                });
+        // Fill
+        const sourceNode = nodesById.get(d.source);
+        const targetNode = nodesById.get(d.target);
+        const sourceColor = getNodePrimaryColor(sourceNode);
+        const targetColor = getNodePrimaryColor(targetNode);
+        const sourceIsTop = (d.sourceY ?? 0) <= (d.targetY ?? 0);
+        const startColor = sourceIsTop ? sourceColor : targetColor;
+        const endColor = sourceIsTop ? targetColor : sourceColor;
+        const gradId = ensureLinkGradient(defs, d, startColor, endColor);
 
-            // DEBUG outlines + points (toggle via SHOW_VISCOSITY_DEBUG)
-            if (SHOW_VISCOSITY_DEBUG && d.topPathD) {
-                group.append('path')
-                    .attr('class', 'link-outline-top')
-                    .attr('d', d.topPathD)
-                    .attr('fill', 'none')
-                    .attr('stroke', 'red')
-                    .attr('stroke-width', 1.5)
-                    .attr('stroke-dasharray', '3,2')
-                    .style('pointer-events', 'none');
-            } else {
-                group.append('path').attr('class', 'link-outline-top').style('display', 'none');
+        group.append('path')
+          .attr('class', 'link-fill')
+          .attr('d', d.path)
+          .attr('fill', `url(#${gradId})`)
+          .attr('fill-opacity', 1)
+          .attr('stroke', 'none')
+          .style('cursor', 'pointer')
+          .on('mouseenter', (event) => {
+            const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
+            if (content) {
+              setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
             }
-
-            if (SHOW_VISCOSITY_DEBUG && d.bottomPathD) {
-                group.append('path')
-                    .attr('class', 'link-outline-bottom')
-                    .attr('d', d.bottomPathD)
-                    .attr('fill', 'none')
-                    .attr('stroke', 'blue')
-                    .attr('stroke-width', 1.5)
-                    .attr('stroke-dasharray', '3,2')
-                    .style('pointer-events', 'none');
-            } else {
-                group.append('path').attr('class', 'link-outline-bottom').style('display', 'none');
+          })
+          .on('mousemove', (event) => {
+            if (tooltip.visible) {
+              setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
             }
+          })
+          .on('mouseleave', (event) => {
+            setTooltip({ visible: false, content: null, position: null });
+          });
 
-            if (SHOW_VISCOSITY_DEBUG && d.debugPoints) {
-                const pointsGroup = group.append('g').attr('class', 'debug-points');
-                Object.entries(d.debugPoints).forEach(([key, p]) => {
-                     const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
-                     // Smaller and thinner debug visuals
-                     pg.append('line').attr('x1', -1.5).attr('y1', -1.5).attr('x2', 1.5).attr('y2', 1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
-                     pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
-                     pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
-                });
-            } else {
-                group.append('g').attr('class', 'debug-points').style('display', 'none');
-            }
+        // DEBUG outlines + points (toggle via SHOW_VISCOSITY_DEBUG)
+        if (SHOW_VISCOSITY_DEBUG && d.topPathD) {
+          group.append('path')
+            .attr('class', 'link-outline-top')
+            .attr('d', d.topPathD)
+            .attr('fill', 'none')
+            .attr('stroke', 'red')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '3,2')
+            .style('pointer-events', 'none');
+        } else {
+          group.append('path').attr('class', 'link-outline-top').style('display', 'none');
+        }
 
-            if (SHOW_VISCOSITY_DEBUG && d.bezierDebugPoints?.length) {
-                const bezierGroup = group.append('g').attr('class', 'bezier-debug-points');
-                d.bezierDebugPoints.forEach((p) => {
-                    const gp = bezierGroup.append('g').attr('class', 'bezier-point')
-                      .attr('transform', `translate(${p.x},${p.y})`);
-                    gp.append('circle')
-                      .attr('r', 1)
-                      .attr('fill', 'yellow')
-                      .style('pointer-events', 'none');
-                    gp.append('text')
-                      .attr('text-anchor', 'middle')
-                      .attr('dominant-baseline', 'central')
-                      .attr('fill', '#000')
-                      .attr('font-size', '2.5px')
-                      .text(p.label ?? '');
-                });
-            } else {
-                group.append('g').attr('class', 'bezier-debug-points').style('display', 'none');
-            }
-        });
+        if (SHOW_VISCOSITY_DEBUG && d.bottomPathD) {
+          group.append('path')
+            .attr('class', 'link-outline-bottom')
+            .attr('d', d.bottomPathD)
+            .attr('fill', 'none')
+            .attr('stroke', 'blue')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '3,2')
+            .style('pointer-events', 'none');
+        } else {
+          group.append('path').attr('class', 'link-outline-bottom').style('display', 'none');
+        }
+
+        if (SHOW_VISCOSITY_DEBUG && d.debugPoints) {
+          const pointsGroup = group.append('g').attr('class', 'debug-points');
+          Object.entries(d.debugPoints).forEach(([key, p]) => {
+            const pg = pointsGroup.append('g').attr('transform', `translate(${p.x},${p.y})`);
+            // Smaller and thinner debug visuals
+            pg.append('line').attr('x1', -1.5).attr('y1', -1.5).attr('x2', 1.5).attr('y2', 1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
+            pg.append('line').attr('x1', -1.5).attr('y1', 1.5).attr('x2', 1.5).attr('y2', -1.5).attr('stroke', 'yellow').attr('stroke-width', 0.5);
+            pg.append('text').attr('y', -2.5).attr('text-anchor', 'middle').attr('fill', 'yellow').attr('font-size', '5px').text(key);
+          });
+        } else {
+          group.append('g').attr('class', 'debug-points').style('display', 'none');
+        }
+
+        if (SHOW_VISCOSITY_DEBUG && d.bezierDebugPoints?.length) {
+          const bezierGroup = group.append('g').attr('class', 'bezier-debug-points');
+          d.bezierDebugPoints.forEach((p) => {
+            const gp = bezierGroup.append('g').attr('class', 'bezier-point')
+              .attr('transform', `translate(${p.x},${p.y})`);
+            gp.append('circle')
+              .attr('r', 1)
+              .attr('fill', 'yellow')
+              .style('pointer-events', 'none');
+            gp.append('text')
+              .attr('text-anchor', 'middle')
+              .attr('dominant-baseline', 'central')
+              .attr('fill', '#000')
+              .attr('font-size', '2.5px')
+              .text(p.label ?? '');
+          });
+        } else {
+          group.append('g').attr('class', 'bezier-debug-points').style('display', 'none');
+        }
+      });
   };
-  
+
   const renderTransitionMarkers = (g, links) => {
     // Only render markers for same-swimlane transitions
     const markerData = links.filter(d => d.sameSwimlane && d.path === null);
-    
+
     const markerGroup = g.append('g').attr('class', 'transition-markers');
-    
+
     const markers = markerGroup
       .selectAll('g.transition-marker')
       .data(markerData, (d) => `marker-${d.source}-${d.target}-${d.year || ''}`)
       .join('g')
-        .attr('class', 'transition-marker')
-        .style('cursor', 'pointer')
-        .on('mouseenter', (event, d) => {
-          d3.select(event.currentTarget).select('line').attr('stroke-width', 3);
-          d3.select(event.currentTarget).select('circle').attr('r', 5);
-          const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
-          if (content) {
-            setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
-          }
-        })
-        .on('mousemove', (event) => {
-          if (tooltip.visible) {
-            setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
-          }
-        })
-        .on('mouseleave', (event) => {
-          d3.select(event.currentTarget).select('line').attr('stroke-width', 2);
-          d3.select(event.currentTarget).select('circle').attr('r', 3.5);
-          setTooltip({ visible: false, content: null, position: null });
-        });
+      .attr('class', 'transition-marker')
+      .style('cursor', 'pointer')
+      .on('mouseenter', (event, d) => {
+        d3.select(event.currentTarget).select('line').attr('stroke-width', 3);
+        d3.select(event.currentTarget).select('circle').attr('r', 5);
+        const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
+        if (content) {
+          setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+        }
+      })
+      .on('mousemove', (event) => {
+        if (tooltip.visible) {
+          setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
+        }
+      })
+      .on('mouseleave', (event) => {
+        d3.select(event.currentTarget).select('line').attr('stroke-width', 2);
+        d3.select(event.currentTarget).select('circle').attr('r', 3.5);
+        setTooltip({ visible: false, content: null, position: null });
+      });
 
     // Vertical line marker
     markers
@@ -1120,7 +1146,7 @@ export default function TimelineGraph({
       .attr('y1', (d) => d.targetY - 15)
       .attr('x2', (d) => d.targetX)
       .attr('y2', (d) => d.targetY + 15)
-      .attr('stroke', (d) => 
+      .attr('stroke', (d) =>
         d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL
       )
       .attr('stroke-width', 2)
@@ -1132,14 +1158,14 @@ export default function TimelineGraph({
       .attr('cx', (d) => d.targetX)
       .attr('cy', (d) => d.targetY)
       .attr('r', 3.5)
-      .attr('fill', (d) => 
+      .attr('fill', (d) =>
         d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL
       )
       .attr('stroke', '#fff')
       .attr('stroke-width', 1.5);
   };
-  
-  
+
+
   const renderNodes = (g, nodes, svg) => {
     console.log('renderNodes called with', nodes.length, 'nodes:', nodes.map(n => ({ id: n.id, x: n.x, y: n.y, width: n.width, height: n.height })));
 
@@ -1148,28 +1174,28 @@ export default function TimelineGraph({
       .selectAll('g')
       .data(nodes)
       .join('g')
-        .attr('class', 'node')
-        .attr('data-id', d => d.id)
-        .attr('transform', d => `translate(${d.x},${d.y})`)
-        .style('cursor', 'pointer')
-        .on('click', (event, d) => handleNodeClick(d))
-        .on('mouseenter', (event, d) => {
-          handleNodeHover(event, d);
-          const content = TooltipBuilder.buildNodeTooltip(d);
-          setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
-        })
-        .on('mousemove', (event) => {
-          if (tooltip.visible) {
-            setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
-          }
-        })
-        .on('mouseleave', (event) => {
-          handleNodeHoverEnd(event);
-          setTooltip({ visible: false, content: null, position: null });
-        });
+      .attr('class', 'node')
+      .attr('data-id', d => d.id)
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .style('cursor', 'pointer')
+      .on('click', (event, d) => handleNodeClick(d))
+      .on('mouseenter', (event, d) => {
+        handleNodeHover(event, d);
+        const content = TooltipBuilder.buildNodeTooltip(d);
+        setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+      })
+      .on('mousemove', (event) => {
+        if (tooltip.visible) {
+          setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
+        }
+      })
+      .on('mouseleave', (event) => {
+        handleNodeHoverEnd(event);
+        setTooltip({ visible: false, content: null, position: null });
+      });
 
     // Render each node with jersey styling
-    nodeGroups.each(function(d) {
+    nodeGroups.each(function (d) {
       const group = d3.select(this);
       JerseyRenderer.renderNode(group, d, svg);
       JerseyRenderer.addNodeLabel(group, d);
@@ -1184,7 +1210,7 @@ export default function TimelineGraph({
 
   const handleNodeClick = (node) => {
     console.log('Clicked node:', node);
-    
+
     // Only allow edits if user can edit (authenticated with proper role)
     if (canEdit()) {
       setSelectedNode(node);
@@ -1194,7 +1220,7 @@ export default function TimelineGraph({
       navigate(`/team/${node.id}`);
     }
   };
-  
+
   const showToast = (message, type = 'success', duration = 3000) => {
     setToast({ visible: true, message, type });
     setTimeout(() => {
@@ -1209,7 +1235,7 @@ export default function TimelineGraph({
     setShowSplitWizard(false);
     setShowCreateWizard(false);
     setSelectedNode(null);
-    
+
     // Show toast notification (no browser dialog)
     if (result.status === 'APPROVED') {
       showToast('Edit applied successfully!', 'success');
@@ -1240,8 +1266,8 @@ export default function TimelineGraph({
 
   return (
     <div className="timeline-layout">
-      <div 
-        ref={containerRef} 
+      <div
+        ref={containerRef}
         className="timeline-graph-container"
       >
         <div className="timeline-ruler top" ref={rulerTopRef} aria-hidden="true" />
@@ -1254,7 +1280,7 @@ export default function TimelineGraph({
 
       {/* Right sidebar with controls and actions */}
       <div className="timeline-sidebar">
-        <ControlPanel 
+        <ControlPanel
           onYearRangeChange={onYearRangeChange}
           onTierFilterChange={onTierFilterChange}
           onZoomReset={handleZoomReset}
@@ -1264,44 +1290,44 @@ export default function TimelineGraph({
           initialEndYear={initialEndYear}
           initialTiers={initialTiers}
         />
-        
+
         {/* Action buttons for merge/split/create - only show if user can edit */}
         {canEdit() && (
           <div className="wizard-actions">
-            <button 
+            <button
               className="wizard-action-btn wizard-create"
               onClick={() => setShowCreateWizard(true)}
               title="Create a new team from scratch"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="16"/>
-                <line x1="8" y1="12" x2="16" y2="12"/>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="16" />
+                <line x1="8" y1="12" x2="16" y2="12" />
               </svg>
               Create Team
             </button>
-            <button 
+            <button
               className="wizard-action-btn"
               onClick={() => setShowMergeWizard(true)}
               title="Create a merge event"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                <path d="m8 6 4-4 4 4"/>
-                <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/>
-                <path d="m20 22-5-5"/>
+                <path d="m8 6 4-4 4 4" />
+                <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" />
+                <path d="m20 22-5-5" />
               </svg>
               Merge Teams
             </button>
-            <button 
+            <button
               className="wizard-action-btn"
               onClick={() => setShowSplitWizard(true)}
               title="Create a split event"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                <path d="M16 3h5v5"/>
-                <path d="M8 3H3v5"/>
-                <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/>
-                <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22"/>
+                <path d="M16 3h5v5" />
+                <path d="M8 3H3v5" />
+                <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
+                <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22" />
               </svg>
               Split Team
             </button>
@@ -1309,12 +1335,12 @@ export default function TimelineGraph({
         )}
       </div>
 
-      <Tooltip 
+      <Tooltip
         content={tooltip.content}
         position={tooltip.position}
         visible={tooltip.visible}
       />
-      
+
       {/* Wizard Modals */}
       {showEditWizard && selectedNode && selectedNode.eras && selectedNode.eras.length > 0 && (
         <EditMetadataWizard
@@ -1327,7 +1353,7 @@ export default function TimelineGraph({
           onSuccess={handleWizardSuccess}
         />
       )}
-      
+
       {showMergeWizard && selectedNode && (
         <MergeWizard
           initialNode={selectedNode}
@@ -1338,7 +1364,7 @@ export default function TimelineGraph({
           onSuccess={handleWizardSuccess}
         />
       )}
-      
+
       {showSplitWizard && selectedNode && (
         <SplitWizard
           sourceNode={selectedNode}
@@ -1349,14 +1375,14 @@ export default function TimelineGraph({
           onSuccess={handleWizardSuccess}
         />
       )}
-      
+
       {showCreateWizard && (
         <CreateTeamWizard
           onClose={() => setShowCreateWizard(false)}
           onSuccess={handleWizardSuccess}
         />
       )}
-      
+
       {/* Toast Notification */}
       {toast.visible && (
         <div className={`toast toast-${toast.type}`}>
