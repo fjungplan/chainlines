@@ -60,6 +60,12 @@ class TeamNode(Base):
         CheckConstraint("current_tier IN (1, 2, 3)", name="check_current_tier"),
     )
 
+    @validates("founding_year")
+    def validate_founding_year(self, key, value):
+        if value < 1900:
+            raise ValueError("founding_year must be >= 1900")
+        return value
+
 class TeamEra(Base):
     """Season-specific team configuration snapshot."""
     __tablename__ = "team_era"
