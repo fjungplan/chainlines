@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
+from datetime import date
 from app.models.team import TeamNode, TeamEra
 from app.services.sponsor_service import SponsorService
 from app.core.exceptions import ValidationException, NodeNotFoundException
@@ -148,13 +149,14 @@ class TestTeamSponsorLink:
     async def test_create_sponsor_link(self, db_session: AsyncSession):
         """Test creating a team-sponsor link."""
         # Create prerequisites
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
         era = TeamEra(
             node_id=node.node_id,
             season_year=2020,
+            valid_from=date(2020, 1, 1),
             registered_name="Test Team"
         )
         db_session.add(era)
@@ -189,11 +191,16 @@ class TestTeamSponsorLink:
     async def test_prominence_validation(self, db_session: AsyncSession):
         """Test prominence_percent validation."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -258,11 +265,16 @@ class TestTeamSponsorLink:
     async def test_rank_order_uniqueness(self, db_session: AsyncSession):
         """Test that rank_order must be unique per era."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -307,11 +319,16 @@ class TestTeamSponsorLink:
     async def test_restrict_delete_brand_with_links(self, db_session: AsyncSession):
         """Test that deleting a brand with active links is restricted."""
         # Setup complete hierarchy
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -355,11 +372,16 @@ class TestTeamSponsorLink:
     async def test_cascade_delete_era(self, db_session: AsyncSession):
         """Test that deleting era cascades to sponsor links."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -453,11 +475,11 @@ class TestSponsorService:
     async def test_link_sponsor_to_era_success(self, db_session: AsyncSession):
         """Test successfully linking sponsor to era."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test Team")
+        era = TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="Test Team")
         db_session.add(era)
         await db_session.flush()
         
@@ -487,11 +509,16 @@ class TestSponsorService:
     async def test_link_sponsor_prominence_total_validation(self, db_session: AsyncSession):
         """Test that total prominence cannot exceed 100%."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -535,11 +562,16 @@ class TestSponsorService:
     async def test_validate_era_sponsors(self, db_session: AsyncSession):
         """Test validate_era_sponsors method."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -582,11 +614,16 @@ class TestSponsorService:
     async def test_get_era_jersey_composition(self, db_session: AsyncSession):
         """Test retrieving ordered jersey composition."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Jersey Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Jersey Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -628,11 +665,16 @@ class TestTeamEraSponsors:
     async def test_sponsors_ordered_property(self, db_session: AsyncSession):
         """Test that sponsors_ordered returns links in rank order."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Order Test")
+        era = TeamEra(
+            node_id=node.node_id, 
+            season_year=2020, 
+            valid_from=date(2020, 1, 1),
+            registered_name="Order Test"
+        )
         db_session.add(era)
         await db_session.flush()
         
@@ -660,11 +702,16 @@ class TestTeamEraSponsors:
     async def test_validate_sponsor_total_method(self, db_session: AsyncSession):
         """Test validate_sponsor_total method on TeamEra."""
         # Setup
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
         await db_session.flush()
         
-        era = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Validation Test")
+        era = TeamEra(
+            node_id=node.node_id,
+            season_year=2020,
+            valid_from=date(2020, 1, 1),
+            registered_name="Validation Test"
+        )
         db_session.add(era)
         await db_session.flush()
         

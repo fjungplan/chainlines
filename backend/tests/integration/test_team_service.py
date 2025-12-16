@@ -12,7 +12,7 @@ from app.core.exceptions import NodeNotFoundException
 async def test_full_team_service_workflow(isolated_session):
     # Create a node
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Service Integration Node")
         isolated_session.add(node)
         await isolated_session.flush()
         node_id = node.node_id

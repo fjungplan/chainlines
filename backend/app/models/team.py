@@ -90,5 +90,37 @@ class TeamEra(Base):
     __table_args__ = (
         UniqueConstraint("node_id", "season_year", "valid_from", name="uq_node_year_period"),
         CheckConstraint("tier_level IN (1, 2, 3)", name="check_tier_level"),
-        # uci_code validation via regex in DB, handled by @validates in python ideally
     )
+
+    @validates("registered_name")
+    def validate_name(self, key, value):
+        if not value or not value.strip():
+            raise ValueError("registered_name cannot be empty")
+        return value
+
+    @validates("uci_code")
+    def validate_uci_code(self, key, value):
+        if value is not None:
+            if len(value) != 3 or not value.isalpha() or not value.isupper():
+                raise ValueError("uci_code must be 3 uppercase letters")
+        return value
+
+    @validates("tier_level")
+    def validate_tier_level(self, key, value):
+        if value is not None and value not in (1, 2, 3):
+            raise ValueError("tier_level must be 1, 2, or 3")
+        return value
+
+    @property
+    def display_name(self) -> str:
+        if self.uci_code:
+            return f"{self.registered_name} ({self.uci_code})"
+        return self.registered_name
+
+    @property
+    def sponsors_ordered(self) -> List["TeamSponsorLink"]:
+        return sorted(self.sponsor_links, key=lambda x: x.rank_order)
+
+    def validate_sponsor_total(self) -> bool:
+        total = sum(link.prominence_percent for link in self.sponsor_links)
+        return total <= 100

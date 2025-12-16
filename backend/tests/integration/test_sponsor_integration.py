@@ -1,6 +1,8 @@
 """Integration tests for sponsor functionality."""
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date
+
 
 from app.models.team import TeamNode, TeamEra
 from app.services.sponsor_service import SponsorService
@@ -21,13 +23,14 @@ class TestSponsorIntegration:
         - Verify jersey composition
         """
         # Create team node and era
-        node = TeamNode(founding_year=2003)
+        node = TeamNode(founding_year=2003, legal_name="Soudal Quick-Step Node")
         db_session.add(node)
         await db_session.flush()
         
         era = TeamEra(
             node_id=node.node_id,
             season_year=2023,
+            valid_from=date(2023, 1, 1),
             registered_name="Soudal Quick-Step",
             uci_code="SOQ",
             tier_level=1
@@ -126,13 +129,14 @@ class TestSponsorIntegration:
     async def test_multi_master_sponsor_scenario(self, db_session: AsyncSession):
         """Test a scenario with sponsors from different master companies."""
         # Create team
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Multi Sponsor Node")
         db_session.add(node)
         await db_session.flush()
         
         era = TeamEra(
             node_id=node.node_id,
             season_year=2024,
+            valid_from=date(2024, 1, 1),
             registered_name="Multi-Sponsor Team",
             uci_code="MST",
             tier_level=1
@@ -218,13 +222,14 @@ class TestSponsorIntegration:
     async def test_partial_sponsorship_scenario(self, db_session: AsyncSession):
         """Test a scenario where sponsors don't fill 100% of the jersey."""
         # Create team
-        node = TeamNode(founding_year=2015)
+        node = TeamNode(founding_year=2015, legal_name="Partial Sponsor Node")
         db_session.add(node)
         await db_session.flush()
         
         era = TeamEra(
             node_id=node.node_id,
             season_year=2024,
+            valid_from=date(2024, 1, 1),
             registered_name="Partial Team",
             tier_level=2
         )
@@ -262,7 +267,7 @@ class TestSponsorIntegration:
     async def test_sponsor_evolution_across_eras(self, db_session: AsyncSession):
         """Test how sponsors change across different team eras."""
         # Create team node
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Multi Sponsor Node")
         db_session.add(node)
         await db_session.flush()
         
@@ -270,16 +275,19 @@ class TestSponsorIntegration:
         era_2020 = TeamEra(
             node_id=node.node_id,
             season_year=2020,
+            valid_from=date(2020, 1, 1),
             registered_name="Team Alpha 2020"
         )
         era_2021 = TeamEra(
             node_id=node.node_id,
             season_year=2021,
+            valid_from=date(2021, 1, 1),
             registered_name="Team Alpha 2021"
         )
         era_2022 = TeamEra(
             node_id=node.node_id,
             season_year=2022,
+            valid_from=date(2022, 1, 1),
             registered_name="Team Beta 2022"  # Rebrand
         )
         db_session.add_all([era_2020, era_2021, era_2022])

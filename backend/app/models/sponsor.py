@@ -49,6 +49,12 @@ class SponsorBrand(Base):
         UniqueConstraint("master_id", "brand_name", name="uq_master_brand"),
     )
 
+    @validates("default_hex_color")
+    def validate_hex_color(self, key, value):
+        if not re.match(r"^#[0-9A-Fa-f]{6}$", value):
+            raise ValueError(f"Invalid hex color format: {value}")
+        return value
+
 class TeamSponsorLink(Base):
     """Link between a team era and a sponsor brand."""
     __tablename__ = "team_sponsor_link"
@@ -75,3 +81,16 @@ class TeamSponsorLink(Base):
         CheckConstraint("rank_order >= 1", name="check_rank_order_positive"),
         CheckConstraint("prominence_percent > 0 AND prominence_percent <= 100", name="check_prominence_range"),
     )
+
+    @validates("prominence_percent")
+    def validate_prominence(self, key, value):
+        if value is not None:
+            if value <= 0 or value > 100:
+                raise ValueError("prominence_percent must be between 1 and 100")
+        return value
+
+    @validates("rank_order")
+    def validate_rank(self, key, value):
+        if value is not None and value < 1:
+            raise ValueError("rank_order must be positive")
+        return value

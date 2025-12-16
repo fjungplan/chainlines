@@ -1,6 +1,4 @@
-"""Service layer for TeamNode and TeamEra operations."""
-from __future__ import annotations
-
+from datetime import date
 from typing import List, Optional
 import uuid
 
@@ -127,6 +125,7 @@ class TeamService:
         era = TeamEra(
             node_id=node_id,
             season_year=year,
+            valid_from=date(year, 1, 1),
             registered_name=registered_name.strip(),
             uci_code=uci_code,
             tier_level=tier_level,
