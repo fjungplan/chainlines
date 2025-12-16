@@ -100,7 +100,7 @@ async def require_editor(
     Require editor permissions (not banned).
     
     This dependency checks that the authenticated user has permission to edit
-    (NEW_USER, TRUSTED_USER, or ADMIN) and is not banned.
+    (NEW_USER, TRUSTED_EDITOR, or ADMIN) and is not banned.
     Use this for endpoints that allow users to create or modify data.
     
     Raises:
@@ -120,14 +120,14 @@ async def require_trusted_user(
     """
     Require trusted user or admin role.
     
-    This dependency checks that the authenticated user is either a TRUSTED_USER
+    This dependency checks that the authenticated user is either a TRUSTED_EDITOR
     or ADMIN. Use this for endpoints that should skip moderation or have
     additional privileges.
     
     Raises:
         HTTPException: If user is not trusted or admin.
     """
-    if current_user.role not in [UserRole.TRUSTED_USER, UserRole.ADMIN]:
+    if current_user.role not in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Trusted user status required"

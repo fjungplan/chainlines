@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -49,12 +49,20 @@ class EditMetadataRequest(BaseModel):
 
 
 class CreateTeamRequest(BaseModel):
-    registered_name: str  # Team name
+    legal_name: str # Unique internal identifier (for TeamNode)
+    registered_name: str  # Team name for the first era
     founding_year: int
     uci_code: Optional[str] = None
     tier_level: int  # Initial tier
     reason: Optional[str] = None  # Optional for admins
     
+    @field_validator('legal_name')
+    @classmethod
+    def validate_legal_name(cls, v):
+        if not v or len(v.strip()) < 3:
+            raise ValueError('Legal name must be at least 3 characters')
+        return v.strip()
+
     @field_validator('registered_name')
     @classmethod
     def validate_name(cls, v):

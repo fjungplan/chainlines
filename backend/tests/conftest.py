@@ -11,7 +11,7 @@ from app.db.database import get_db
 from app.api.health import get_checker
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
-from app.models.enums import EventType
+from app.models.enums import LineageEventType
 from app.models.user import User, UserRole
 from app.core.security import create_access_token
 import uuid
@@ -48,7 +48,7 @@ async def test_engine():
 
 @pytest_asyncio.fixture
 async def sample_team_node(isolated_session) -> TeamNode:
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Sample Team 2000")
     isolated_session.add(node)
     await isolated_session.commit()
     await isolated_session.refresh(node)
@@ -56,7 +56,7 @@ async def sample_team_node(isolated_session) -> TeamNode:
 
 @pytest_asyncio.fixture
 async def another_team_node(isolated_session) -> TeamNode:
-    node = TeamNode(founding_year=2010)
+    node = TeamNode(founding_year=2010, legal_name="Another Team 2010")
     isolated_session.add(node)
     await isolated_session.commit()
     await isolated_session.refresh(node)
@@ -64,7 +64,8 @@ async def another_team_node(isolated_session) -> TeamNode:
 
 @pytest_asyncio.fixture
 async def sample_team_era(isolated_session, sample_team_node) -> TeamEra:
-    era = TeamEra(node_id=sample_team_node.node_id, season_year=2001, registered_name="Test Era", tier_level=1)
+    from datetime import date
+    era = TeamEra(node_id=sample_team_node.node_id, season_year=2001, valid_from=date(2001, 1, 1), registered_name="Test Era", tier_level=1)
     isolated_session.add(era)
     await isolated_session.commit()
     await isolated_session.refresh(era)
@@ -72,7 +73,7 @@ async def sample_team_era(isolated_session, sample_team_node) -> TeamEra:
 
 @pytest_asyncio.fixture
 async def sample_lineage_event(isolated_session, sample_team_node, another_team_node) -> LineageEvent:
-    event = LineageEvent(previous_node_id=sample_team_node.node_id, next_node_id=another_team_node.node_id, event_year=2015, event_type=EventType.LEGAL_TRANSFER)
+    event = LineageEvent(predecessor_node_id=sample_team_node.node_id, successor_node_id=another_team_node.node_id, event_year=2015, event_type=LineageEventType.LEGAL_TRANSFER)
     isolated_session.add(event)
     await isolated_session.commit()
     await isolated_session.refresh(event)
@@ -81,19 +82,19 @@ async def sample_lineage_event(isolated_session, sample_team_node, another_team_
 @pytest_asyncio.fixture
 async def complex_lineage_tree(isolated_session) -> dict:
     # 3 generations: A -> B -> C, plus a split from B to D
-    node_a = TeamNode(founding_year=1990)
-    node_b = TeamNode(founding_year=2000)
-    node_c = TeamNode(founding_year=2010)
-    node_d = TeamNode(founding_year=2012)
+    node_a = TeamNode(founding_year=1990, legal_name="Node A 1990")
+    node_b = TeamNode(founding_year=2000, legal_name="Node B 2000")
+    node_c = TeamNode(founding_year=2010, legal_name="Node C 2010")
+    node_d = TeamNode(founding_year=2012, legal_name="Node D 2012")
     isolated_session.add_all([node_a, node_b, node_c, node_d])
     await isolated_session.commit()
     await isolated_session.refresh(node_a)
     await isolated_session.refresh(node_b)
     await isolated_session.refresh(node_c)
     await isolated_session.refresh(node_d)
-    event_ab = LineageEvent(previous_node_id=node_a.node_id, next_node_id=node_b.node_id, event_year=2000, event_type=EventType.LEGAL_TRANSFER)
-    event_bc = LineageEvent(previous_node_id=node_b.node_id, next_node_id=node_c.node_id, event_year=2010, event_type=EventType.LEGAL_TRANSFER)
-    event_bd = LineageEvent(previous_node_id=node_b.node_id, next_node_id=node_d.node_id, event_year=2012, event_type=EventType.SPLIT)
+    event_ab = LineageEvent(predecessor_node_id=node_a.node_id, successor_node_id=node_b.node_id, event_year=2000, event_type=LineageEventType.LEGAL_TRANSFER)
+    event_bc = LineageEvent(predecessor_node_id=node_b.node_id, successor_node_id=node_c.node_id, event_year=2010, event_type=LineageEventType.LEGAL_TRANSFER)
+    event_bd = LineageEvent(predecessor_node_id=node_b.node_id, successor_node_id=node_d.node_id, event_year=2012, event_type=LineageEventType.SPLIT)
     isolated_session.add_all([event_ab, event_bc, event_bd])
     await isolated_session.commit()
     return {
@@ -184,10 +185,11 @@ async def test_client(isolated_session) -> AsyncGenerator[AsyncClient, None]:
 @pytest_asyncio.fixture
 async def sample_teams_in_db(isolated_session):
     """Create 5 teams with eras across different years and tiers."""
+    from datetime import date
     nodes = []
     # Create 5 nodes
     for base_year in [1995, 2000, 2005, 2010, 2015]:
-        node = TeamNode(founding_year=base_year)
+        node = TeamNode(founding_year=base_year, legal_name=f"Team {base_year}")
         isolated_session.add(node)
         await isolated_session.flush()
         nodes.append(node)
@@ -201,12 +203,14 @@ async def sample_teams_in_db(isolated_session):
         e1 = TeamEra(
             node_id=node.node_id,
             season_year=years[i],
+            valid_from=date(years[i], 1, 1),
             registered_name=f"Team {i} A",
             tier_level=tier_cycle[i],
         )
         e2 = TeamEra(
             node_id=node.node_id,
             season_year=years[i] + 1,
+            valid_from=date(years[i] + 1, 1, 1),
             registered_name=f"Team {i} B",
             tier_level=tier_cycle[-(i+1)],
         )
@@ -223,7 +227,7 @@ async def new_user(isolated_session) -> User:
         google_id="test_new_user_123",
         email="newuser@test.com",
         display_name="New User",
-        role=UserRole.NEW_USER
+        role=UserRole.EDITOR
     )
     isolated_session.add(user)
     await isolated_session.commit()
@@ -238,7 +242,7 @@ async def trusted_user(isolated_session) -> User:
         google_id="test_trusted_user_123",
         email="trusteduser@test.com",
         display_name="Trusted User",
-        role=UserRole.TRUSTED_USER,
+        role=UserRole.TRUSTED_EDITOR,
         approved_edits_count=5
     )
     isolated_session.add(user)
@@ -269,7 +273,7 @@ async def banned_user(isolated_session) -> User:
         google_id="test_banned_user_123",
         email="banneduser@test.com",
         display_name="Banned User",
-        role=UserRole.NEW_USER,
+        role=UserRole.EDITOR,
         is_banned=True,
         banned_reason="Test ban"
     )
@@ -331,9 +335,10 @@ async def test_user_admin(admin_user) -> User:
 @pytest_asyncio.fixture
 async def sample_teams(isolated_session):
     """Create sample teams with eras for testing merges."""
+    from datetime import date
     nodes = []
     for i in range(3):
-        node = TeamNode(founding_year=2000 + i * 5)
+        node = TeamNode(founding_year=2000 + i * 5, legal_name=f"Sample Team {i+1} {2000 + i * 5}")
         isolated_session.add(node)
         await isolated_session.flush()
         
@@ -341,6 +346,7 @@ async def sample_teams(isolated_session):
         era = TeamEra(
             node_id=node.node_id,
             season_year=2020,
+            valid_from=date(2020, 1, 1),
             registered_name=f"Sample Team {i+1}",
             tier_level=(i % 3) + 1
         )

@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.models.lineage import LineageEvent
 from app.models.team import TeamNode
-from app.models.enums import EventType
+from app.models.enums import LineageEventType
 from app.core.exceptions import ValidationException
 import uuid
 from app.services.timeline_service import TimelineService
@@ -18,7 +18,7 @@ class LineageService:
         previous_id: Optional[uuid.UUID],
         next_id: Optional[uuid.UUID],
         year: int,
-        event_type: EventType,
+        event_type: LineageEventType,
         notes: Optional[str] = None,
     ) -> LineageEvent:
         # Validation: at least one node
@@ -41,16 +41,16 @@ class LineageService:
         if next_node and next_node.dissolution_year and year > next_node.dissolution_year:
             raise ValidationException("event_year cannot be after next node's dissolution_year.")
         # Pre-create checks for MERGE/SPLIT semantics (we allow first event but enforce on second)
-        if event_type == EventType.MERGE and not next_id:
+        if event_type == LineageEventType.MERGE and not next_id:
             raise ValidationException("MERGE events require a successor (next_id).")
-        if event_type == EventType.SPLIT and not previous_id:
+        if event_type == LineageEventType.SPLIT and not previous_id:
             raise ValidationException("SPLIT events require an origin (previous_id).")
         # Prevent circular references
         if previous_id and next_id and previous_id == next_id:
             raise ValidationException("Cannot create circular lineage event.")
         event = LineageEvent(
-            previous_node_id=previous_id,
-            next_node_id=next_id,
+            predecessor_node_id=previous_id,
+            successor_node_id=next_id,
             event_year=year,
             event_type=event_type,
             notes=notes,
@@ -64,19 +64,19 @@ class LineageService:
         await self.db.refresh(event)
 
         # Canonicalization: auto-downgrade single-leg MERGE/SPLIT to succession
-        if event_type in (EventType.MERGE, EventType.SPLIT):
-            if event_type == EventType.MERGE:
+        if event_type in (LineageEventType.MERGE, LineageEventType.SPLIT):
+            if event_type == LineageEventType.MERGE:
                 q = await self.db.execute(
                     select(LineageEvent).where(
-                        LineageEvent.next_node_id == next_id,
+                        LineageEvent.successor_node_id == next_id,
                         LineageEvent.event_year == year,
-                        LineageEvent.event_type == EventType.MERGE,
+                        LineageEvent.event_type == LineageEventType.MERGE,
                     )
                 )
                 related_events = q.scalars().all()
                 if len(related_events) == 1:
                     # Only one leg: auto-downgrade to LEGAL_TRANSFER
-                    event.event_type = EventType.LEGAL_TRANSFER
+                    event.event_type = LineageEventType.LEGAL_TRANSFER
                     # Remove any incomplete warning
                     if event.notes and "INCOMPLETE MERGE" in event.notes:
                         parts = [p.strip() for p in event.notes.split("|") if p.strip() and not p.strip().startswith("INCOMPLETE MERGE")]
@@ -100,15 +100,15 @@ class LineageService:
             else:  # SPLIT
                 q = await self.db.execute(
                     select(LineageEvent).where(
-                        LineageEvent.previous_node_id == previous_id,
+                        LineageEvent.predecessor_node_id == previous_id,
                         LineageEvent.event_year == year,
-                        LineageEvent.event_type == EventType.SPLIT,
+                        LineageEvent.event_type == LineageEventType.SPLIT,
                     )
                 )
                 related_events = q.scalars().all()
                 if len(related_events) == 1:
                     # Only one leg: auto-downgrade to LEGAL_TRANSFER
-                    event.event_type = EventType.LEGAL_TRANSFER
+                    event.event_type = LineageEventType.LEGAL_TRANSFER
                     if event.notes and "INCOMPLETE SPLIT" in event.notes:
                         parts = [p.strip() for p in event.notes.split("|") if p.strip() and not p.strip().startswith("INCOMPLETE SPLIT")]
                         event.notes = " | ".join(parts) if parts else None
@@ -136,10 +136,10 @@ class LineageService:
             .options(
                 # Eager-load lineage relations and eras with sponsors to avoid async lazy-loads
                 selectinload(TeamNode.outgoing_events)
-                .selectinload(LineageEvent.next_node)
+                .selectinload(LineageEvent.successor_node)
                 .selectinload(TeamNode.eras),
                 selectinload(TeamNode.incoming_events)
-                .selectinload(LineageEvent.previous_node)
+                .selectinload(LineageEvent.predecessor_node)
                 .selectinload(TeamNode.eras),
                 selectinload(TeamNode.eras),
             )
@@ -150,15 +150,16 @@ class LineageService:
             raise ValidationException("Node not found.")
         return {
             "node_id": node.node_id,
-            "predecessors": [e.previous_node_id for e in node.incoming_events if e.previous_node_id],
-            "successors": [e.next_node_id for e in node.outgoing_events if e.next_node_id],
+            "predecessors": [e.predecessor_node_id for e in node.incoming_events if e.predecessor_node_id],
+            "successors": [e.successor_node_id for e in node.outgoing_events if e.successor_node_id],
             "era_years": [era.season_year for era in node.eras],
         }
 
     async def validate_event_timeline(self, event: LineageEvent):
         # Ensure event_year makes sense for connected nodes
-        if event.previous_node and event.event_year < event.previous_node.founding_year:
+        if event.predecessor_node and event.event_year < event.predecessor_node.founding_year:
             raise ValidationException("event_year before previous node's founding_year.")
-        if event.next_node and event.next_node.dissolution_year and event.event_year > event.next_node.dissolution_year:
+        if event.successor_node and event.successor_node.dissolution_year and event.event_year > event.successor_node.dissolution_year:
             raise ValidationException("event_year after next node's dissolution_year.")
         # Add more timeline validation as needed
+

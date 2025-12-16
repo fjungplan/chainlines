@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.models.team import TeamNode
 from app.models.lineage import LineageEvent
-from app.models.enums import EventType
+from app.models.enums import LineageEventType
 from app.services.lineage_service import LineageService
 from app.core.exceptions import ValidationException
 
@@ -15,10 +15,10 @@ async def test_create_legal_transfer_event(isolated_session: AsyncSession, sampl
         previous_id=sample_team_node.node_id,
         next_id=None,
         year=sample_team_node.founding_year + 1,
-        event_type=EventType.LEGAL_TRANSFER,
+        event_type=LineageEventType.LEGAL_TRANSFER,
         notes="Legal transfer test"
     )
-    assert event.event_type == EventType.LEGAL_TRANSFER
+    assert event.event_type == LineageEventType.LEGAL_TRANSFER
     assert event.previous_node_id == sample_team_node.node_id
 
 @pytest.mark.asyncio
@@ -33,14 +33,14 @@ async def test_create_merge_event(isolated_session: AsyncSession, sample_team_no
         previous_id=sample_team_node.node_id,
         next_id=next_node.node_id,
         year=2021,
-        event_type=EventType.MERGE,
+        event_type=LineageEventType.MERGE,
         notes="Merge part 1"
     )
     event2 = await service.create_event(
         previous_id=another_team_node.node_id,
         next_id=next_node.node_id,
         year=2021,
-        event_type=EventType.MERGE,
+        event_type=LineageEventType.MERGE,
         notes="Merge part 2"
     )
     assert event1.next_node_id == next_node.node_id
@@ -57,7 +57,7 @@ async def test_create_spiritual_succession(isolated_session: AsyncSession, sampl
         previous_id=sample_team_node.node_id,
         next_id=successor.node_id,
         year=successor.founding_year,
-        event_type=EventType.SPIRITUAL_SUCCESSION,
+        event_type=LineageEventType.SPIRITUAL_SUCCESSION,
         notes="Spiritual succession"
     )
     assert event.is_spiritual()
@@ -75,19 +75,19 @@ async def test_create_split_events(isolated_session: AsyncSession, sample_team_n
         previous_id=sample_team_node.node_id,
         next_id=child1.node_id,
         year=child1.founding_year,
-        event_type=EventType.SPLIT,
+        event_type=LineageEventType.SPLIT,
         notes="Split part 1"
     )
     e2 = await service.create_event(
         previous_id=sample_team_node.node_id,
         next_id=child2.node_id,
         year=child2.founding_year,
-        event_type=EventType.SPLIT,
+        event_type=LineageEventType.SPLIT,
         notes="Split part 2"
     )
     # After canonicalization, both events should be LEGAL_TRANSFER (not SPLIT) since only one leg per year
-    assert e1.event_type == EventType.LEGAL_TRANSFER
-    assert e2.event_type == EventType.LEGAL_TRANSFER
+    assert e1.event_type == LineageEventType.LEGAL_TRANSFER
+    assert e2.event_type == LineageEventType.LEGAL_TRANSFER
     # Ensure both successors recorded
     chain = await service.get_lineage_chain(sample_team_node.node_id)
     assert set(chain["successors"]) == {child1.node_id, child2.node_id}
@@ -100,7 +100,7 @@ async def test_circular_reference_prevention(isolated_session: AsyncSession, sam
             previous_id=sample_team_node.node_id,
             next_id=sample_team_node.node_id,
             year=2022,
-            event_type=EventType.LEGAL_TRANSFER,
+            event_type=LineageEventType.LEGAL_TRANSFER,
             notes="Should fail"
         )
 
@@ -112,7 +112,7 @@ async def test_event_year_validation(isolated_session: AsyncSession, sample_team
             previous_id=sample_team_node.node_id,
             next_id=None,
             year=sample_team_node.founding_year - 1,
-            event_type=EventType.LEGAL_TRANSFER,
+            event_type=LineageEventType.LEGAL_TRANSFER,
             notes="Invalid year"
         )
 
@@ -127,7 +127,7 @@ async def test_relationship_traversal(isolated_session: AsyncSession, sample_tea
         previous_id=sample_team_node.node_id,
         next_id=next_node.node_id,
         year=2021,
-        event_type=EventType.LEGAL_TRANSFER,
+        event_type=LineageEventType.LEGAL_TRANSFER,
         notes="Test traversal"
     )
     # Reload nodes with eager-loaded relationships to avoid async lazy loading issues
@@ -164,7 +164,7 @@ async def test_get_lineage_chain(isolated_session: AsyncSession, sample_team_nod
         previous_id=sample_team_node.node_id,
         next_id=successor.node_id,
         year=successor.founding_year,
-        event_type=EventType.LEGAL_TRANSFER,
+        event_type=LineageEventType.LEGAL_TRANSFER,
         notes="Chain test"
     )
     chain = await service.get_lineage_chain(successor.node_id)
@@ -182,7 +182,7 @@ async def test_cascade_delete_sets_null(isolated_session: AsyncSession, sample_t
         previous_id=sample_team_node.node_id,
         next_id=successor.node_id,
         year=successor.founding_year,
-        event_type=EventType.LEGAL_TRANSFER,
+        event_type=LineageEventType.LEGAL_TRANSFER,
         notes="Cascade test"
     )
     # Delete predecessor node
@@ -207,11 +207,11 @@ async def test_incomplete_merge_warning(isolated_session: AsyncSession, sample_t
         previous_id=sample_team_node.node_id,
         next_id=successor.node_id,
         year=successor.founding_year,
-        event_type=EventType.MERGE,
+        event_type=LineageEventType.MERGE,
         notes="First merge leg"
     )
     # After canonicalization, event should be LEGAL_TRANSFER and not have incomplete warning
-    assert merge_event.event_type == EventType.LEGAL_TRANSFER
+    assert merge_event.event_type == LineageEventType.LEGAL_TRANSFER
     assert not merge_event.notes or "INCOMPLETE MERGE" not in merge_event.notes
 
 @pytest.mark.asyncio
@@ -225,14 +225,14 @@ async def test_merge_completion_removes_warning(isolated_session: AsyncSession, 
         previous_id=sample_team_node.node_id,
         next_id=successor.node_id,
         year=2025,
-        event_type=EventType.MERGE,
+        event_type=LineageEventType.MERGE,
         notes="Leg 1"
     )
     second = await service.create_event(
         previous_id=another_team_node.node_id,
         next_id=successor.node_id,
         year=2025,
-        event_type=EventType.MERGE,
+        event_type=LineageEventType.MERGE,
         notes="Leg 2"
     )
     # Refresh first to see updated notes after completion cleanup
@@ -251,11 +251,11 @@ async def test_incomplete_split_warning(isolated_session: AsyncSession, sample_t
         previous_id=sample_team_node.node_id,
         next_id=child.node_id,
         year=child.founding_year,
-        event_type=EventType.SPLIT,
+        event_type=LineageEventType.SPLIT,
         notes="First split leg"
     )
     # After canonicalization, event should be LEGAL_TRANSFER and not have incomplete warning
-    assert split_event.event_type == EventType.LEGAL_TRANSFER
+    assert split_event.event_type == LineageEventType.LEGAL_TRANSFER
     assert not split_event.notes or "INCOMPLETE SPLIT" not in split_event.notes
 
 @pytest.mark.asyncio
@@ -271,16 +271,17 @@ async def test_split_completion_removes_warning(isolated_session: AsyncSession, 
         previous_id=sample_team_node.node_id,
         next_id=child1.node_id,
         year=child1.founding_year,
-        event_type=EventType.SPLIT,
+        event_type=LineageEventType.SPLIT,
         notes="Split leg 1"
     )
     second = await service.create_event(
         previous_id=sample_team_node.node_id,
         next_id=child2.node_id,
         year=child2.founding_year,
-        event_type=EventType.SPLIT,
+        event_type=LineageEventType.SPLIT,
         notes="Split leg 2"
     )
     await isolated_session.refresh(first)
     assert first.notes is None or "INCOMPLETE SPLIT" not in first.notes
     assert second.notes is None or "INCOMPLETE SPLIT" not in second.notes
+

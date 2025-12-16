@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
-from app.models.enums import EventType
+from app.models.enums import LineageEventType
 
 
 @pytest.mark.asyncio
@@ -26,9 +26,9 @@ async def test_timeline_integration_complex(isolated_session, test_client: Async
     await isolated_session.commit()
 
     # A -> B (2015), B -> C (2020), Merge A + D -> E (simplify: A -> D in 2016 as SPLIT)
-    ev_ab = LineageEvent(previous_node_id=A.node_id, next_node_id=B.node_id, event_year=2015, event_type=EventType.LEGAL_TRANSFER)
-    ev_bc = LineageEvent(previous_node_id=B.node_id, next_node_id=C.node_id, event_year=2020, event_type=EventType.LEGAL_TRANSFER)
-    ev_ad = LineageEvent(previous_node_id=A.node_id, next_node_id=D.node_id, event_year=2016, event_type=EventType.SPLIT)
+    ev_ab = LineageEvent(previous_node_id=A.node_id, next_node_id=B.node_id, event_year=2015, event_type=LineageEventType.LEGAL_TRANSFER)
+    ev_bc = LineageEvent(previous_node_id=B.node_id, next_node_id=C.node_id, event_year=2020, event_type=LineageEventType.LEGAL_TRANSFER)
+    ev_ad = LineageEvent(previous_node_id=A.node_id, next_node_id=D.node_id, event_year=2016, event_type=LineageEventType.SPLIT)
     isolated_session.add_all([ev_ab, ev_bc, ev_ad])
     await isolated_session.commit()
 
@@ -41,3 +41,4 @@ async def test_timeline_integration_complex(isolated_session, test_client: Async
     for link in graph["links"]:
         assert link["source"] in node_ids
         assert link["target"] in node_ids
+

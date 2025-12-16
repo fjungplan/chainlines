@@ -120,8 +120,10 @@ app.include_router(teams_router)
 app.include_router(timeline_router)
 app.include_router(admin_router)
 app.include_router(edits_router)
-from app.api.v1 import moderation
-app.include_router(moderation.router)
+# Moderation API - TEMPORARILY DISABLED (needs rewrite for EditHistory schema)
+# from app.api.v1 import moderation
+# app.include_router(moderation.router)
+
 
 
 @app.get("/")
