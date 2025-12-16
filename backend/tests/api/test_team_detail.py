@@ -1,19 +1,20 @@
 import pytest
+from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
-from app.models.enums import EventType
+from app.models.enums import LineageEventType
 
 
 @pytest.mark.asyncio
 async def test_team_history_basic(test_client, isolated_session: AsyncSession):
     # Setup: create node and eras
-    node = TeamNode(founding_year=2010)
+    node = TeamNode(founding_year=2010, legal_name="Team Detail Node")
     isolated_session.add(node)
     await isolated_session.flush()
     await isolated_session.refresh(node)
-    e2010 = TeamEra(node_id=node.node_id, season_year=2010, registered_name="Team Sky", tier_level=1, uci_code="SKY")
-    e2020 = TeamEra(node_id=node.node_id, season_year=2020, registered_name="Ineos Grenadiers", tier_level=1, uci_code="IGD")
+    e2010 = TeamEra(node_id=node.node_id, season_year=2010, valid_from=date(2010, 1, 1), registered_name="Team Sky", tier_level=1, uci_code="SKY")
+    e2020 = TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="Ineos Grenadiers", tier_level=1, uci_code="IGD")
     isolated_session.add(e2010)
     isolated_session.add(e2020)
     await isolated_session.commit()
@@ -48,22 +49,22 @@ async def test_team_history_not_found(test_client):
 @pytest.mark.asyncio
 async def test_team_history_successor_predecessor(test_client, isolated_session: AsyncSession):
     # Setup nodes
-    prev = TeamNode(founding_year=2000)
-    nextn = TeamNode(founding_year=2021)
-    curr = TeamNode(founding_year=2010)
+    prev = TeamNode(founding_year=2000, legal_name="Prev Node")
+    nextn = TeamNode(founding_year=2021, legal_name="Next Node")
+    curr = TeamNode(founding_year=2010, legal_name="Curr Node")
     isolated_session.add_all([prev, nextn, curr])
     await isolated_session.flush()
     await isolated_session.refresh(prev)
     await isolated_session.refresh(nextn)
     await isolated_session.refresh(curr)
     # eras
-    isolated_session.add(TeamEra(node_id=prev.node_id, season_year=2015, registered_name="OldTeam"))
-    isolated_session.add(TeamEra(node_id=curr.node_id, season_year=2020, registered_name="CurrentTeam"))
-    isolated_session.add(TeamEra(node_id=nextn.node_id, season_year=2021, registered_name="NewTeam"))
+    isolated_session.add(TeamEra(node_id=prev.node_id, season_year=2015, valid_from=date(2015, 1, 1), registered_name="OldTeam"))
+    isolated_session.add(TeamEra(node_id=curr.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="CurrentTeam"))
+    isolated_session.add(TeamEra(node_id=nextn.node_id, season_year=2021, valid_from=date(2021, 1, 1), registered_name="NewTeam"))
     await isolated_session.flush()
     # events
-    await isolated_session.merge(LineageEvent(previous_node_id=prev.node_id, next_node_id=curr.node_id, event_year=2016, event_type=EventType.LEGAL_TRANSFER))
-    await isolated_session.merge(LineageEvent(previous_node_id=curr.node_id, next_node_id=nextn.node_id, event_year=2021, event_type=EventType.MERGE))
+    await isolated_session.merge(LineageEvent(predecessor_node_id=prev.node_id, successor_node_id=curr.node_id, event_year=2016, event_type=LineageEventType.LEGAL_TRANSFER))
+    await isolated_session.merge(LineageEvent(predecessor_node_id=curr.node_id, successor_node_id=nextn.node_id, event_year=2021, event_type=LineageEventType.MERGE))
     await isolated_session.commit()
 
     resp = await test_client.get(f"/api/v1/teams/{curr.node_id}/history")
@@ -73,3 +74,4 @@ async def test_team_history_successor_predecessor(test_client, isolated_session:
     assert era["predecessor"]["event_type"] == "ACQUISITION"
     last = data["timeline"][-1]
     assert last["successor"]["event_type"] == "MERGED_INTO"
+

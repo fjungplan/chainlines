@@ -61,10 +61,10 @@ class GraphBuilder:
     def build_links(self, events: List[LineageEvent]) -> List[Dict]:
         links: List[Dict] = []
         for ev in events:
-            if ev.previous_node_id and ev.next_node_id:
+            if ev.predecessor_node_id and ev.successor_node_id:
                 links.append({
-                    "source": str(ev.previous_node_id),
-                    "target": str(ev.next_node_id),
+                    "source": str(ev.predecessor_node_id),
+                    "target": str(ev.successor_node_id),
                     "year": ev.event_year,
                     "type": ev.event_type.name if hasattr(ev.event_type, 'name') else str(ev.event_type),
                 })

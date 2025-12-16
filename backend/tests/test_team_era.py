@@ -3,6 +3,8 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import select
+from datetime import date
+from datetime import date
 from sqlalchemy.exc import IntegrityError
 
 from app.models.team import TeamNode, TeamEra
@@ -24,12 +26,13 @@ async def test_team_era_table_exists(isolated_engine):
 @pytest.mark.asyncio
 async def test_create_team_era_valid(isolated_session):
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2005)
+        node = TeamNode(founding_year=2005, legal_name="Team Era Test Node")
         isolated_session.add(node)
         await isolated_session.flush()
         era = TeamEra(
             node_id=node.node_id,
             season_year=2020,
+            valid_from=date(2020, 1, 1),
             registered_name="Example Cycling Team",
             uci_code="ECT",
             tier_level=1,
@@ -44,12 +47,13 @@ async def test_create_team_era_valid(isolated_session):
 @pytest.mark.asyncio
 async def test_team_era_duplicate_constraint(isolated_session):
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Constraint Test Node")
         isolated_session.add(node)
         await isolated_session.flush()
         era1 = TeamEra(
             node_id=node.node_id,
             season_year=2021,
+            valid_from=date(2021, 1, 1),
             registered_name="Dup Team",
         )
         isolated_session.add(era1)
@@ -57,6 +61,7 @@ async def test_team_era_duplicate_constraint(isolated_session):
         era2 = TeamEra(
             node_id=node.node_id,
             season_year=2021,
+            valid_from=date(2021, 1, 1),
             registered_name="Dup Team Again",
         )
         isolated_session.add(era2)
@@ -68,7 +73,7 @@ async def test_team_era_duplicate_constraint(isolated_session):
 async def test_team_service_create_era_and_duplicate(isolated_session):
     # Create node first
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2012)
+        node = TeamNode(founding_year=2012, legal_name="Service Test Node")
         isolated_session.add(node)
         await isolated_session.flush()
         node_id = node.node_id
@@ -102,7 +107,7 @@ async def test_team_service_validation_errors(isolated_session):
         )
     # Invalid tier level
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2010)
+        node = TeamNode(founding_year=2010, legal_name="Constraint Test Node")
         isolated_session.add(node)
         await isolated_session.flush()
     with pytest.raises(ValidationException):
@@ -127,13 +132,13 @@ async def test_team_service_validation_errors(isolated_session):
 @pytest.mark.asyncio
 async def test_get_eras_by_year(isolated_session):
     async with isolated_session.begin():
-        node1 = TeamNode(founding_year=2000)
-        node2 = TeamNode(founding_year=2005)
+        node1 = TeamNode(founding_year=2000, legal_name="Node One")
+        node2 = TeamNode(founding_year=2005, legal_name="Node Two")
         isolated_session.add_all([node1, node2])
         await isolated_session.flush()
         isolated_session.add_all([
-            TeamEra(node_id=node1.node_id, season_year=2024, registered_name="Alpha"),
-            TeamEra(node_id=node2.node_id, season_year=2024, registered_name="Beta"),
+            TeamEra(node_id=node1.node_id, season_year=2024, valid_from=date(2024, 1, 1), registered_name="Alpha"),
+            TeamEra(node_id=node2.node_id, season_year=2024, valid_from=date(2024, 1, 1), registered_name="Beta"),
         ])
         await isolated_session.flush()
     eras = await TeamService.get_eras_by_year(isolated_session, 2024)
@@ -145,10 +150,10 @@ async def test_get_eras_by_year(isolated_session):
 @pytest.mark.asyncio
 async def test_cascade_delete_node_deletes_eras(isolated_session):
     async with isolated_session.begin():
-        node = TeamNode(founding_year=2015)
+        node = TeamNode(founding_year=2015, legal_name="To Delete Node")
         isolated_session.add(node)
         await isolated_session.flush()
-        era = TeamEra(node_id=node.node_id, season_year=2023, registered_name="To Delete")
+        era = TeamEra(node_id=node.node_id, season_year=2023, valid_from=date(2023, 1, 1), registered_name="To Delete")
         isolated_session.add(era)
         await isolated_session.flush()
         # Delete node
@@ -162,18 +167,18 @@ async def test_cascade_delete_node_deletes_eras(isolated_session):
 @pytest.mark.asyncio
 async def test_team_era_validations(isolated_session):
     async with isolated_session.begin():
-        node = TeamNode(founding_year=1999)
+        node = TeamNode(founding_year=1999, legal_name="Validations Node")
         isolated_session.add(node)
         await isolated_session.flush()
     # Empty registered_name
     with pytest.raises(ValueError):
-        TeamEra(node_id=node.node_id, season_year=2020, registered_name="   ")
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="   ")
     # Bad UCI code length
     with pytest.raises(ValueError):
-        TeamEra(node_id=node.node_id, season_year=2020, registered_name="X", uci_code="AB")
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", uci_code="AB")
     # Bad UCI lowercase
     with pytest.raises(ValueError):
-        TeamEra(node_id=node.node_id, season_year=2020, registered_name="X", uci_code="abc")
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", uci_code="abc")
     # Bad tier level
     with pytest.raises(ValueError):
-        TeamEra(node_id=node.node_id, season_year=2020, registered_name="X", tier_level=5)
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", tier_level=5)

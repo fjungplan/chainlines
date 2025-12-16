@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
@@ -10,7 +11,7 @@ async def test_graph_nodes_links_invariants(test_client: AsyncClient, complex_li
     # Ensure eras exist so nodes appear in the graph
     from app.models.team import TeamEra
     for node in [complex_lineage_tree["A"], complex_lineage_tree["B"], complex_lineage_tree["C"], complex_lineage_tree["D"]]:
-        e = TeamEra(node_id=node.node_id, season_year=2000, registered_name="Graph Test", tier_level=1)
+        e = TeamEra(node_id=node.node_id, season_year=2000, valid_from=date(2000, 1, 1), registered_name="Graph Test", tier_level=1)
         isolated_session.add(e)
     await isolated_session.commit()
 

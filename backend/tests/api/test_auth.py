@@ -265,7 +265,7 @@ async def test_user(db_session):
         email='testuser@example.com',
         display_name='Test User',
         avatar_url='https://example.com/avatar.jpg',
-        role=UserRole.NEW_USER
+        role=UserRole.EDITOR
     )
     db_session.add(user)
     await db_session.commit()
@@ -295,7 +295,7 @@ async def banned_user(db_session):
         google_id='banned_google_id_789',
         email='banned@example.com',
         display_name='Banned User',
-        role=UserRole.NEW_USER,
+        role=UserRole.EDITOR,
         is_banned=True,
         banned_reason='Violation of terms of service'
     )

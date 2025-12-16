@@ -36,9 +36,9 @@ class TimelineRepository:
         event_stmt = (
             select(LineageEvent)
             .options(
-                selectinload(LineageEvent.previous_node).selectinload(TeamNode.eras)
+                selectinload(LineageEvent.predecessor_node).selectinload(TeamNode.eras)
                 .selectinload(TeamEra.sponsor_links).selectinload(TeamSponsorLink.brand),
-                selectinload(LineageEvent.next_node).selectinload(TeamNode.eras)
+                selectinload(LineageEvent.successor_node).selectinload(TeamNode.eras)
                 .selectinload(TeamEra.sponsor_links).selectinload(TeamSponsorLink.brand),
             )
         )

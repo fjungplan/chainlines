@@ -1,5 +1,6 @@
 import pytest
 import pytest_asyncio
+from datetime import date
 from app.services.dto import build_timeline_era_dto, build_team_summary_dto
 from app.models.team import TeamNode, TeamEra
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
@@ -10,8 +11,8 @@ from app.models.sponsor import TeamSponsorLink
 
 @pytest.mark.asyncio
 async def test_build_timeline_era_dto_shape(isolated_session):
-    node = TeamNode(founding_year=2000)
-    era = TeamEra(node=node, season_year=2024, registered_name="Alpha", tier_level=1)
+    node = TeamNode(founding_year=2000, legal_name="DTO Node")
+    era = TeamEra(node=node, season_year=2024, valid_from=date(2024, 1, 1), registered_name="Alpha", tier_level=1)
     master = SponsorMaster(legal_name="Contoso LLC")
     brand = SponsorBrand(master=master, brand_name="Contoso", default_hex_color="#112233")
     link = TeamSponsorLink(era=era, brand=brand, prominence_percent=70, rank_order=1)
@@ -47,9 +48,9 @@ async def test_build_timeline_era_dto_shape(isolated_session):
 
 @pytest.mark.asyncio
 async def test_build_team_summary_dto_shape(isolated_session):
-    node = TeamNode(founding_year=1995)
-    era1 = TeamEra(node=node, season_year=2023, registered_name="Bravo", tier_level=2)
-    era2 = TeamEra(node=node, season_year=2024, registered_name="Bravo Renewed", tier_level=1)
+    node = TeamNode(founding_year=1995, legal_name="Summary Node")
+    era1 = TeamEra(node=node, season_year=2023, valid_from=date(2023, 1, 1), registered_name="Bravo", tier_level=2)
+    era2 = TeamEra(node=node, season_year=2024, valid_from=date(2024, 1, 1), registered_name="Bravo Renewed", tier_level=1)
     isolated_session.add_all([node, era1, era2])
     await isolated_session.commit()
     # Re-fetch node with eras eagerly loaded to avoid async lazy-load

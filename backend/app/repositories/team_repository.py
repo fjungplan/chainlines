@@ -25,12 +25,12 @@ class TeamRepository:
                 .selectinload(TeamSponsorLink.brand),
                 # Eager-load lineage events and their related nodes' eras to avoid async lazy loads
                 selectinload(TeamNode.outgoing_events)
-                .selectinload(LineageEvent.next_node)
+                .selectinload(LineageEvent.successor_node)
                 .selectinload(TeamNode.eras)
                 .selectinload(TeamEra.sponsor_links)
                 .selectinload(TeamSponsorLink.brand),
                 selectinload(TeamNode.incoming_events)
-                .selectinload(LineageEvent.previous_node)
+                .selectinload(LineageEvent.predecessor_node)
                 .selectinload(TeamNode.eras)
                 .selectinload(TeamEra.sponsor_links)
                 .selectinload(TeamSponsorLink.brand),

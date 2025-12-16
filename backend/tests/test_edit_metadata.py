@@ -3,21 +3,27 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User, UserRole
 from app.models.team import TeamNode, TeamEra
-from app.models.edit import Edit, EditType, EditStatus
-from datetime import datetime
+from app.models.edit import EditHistory
+from app.models.enums import EditAction, EditStatus
+from datetime import datetime, date
 
 
 @pytest.mark.asyncio
 async def test_edit_metadata_as_new_user(test_client: AsyncClient, db_session: AsyncSession, new_user_token: str):
     """Test that new users' edits go to moderation queue"""
     # Create a team node and era
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(
+        founding_year=2000,
+        legal_name="Test Team 2000",
+        display_name="Test Team"
+    )
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         uci_code="TST",
         tier_level=1
@@ -51,13 +57,18 @@ async def test_edit_metadata_as_new_user(test_client: AsyncClient, db_session: A
 async def test_edit_metadata_as_trusted_user(test_client: AsyncClient, db_session: AsyncSession, trusted_user_token: str, trusted_user: User):
     """Test that trusted users' edits are auto-approved"""
     # Create a team node and era
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(
+        founding_year=2000,
+        legal_name="Test Team 2000",
+        display_name="Test Team"
+    )
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         uci_code="TST",
         tier_level=1
@@ -101,13 +112,14 @@ async def test_edit_metadata_as_trusted_user(test_client: AsyncClient, db_sessio
 @pytest.mark.asyncio
 async def test_edit_metadata_validation_uci_code(test_client: AsyncClient, db_session: AsyncSession, trusted_user_token: str):
     """Test UCI code validation"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -142,13 +154,14 @@ async def test_edit_metadata_validation_uci_code(test_client: AsyncClient, db_se
 @pytest.mark.asyncio
 async def test_edit_metadata_validation_tier_level(test_client: AsyncClient, db_session: AsyncSession, trusted_user_token: str):
     """Test tier level validation"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -171,13 +184,14 @@ async def test_edit_metadata_validation_tier_level(test_client: AsyncClient, db_
 @pytest.mark.asyncio
 async def test_edit_metadata_validation_reason_too_short(test_client: AsyncClient, db_session: AsyncSession, trusted_user_token: str):
     """Test reason minimum length validation"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -200,13 +214,14 @@ async def test_edit_metadata_validation_reason_too_short(test_client: AsyncClien
 @pytest.mark.asyncio
 async def test_edit_metadata_no_changes(test_client: AsyncClient, db_session: AsyncSession, trusted_user_token: str):
     """Test that edit with no changes is rejected"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -247,13 +262,14 @@ async def test_edit_metadata_era_not_found(test_client: AsyncClient, trusted_use
 @pytest.mark.asyncio
 async def test_edit_metadata_unauthorized(test_client: AsyncClient, db_session: AsyncSession):
     """Test edit without authentication"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -275,13 +291,14 @@ async def test_edit_metadata_unauthorized(test_client: AsyncClient, db_session: 
 @pytest.mark.asyncio
 async def test_edit_metadata_banned_user(test_client: AsyncClient, db_session: AsyncSession, banned_user_token: str):
     """Test that banned users cannot edit"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1
     )
@@ -305,13 +322,14 @@ async def test_edit_metadata_banned_user(test_client: AsyncClient, db_session: A
 @pytest.mark.asyncio
 async def test_manual_override_prevents_scraper_overwrite(db_session: AsyncSession, trusted_user: User):
     """Test that manual override flag is set correctly"""
-    node = TeamNode(founding_year=2000)
+    node = TeamNode(founding_year=2000, legal_name="Test Team 2000")
     db_session.add(node)
     await db_session.flush()
     
     era = TeamEra(
         node_id=node.node_id,
         season_year=2000,
+        valid_from=date(2000, 1, 1),
         registered_name="Test Team",
         tier_level=1,
         source_origin="scraper_pcs"

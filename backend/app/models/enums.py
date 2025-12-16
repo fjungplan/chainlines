@@ -1,16 +1,24 @@
 import enum
 
-class EventType(enum.Enum):
+class UserRole(str, enum.Enum):
+    EDITOR = "EDITOR"
+    TRUSTED_EDITOR = "TRUSTED_EDITOR"
+    MODERATOR = "MODERATOR"
+    ADMIN = "ADMIN"
+
+class EditAction(str, enum.Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+
+class EditStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    APPLIED = "APPLIED"
+
+class LineageEventType(str, enum.Enum):
     LEGAL_TRANSFER = "LEGAL_TRANSFER"
     SPIRITUAL_SUCCESSION = "SPIRITUAL_SUCCESSION"
     MERGE = "MERGE"
     SPLIT = "SPLIT"
-
-    @property
-    def description(self):
-        return {
-            EventType.LEGAL_TRANSFER: "Legal transfer of team rights or license.",
-            EventType.SPIRITUAL_SUCCESSION: "Spiritual or informal succession.",
-            EventType.MERGE: "Merger of two or more teams.",
-            EventType.SPLIT: "Split of a team into multiple entities.",
-        }[self]

@@ -14,7 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app.core.config import settings
 from app.db.base import Base
 # Import all models so they're registered with Base.metadata
-from app.models import TeamNode
+from app.models.user import User
+from app.models.edit import EditHistory
+from app.models.team import TeamNode, TeamEra
+from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
+from app.models.lineage import LineageEvent
+from app.models.enums import UserRole, EditAction, EditStatus, LineageEventType
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

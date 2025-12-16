@@ -81,7 +81,7 @@ class TestAuthService:
         assert user.email == google_user_info['email']
         assert user.display_name == google_user_info['display_name']
         assert user.avatar_url == google_user_info['avatar_url']
-        assert user.role == UserRole.NEW_USER
+        assert user.role == UserRole.EDITOR
         assert user.is_banned is False
     
     @pytest.mark.asyncio
@@ -134,7 +134,7 @@ class TestSecurityFunctions:
         user_data = {
             "sub": str(uuid4()),
             "email": "test@example.com",
-            "role": "NEW_USER"
+            "role": "EDITOR"
         }
         
         token = create_access_token(user_data)
@@ -194,7 +194,7 @@ async def test_user(db_session):
         email='testuser@example.com',
         display_name='Test User',
         avatar_url='https://example.com/avatar.jpg',
-        role=UserRole.NEW_USER
+        role=UserRole.EDITOR
     )
     db_session.add(user)
     await db_session.flush()
@@ -224,7 +224,7 @@ async def banned_user(db_session):
         google_id='banned_google_id_789',
         email='banned@example.com',
         display_name='Banned User',
-        role=UserRole.NEW_USER,
+        role=UserRole.EDITOR,
         is_banned=True,
         banned_reason='Violation of terms of service'
     )
