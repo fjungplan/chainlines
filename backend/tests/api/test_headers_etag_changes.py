@@ -1,4 +1,5 @@
 import pytest
+from datetime import date
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.team import TeamEra
@@ -11,7 +12,7 @@ async def test_timeline_etag_changes_on_data_mutation(test_client: AsyncClient, 
     assert etag1 is not None
 
     # Mutate data: add a new era for the sample team
-    new_era = TeamEra(node_id=sample_team_node.node_id, season_year=2099, registered_name="Future Team", tier_level=1)
+    new_era = TeamEra(node_id=sample_team_node.node_id, season_year=2099, valid_from=date(2099, 1, 1), registered_name="Future Team", tier_level=1)
     isolated_session.add(new_era)
     await isolated_session.commit()
 

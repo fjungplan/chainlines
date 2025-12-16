@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 import pytest
 
 
@@ -31,8 +32,8 @@ async def test_get_team_eras_list_and_filter(test_client, isolated_session, samp
     # Create multiple eras
     from app.models.team import TeamEra
 
-    e1 = TeamEra(node_id=sample_team_node.node_id, season_year=2020, registered_name="A", tier_level=1)
-    e2 = TeamEra(node_id=sample_team_node.node_id, season_year=2021, registered_name="B", tier_level=1)
+    e1 = TeamEra(node_id=sample_team_node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="A", tier_level=1)
+    e2 = TeamEra(node_id=sample_team_node.node_id, season_year=2021, valid_from=date(2021, 1, 1), registered_name="B", tier_level=1)
     await isolated_session.merge(e1)
     await isolated_session.merge(e2)
     await isolated_session.commit()

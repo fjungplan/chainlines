@@ -71,7 +71,7 @@ async def test_team_node_indexes_exist(isolated_engine):
 async def test_create_team_node(isolated_session):
     """Creating and flushing a TeamNode should populate fields."""
     async with isolated_session.begin():
-        team = TeamNode(founding_year=2010)
+        team = TeamNode(founding_year=2010, legal_name="Migration Node 1")
         isolated_session.add(team)
         await isolated_session.flush()
         assert isinstance(team.node_id, uuid.UUID)
@@ -85,7 +85,7 @@ async def test_create_team_node(isolated_session):
 async def test_team_node_timestamps_auto_populate(isolated_session):
     """Timestamps should auto-fill on insert."""
     async with isolated_session.begin():
-        team = TeamNode(founding_year=1995)
+        team = TeamNode(founding_year=1995, legal_name="Migration Node 2")
         isolated_session.add(team)
         await isolated_session.flush()
         assert team.created_at is not None
@@ -101,14 +101,14 @@ async def test_team_node_founding_year_validation(client):
     
     # The model validation should catch this before database
     with pytest.raises(ValueError, match="founding_year must be >= 1900"):
-        team = TeamNode(founding_year=1800)
+        team = TeamNode(founding_year=1800, legal_name="Bad Year Node")
 
 
 @pytest.mark.asyncio
 async def test_team_node_with_dissolution_year(isolated_session):
     """Dissolution year should persist."""
     async with isolated_session.begin():
-        team = TeamNode(founding_year=2000, dissolution_year=2015)
+        team = TeamNode(founding_year=2000, dissolution_year=2015, legal_name="Dissolved Node")
         isolated_session.add(team)
         await isolated_session.flush()
         assert team.dissolution_year == 2015
@@ -117,7 +117,7 @@ async def test_team_node_with_dissolution_year(isolated_session):
 @pytest.mark.asyncio
 async def test_team_node_repr():
     """Test the __repr__ method of TeamNode."""
-    team = TeamNode(founding_year=2010, dissolution_year=2020)
+    team = TeamNode(founding_year=2010, dissolution_year=2020, legal_name="Repr Node")
     team.node_id = uuid.uuid4()
     
     repr_str = repr(team)
@@ -131,8 +131,8 @@ async def test_team_node_repr():
 async def test_team_node_query(isolated_session):
     """Selecting TeamNode rows should return inserted items."""
     async with isolated_session.begin():
-        team1 = TeamNode(founding_year=2010)
-        team2 = TeamNode(founding_year=2015, dissolution_year=2020)
+        team1 = TeamNode(founding_year=2010, legal_name="Query Node 1")
+        team2 = TeamNode(founding_year=2015, dissolution_year=2020, legal_name="Query Node 2")
         isolated_session.add_all([team1, team2])
         await isolated_session.flush()
         result = await isolated_session.execute(select(TeamNode))
