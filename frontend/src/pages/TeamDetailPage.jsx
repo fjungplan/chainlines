@@ -18,39 +18,48 @@ function TeamDetailPage() {
 
   return (
     <div className="team-detail-page">
-      <h2>Team History</h2>
-      
-      <div className="team-overview">
-        <p><strong>Node ID:</strong> {data?.node_id}</p>
-        <p><strong>Founded:</strong> {data?.founding_year}</p>
-        {data?.dissolution_year && (
-          <p><strong>Dissolved:</strong> {data?.dissolution_year}</p>
-        )}
-      </div>
+      <div className="team-detail-container">
+        <h1>Team History</h1>
 
-      <h3>Timeline</h3>
-      {data?.timeline && data.timeline.length > 0 ? (
-        <div className="timeline-list">
-          {data.timeline.map((era, index) => (
-            <div key={index} className="timeline-era">
-              <div className="era-year">{era.year}</div>
-              <div className="era-details">
-                <h4>{era.name}</h4>
-                {era.tier && <p className="era-tier">Tier {era.tier}</p>}
-                {era.uci_code && <p className="era-uci">UCI Code: {era.uci_code}</p>}
-                <p className="era-status">{era.status}</p>
-              </div>
+        <section>
+          <h2>Overview</h2>
+          <div className="team-overview">
+            <p><strong>Node ID:</strong> {data?.node_id}</p>
+            <p><strong>Founded:</strong> {data?.founding_year}</p>
+            {data?.dissolution_year && (
+              <p><strong>Dissolved:</strong> {data?.dissolution_year}</p>
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h2>Timeline</h2>
+          {data?.timeline && data.timeline.length > 0 ? (
+            <div className="timeline-list">
+              {data.timeline.map((era, index) => (
+                <div key={index} className="timeline-era">
+                  <div className="era-year">{era.year}</div>
+                  <div className="era-details">
+                    <h4>{era.name}</h4>
+                    {era.tier && <p className="era-tier">Tier {era.tier}</p>}
+                    {era.uci_code && <p className="era-uci">UCI Code: {era.uci_code}</p>}
+                    <p className="era-status">{era.status}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : (
-        <p>No timeline data available.</p>
-      )}
+          ) : (
+            <p>No timeline data available.</p>
+          )}
+        </section>
 
-      <details className="data-preview">
-        <summary>View Raw Data</summary>
-        <pre>{JSON.stringify(data, null, 2)}</pre>
-      </details>
+        <section>
+          <details className="data-preview">
+            <summary>View Raw Data</summary>
+            <pre>{JSON.stringify(data, null, 2)}</pre>
+          </details>
+        </section>
+      </div>
     </div>
   );
 }
