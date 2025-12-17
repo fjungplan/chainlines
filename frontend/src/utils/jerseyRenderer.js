@@ -1,34 +1,55 @@
 import * as d3 from 'd3';
 
 export class JerseyRenderer {
-  static createGradientDefinition(svg, node) {
-    const gradientId = `gradient-${node.id}`;
-    const latestEra = node.eras[node.eras.length - 1];
-    const sponsors = latestEra.sponsors || [];
-    if (sponsors.length === 0) {
-      return null;
-    }
+  /**
+   * Create a gradient definition for a specific era (scaled to 100% of the era's container)
+   */
+  static createEraGradient(svg, era, idPrefix) {
+    const sponsors = era.sponsors || [];
+    if (sponsors.length === 0) return null;
+
+    const gradientId = `${idPrefix}-gradient`;
+
+    // Check if gradient already exists
     const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
+    if (!defs.select(`#${gradientId}`).empty()) return gradientId;
+
     const gradient = defs.append('linearGradient')
       .attr('id', gradientId)
       .attr('x1', '0%')
       .attr('y1', '0%')
       .attr('x2', '0%')
       .attr('y2', '100%');
+
     let cumulativePercent = 0;
+
+    // Normalize prominence to ensure we fill 100% of the bar
+    // (If user data doesn't sum to 100, we scale it)
+    const totalProminence = sponsors.reduce((sum, s) => sum + (parseFloat(s.prominence) || 0), 0) || 100;
+
+    // DEBUG: Log gradient generation to debug generic patterns
+    if (Math.random() < 0.05) { // Sample logs to avoid spamming
+      console.log(`[JerseyRenderer] Gradient ${gradientId} - Total: ${totalProminence}`, sponsors);
+    }
+
     sponsors.forEach((sponsor) => {
+      const prominence = parseFloat(sponsor.prominence) || 0;
+      const percent = (prominence / totalProminence) * 100;
+
       const startPercent = cumulativePercent;
-      const endPercent = cumulativePercent + sponsor.prominence;
+      const endPercent = cumulativePercent + percent;
+
       gradient.append('stop')
         .attr('offset', `${startPercent}%`)
         .attr('stop-color', sponsor.color);
       gradient.append('stop')
         .attr('offset', `${endPercent}%`)
         .attr('stop-color', sponsor.color);
+
       cumulativePercent = endPercent;
     });
-    
-    // If sponsors don't add up to 100%, fill the rest with the last sponsor's color
+
+    // Fill remaining space if any (floating point errors)
     if (cumulativePercent < 100) {
       const lastSponsor = sponsors[sponsors.length - 1];
       gradient.append('stop')
@@ -38,8 +59,15 @@ export class JerseyRenderer {
         .attr('offset', '100%')
         .attr('stop-color', lastSponsor.color);
     }
-    
+
     return gradientId;
+  }
+
+  static createGradientDefinition(svg, node) {
+    // DEPRECATED: Used for whole-node gradients
+    const gradientId = `gradient-${node.id}`;
+    const latestEra = node.eras[node.eras.length - 1];
+    return this.createEraGradient(svg, latestEra, gradientId);
   }
 
   static renderNode(nodeGroup, node, svg) {
