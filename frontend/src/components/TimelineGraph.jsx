@@ -386,13 +386,17 @@ export default function TimelineGraph({
 
     for (let year = start; year <= end; year += gridSpacingYears) {
       const x = xScale(year);
+      const isDecade = Math.abs(year % 10) < 0.1; // Float safety
+      const isHighDetail = scale >= ZOOM_THRESHOLDS.HIGH_DETAIL;
+      const highlightDecade = isDecade && isHighDetail;
+
       gridGroup.append('line')
         .attr('x1', x)
         .attr('y1', paddedMinY - 100)
         .attr('x2', x)
         .attr('y2', paddedMaxY + 100)
-        .attr('stroke', '#444')
-        .attr('stroke-width', Math.max(0.7, 0.7 / scale))
+        .attr('stroke', highlightDecade ? '#777' : '#444')
+        .attr('stroke-width', highlightDecade ? Math.max(1.2, 1.2 / scale) : Math.max(0.7, 0.7 / scale))
         .attr('stroke-dasharray', scale >= ZOOM_THRESHOLDS.GRID_DENSITY ? '1,3' : '3,3');
     }
   };
