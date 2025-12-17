@@ -33,12 +33,8 @@ export class OptimizedRenderer {
   }
 
   renderWithLOD(nodes, links, scale) {
-    const useLowDetail = nodes.length > 100 || scale < 0.8;
-    if (useLowDetail) {
-      this.renderLowDetail(nodes, links);
-    } else {
-      this.renderHighDetail(nodes, links);
-    }
+    // DEPRECATED: Rendering logic moved to TimelineGraph.jsx + Virtualization
+    return;
   }
 
   renderLowDetail(_nodes, _links) {

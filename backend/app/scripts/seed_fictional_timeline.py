@@ -143,6 +143,8 @@ def seed():
         # Initialize with None
         s1_state = {'brand': None, 'contract_end': -1}
         s2_state = {'brand': None, 'contract_end': -1}
+        s3_state = {'brand': None, 'contract_end': -1}
+        s4_state = {'brand': None, 'contract_end': -1}
         
         last_reg_name = None
 
@@ -150,14 +152,13 @@ def seed():
             # 1. Manage Sponsor 1
             if s1_state['brand'] is None or current_year > s1_state['contract_end']:
                 # Need a new main sponsor
-                potential_brands = get_available_brands(current_year, exclude_ids=[s2_state['brand']['id'] if s2_state['brand'] else None])
+                exclude = [s['brand']['id'] for s in [s2_state, s3_state, s4_state] if s['brand']]
+                potential_brands = get_available_brands(current_year, exclude_ids=exclude)
                 
-                # Check for promotion (Sponsor 2 becomes Sponsor 1)
+                # Promotion Check (S2 -> S1)
                 promoted = False
-                if s2_state['brand'] and random.random() < 0.3: # 30% chance of promotion if S2 exists
-                     # S2 becomes S1
+                if s2_state['brand'] and random.random() < 0.3: 
                      s1_state['brand'] = s2_state['brand']
-                     # Reset S2
                      s2_state['brand'] = None
                      s2_state['contract_end'] = -1
                      promoted = True
@@ -165,36 +166,54 @@ def seed():
                 if not promoted:
                     if not potential_brands:
                         print(f"WARN: No brands available for {key} in {current_year}!")
-                        break # Should not happen with large pool
+                        break 
                     s1_state['brand'] = random.choice(potential_brands)
                 
-                # Contract Length: Main sponsors stick around (2-5 years, sometimes 8+)
                 if stable_sponsors:
                     duration = random.choice([4, 5, 6, 7, 8])
                 else:
                     duration = random.choices([2, 3, 4, 5, 8], weights=[20, 30, 30, 15, 5])[0]
-                
-                # Cap duration if it exceeds remaining team life? No, contracts can end early if team folds.
                 s1_state['contract_end'] = current_year + duration - 1
 
-            # 2. Manage Sponsor 2
+            # 2. Manage Sponsor 2 (80% chance if empty)
             if s2_state['brand'] is None or current_year > s2_state['contract_end']:
-                # Need a new secondary sponsor
-                potential_brands = get_available_brands(current_year, exclude_ids=[s1_state['brand']['id']])
-                
-                if potential_brands:
-                     s2_state['brand'] = random.choice(potential_brands)
-                     # Secondary sponsors rotate faster (1-3 years)
-                     duration = random.choices([1, 2, 3], weights=[30, 50, 20])[0]
-                     s2_state['contract_end'] = current_year + duration - 1
+                if random.random() < 0.8:
+                    exclude = [s['brand']['id'] for s in [s1_state, s3_state, s4_state] if s['brand']]
+                    potential_brands = get_available_brands(current_year, exclude_ids=exclude)
+                    if potential_brands:
+                         s2_state['brand'] = random.choice(potential_brands)
+                         duration = random.choices([1, 2, 3], weights=[30, 50, 20])[0]
+                         s2_state['contract_end'] = current_year + duration - 1
                 else:
-                    s2_state['brand'] = None # Could go without secondary
-            
+                    s2_state['brand'] = None
+
+            # 3. Manage Sponsor 3 (40% chance if empty)
+            if s3_state['brand'] is None or current_year > s3_state['contract_end']:
+                if random.random() < 0.4:
+                    exclude = [s['brand']['id'] for s in [s1_state, s2_state, s4_state] if s['brand']]
+                    potential_brands = get_available_brands(current_year, exclude_ids=exclude)
+                    if potential_brands:
+                         s3_state['brand'] = random.choice(potential_brands)
+                         duration = random.choices([1, 2], weights=[60, 40])[0]
+                         s3_state['contract_end'] = current_year + duration - 1
+                else:
+                    s3_state['brand'] = None
+
+            # 4. Manage Sponsor 4 (20% chance if S3 exists and empty)
+            if s4_state['brand'] is None or current_year > s4_state['contract_end']:
+                if s3_state['brand'] and random.random() < 0.2:
+                    exclude = [s['brand']['id'] for s in [s1_state, s2_state, s3_state] if s['brand']]
+                    potential_brands = get_available_brands(current_year, exclude_ids=exclude)
+                    if potential_brands:
+                         s4_state['brand'] = random.choice(potential_brands)
+                         duration = 1
+                         s4_state['contract_end'] = current_year + duration - 1
+                else:
+                    s4_state['brand'] = None
+
             # Register Usage
-            if s1_state['brand']:
-                sponsor_usage_registry.add((s1_state['brand']['id'], current_year))
-            if s2_state['brand']:
-                sponsor_usage_registry.add((s2_state['brand']['id'], current_year))
+            for s in [s1_state, s2_state, s3_state, s4_state]:
+                if s['brand']: sponsor_usage_registry.add((s['brand']['id'], current_year))
                 
             # 3. Attributes for Era
             tier = random.choice(TIERS)
@@ -221,25 +240,59 @@ def seed():
                 (era_id, node_id, current_year, valid_from, reg_name, uci_code, tier, False)
             )
             
-            # Links
-            if s1_state['brand']:
-                cur.execute(
-                    """
-                    INSERT INTO team_sponsor_link (
-                        link_id, era_id, brand_id, rank_order, prominence_percent, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-                    """,
-                    (str(uuid.uuid4()), era_id, s1_state['brand']['id'], 1, 70)
-                )
+            # Links & Prominence Calculation
+            active_sponsors = []
+            if s1_state['brand']: active_sponsors.append({'state': s1_state, 'rank': 1})
+            if s2_state['brand']: active_sponsors.append({'state': s2_state, 'rank': 2})
+            if s3_state['brand']: active_sponsors.append({'state': s3_state, 'rank': 3})
+            if s4_state['brand']: active_sponsors.append({'state': s4_state, 'rank': 4})
             
-            if s2_state['brand']:
+            count = len(active_sponsors)
+            prominences = []
+            
+            if count == 1:
+                prominences = [100]
+            elif count == 2:
+                # S1: 51-70% (User req: max 70)
+                p1 = random.randint(51, 70)
+                prominences = [p1, 100 - p1]
+            elif count == 3:
+                # S1: 45-60% (User req: max 60)
+                p1 = random.randint(45, 60)
+                remainder = 100 - p1
+                # Split remainder between 2 roughly equally (~20-27%)
+                s2 = (remainder // 2) + random.randint(-2, 2)
+                s3 = remainder - s2
+                prominences = [p1, s2, s3]
+            elif count >= 4:
+                # S1: 30-40% (User req: max 40)
+                # Ensure S1 is biggest: 30 > (70/3=23), safe.
+                p1 = random.randint(30, 40)
+                remainder = 100 - p1
+                others_count = count - 1
+                base_other = remainder // others_count
+                
+                others = []
+                for _ in range(others_count - 1):
+                    val = base_other + random.randint(-2, 2)
+                    others.append(val)
+                others.append(remainder - sum(others))
+                others.sort(reverse=True)
+                prominences = [p1] + others
+
+            # Write to DB
+            for idx, item in enumerate(active_sponsors):
+                brand = item['state']['brand']
+                rank = item['rank']
+                prom = prominences[idx]
+                
                 cur.execute(
                     """
                     INSERT INTO team_sponsor_link (
                         link_id, era_id, brand_id, rank_order, prominence_percent, created_at, updated_at
                     ) VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
                     """,
-                    (str(uuid.uuid4()), era_id, s2_state['brand']['id'], 2, 30)
+                    (str(uuid.uuid4()), era_id, brand['id'], rank, prom)
                 )
             
             current_year += 1
