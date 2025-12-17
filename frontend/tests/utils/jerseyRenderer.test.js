@@ -13,19 +13,23 @@ describe('JerseyRenderer', () => {
   it('creates gradient for single sponsor', () => {
     const node = { id: 'n1', eras: [{ sponsors: [{ color: '#FF0000', prominence: 100 }] }] };
     const gradId = JerseyRenderer.createGradientDefinition(svg, node);
-    expect(gradId).toBe('gradient-n1');
+    expect(gradId).toBe('gradient-n1-gradient');
     const stops = svg.select(`#${gradId}`).selectAll('stop').nodes();
     expect(stops.length).toBe(2);
     expect(stops[0].getAttribute('stop-color')).toBe('#FF0000');
   });
 
   it('creates gradient for multiple sponsors', () => {
-    const node = { id: 'n2', eras: [{ sponsors: [
-      { color: '#FF0000', prominence: 60 },
-      { color: '#00FF00', prominence: 40 }
-    ] }] };
+    const node = {
+      id: 'n2', eras: [{
+        sponsors: [
+          { color: '#FF0000', prominence: 60 },
+          { color: '#00FF00', prominence: 40 }
+        ]
+      }]
+    };
     const gradId = JerseyRenderer.createGradientDefinition(svg, node);
-    expect(gradId).toBe('gradient-n2');
+    expect(gradId).toBe('gradient-n2-gradient');
     const stops = svg.select(`#${gradId}`).selectAll('stop').nodes();
     expect(stops.length).toBe(4);
     expect(stops[2].getAttribute('stop-color')).toBe('#00FF00');

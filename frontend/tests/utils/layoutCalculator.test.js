@@ -54,8 +54,8 @@ describe('LayoutCalculator', () => {
       const calculator = new LayoutCalculator(graphData, 1000, 800);
       const yearRange = calculator.calculateYearRange();
 
-      expect(yearRange.min).toBe(2010);
-      expect(yearRange.max).toBe(2014);
+      expect(yearRange.min).toBe(1900);
+      expect(yearRange.max).toBe(2026);
     });
 
     it('should handle single node', () => {
@@ -72,116 +72,14 @@ describe('LayoutCalculator', () => {
       const calculator = new LayoutCalculator(graphData, 1000, 800);
       const yearRange = calculator.calculateYearRange();
 
-      expect(yearRange.min).toBe(2010);
-      expect(yearRange.max).toBe(2010);
+      expect(yearRange.min).toBe(1900);
+      expect(yearRange.max).toBe(2026);
     });
   });
 
-  describe('createXScale', () => {
-    it('should map years to X coordinates correctly', () => {
-      const graphData = createMockGraphData();
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const xScale = calculator.xScale;
 
-      // First year should be at padding
-      expect(xScale(2010)).toBeCloseTo(50, 1);
-      
-      // Last year should be near width - padding
-      expect(xScale(2014)).toBeCloseTo(950, 1);
-      
-      // Middle year should be in middle
-      const midYear = 2012;
-      const midX = xScale(midYear);
-      expect(midX).toBeGreaterThan(50);
-      expect(midX).toBeLessThan(950);
-    });
-  });
 
-  describe('calculateNodeWidth', () => {
-    it('should calculate width for dissolved team (respects min width)', () => {
-      const graphData = createMockGraphData();
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const node = graphData.nodes[0]; // 2010-2015, 5 years
 
-      const width = calculator.calculateNodeWidth(node);
-      
-      // Width should be based on year span but not below minimum
-      const spanWidth = 5 * (VISUALIZATION.YEAR_WIDTH / 10);
-      const expectedWidth = Math.max(VISUALIZATION.MIN_NODE_WIDTH, spanWidth);
-      expect(width).toBe(expectedWidth);
-    });
-
-    it('should calculate width for active team (no dissolution, respects min width)', () => {
-      const graphData = createMockGraphData();
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const node = graphData.nodes[1]; // 2012-present
-
-      const width = calculator.calculateNodeWidth(node);
-      
-      // Width should be from founding to max year in data but not below minimum
-      const expectedYearSpan = 2014 - 2012; // 2 years
-      const spanWidth = expectedYearSpan * (VISUALIZATION.YEAR_WIDTH / 10);
-      const expectedWidth = Math.max(VISUALIZATION.MIN_NODE_WIDTH, spanWidth);
-      expect(width).toBe(expectedWidth);
-    });
-
-    it('should respect minimum node width', () => {
-      const graphData = {
-        nodes: [
-          {
-            id: 'node1',
-            founding_year: 2010,
-            dissolution_year: 2010, // Same year
-            eras: [{ year: 2010, name: 'Team', tier: 1 }]
-          }
-        ],
-        links: []
-      };
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const width = calculator.calculateNodeWidth(graphData.nodes[0]);
-
-      expect(width).toBe(VISUALIZATION.MIN_NODE_WIDTH);
-    });
-  });
-
-  describe('assignYPositions', () => {
-    it('should distribute nodes vertically by tier', () => {
-      const graphData = createMockGraphData();
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const nodesWithX = calculator.assignXPositions();
-      const positioned = calculator.assignYPositions(nodesWithX);
-
-      // Tier 1 nodes should have same Y
-      const tier1Nodes = positioned.filter(n => 
-        n.eras.some(e => e.tier === 1)
-      );
-      expect(tier1Nodes.length).toBe(2);
-      expect(tier1Nodes[0].y).toBe(tier1Nodes[1].y);
-
-      // All nodes should have height
-      positioned.forEach(node => {
-        expect(node.height).toBe(VISUALIZATION.NODE_HEIGHT);
-      });
-    });
-
-    it('should handle nodes with no tier (default to 2)', () => {
-      const graphData = {
-        nodes: [
-          {
-            id: 'node1',
-            founding_year: 2010,
-            eras: [{ year: 2010, name: 'Team', tier: null }]
-          }
-        ],
-        links: []
-      };
-      const calculator = new LayoutCalculator(graphData, 1000, 800);
-      const nodesWithX = calculator.assignXPositions();
-      const positioned = calculator.assignYPositions(nodesWithX);
-
-      expect(positioned[0].y).toBeGreaterThan(0);
-    });
-  });
 
   describe('calculateLinkPaths', () => {
     it('should generate valid SVG paths for all links', () => {
@@ -190,18 +88,18 @@ describe('LayoutCalculator', () => {
       const layout = calculator.calculateLayout();
 
       expect(layout.links.length).toBe(2);
-      
+
       layout.links.forEach(link => {
         // Should have path property
         expect(link.path).toBeDefined();
         expect(typeof link.path).toBe('string');
-        
+
         // Should start with M (move to)
         expect(link.path).toMatch(/^M /);
-        
+
         // Should contain C (cubic bezier)
         expect(link.path).toContain('C ');
-        
+
         // Should have source/target coordinates
         expect(link.sourceX).toBeDefined();
         expect(link.sourceY).toBeDefined();

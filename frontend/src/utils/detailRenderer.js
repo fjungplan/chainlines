@@ -38,6 +38,11 @@ export class DetailRenderer {
       return;
     }
 
+    if (scale < ZOOM_THRESHOLDS.DETAIL_VISIBLE) {
+      nodeGroup.selectAll('.era-segment').remove();
+      return;
+    }
+
     // Use full height for eras
     const timelineHeight = node.height;
     const y = 0;

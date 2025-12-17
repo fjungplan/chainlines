@@ -162,8 +162,13 @@ export class LayoutCalculator {
       }
     });
 
+    const nodeSet = new Set(nodes.map(n => n.id));
+
     // Add all links (both directions for undirected family grouping)
     this.links.forEach(link => {
+      // Skip links with missing nodes
+      if (!nodeSet.has(link.source) || !nodeSet.has(link.target)) return;
+
       if (!adjacencyMap.has(link.source)) adjacencyMap.set(link.source, new Set());
       if (!adjacencyMap.has(link.target)) adjacencyMap.set(link.target, new Set());
       adjacencyMap.get(link.source).add(link.target);
@@ -658,27 +663,7 @@ export class LayoutCalculator {
     return crossings;
   }
 
-  groupNodesByTier(nodes) {
-    // Group nodes by their most common tier level
-    const tierMap = new Map();
 
-    nodes.forEach(node => {
-      const tiers = node.eras.map(e => e.tier).filter(t => t);
-      const avgTier = tiers.length > 0
-        ? Math.round(tiers.reduce((a, b) => a + b) / tiers.length)
-        : 2; // Default to ProTeam
-
-      if (!tierMap.has(avgTier)) {
-        tierMap.set(avgTier, []);
-      }
-      tierMap.get(avgTier).push(node);
-    });
-
-    // Sort tiers (1 = WorldTour at top)
-    return Array.from(tierMap.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([_, nodes]) => nodes);
-  }
 
   calculateLinkPaths(nodes) {
     // Create node position lookup
