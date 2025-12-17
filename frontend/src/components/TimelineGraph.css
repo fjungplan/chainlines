@@ -174,7 +174,11 @@
 
   /* Era segment styling for detail view */
   .era-segment {
-    pointer-events: none;
+    pointer-events: auto;
+  }
+
+  .node rect {
+    pointer-events: auto;
   }
 
   /* Wizard action buttons */

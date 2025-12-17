@@ -9,7 +9,7 @@ import { ZoomLevelManager, ZOOM_THRESHOLDS } from '../utils/zoomLevelManager';
 import { DetailRenderer } from '../utils/detailRenderer';
 import ControlPanel from './ControlPanel';
 import Tooltip from './Tooltip';
-import { TooltipBuilder } from '../utils/tooltipBuilder.jsx';
+import { TooltipBuilder } from '../utils/tooltipBuilder';
 import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
@@ -995,8 +995,6 @@ export default function TimelineGraph({
             .on('click', (event, d) => handleNodeClick(d))
             .on('mouseenter', (event, d) => {
               handleNodeHover(event, d);
-              const content = TooltipBuilder.buildNodeTooltip(d);
-              setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
             })
             .on('mousemove', (event) => {
               if (tooltip.visible) {
@@ -1051,7 +1049,7 @@ export default function TimelineGraph({
 
         // 3. Eras (High Detail) - DetailRenderer handles internal 1.2 threshold for gradients
         if (isHighDetail) {
-          DetailRenderer.renderEraTimeline(group, d, scale, svg);
+          DetailRenderer.renderEraTimeline(group, d, scale, svg, handleEraHover, handleEraHoverEnd);
         } else {
           group.selectAll('.era-segment').remove();
         }
@@ -1105,19 +1103,34 @@ export default function TimelineGraph({
   };
 
   const handleNodeHover = (event, node) => {
-    d3.select(event.currentTarget)
-      .select('rect')
-      .transition()
-      .duration(200)
-      .attr('filter', 'url(#underglow)');
+    // Context-aware tooltip:
+    // If scale < HIGH_DETAIL, show Node Summary.
+    // If scale >= HIGH_DETAIL, eras handles interaction (or no tooltip if hovering gap).
+    const currentScale = currentTransform.current ? currentTransform.current.k : 1;
+    if (currentScale < ZOOM_THRESHOLDS.HIGH_DETAIL) {
+      const content = TooltipBuilder.buildNodeTooltip(node);
+      setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+    }
   };
 
   const handleNodeHoverEnd = (event) => {
-    d3.select(event.currentTarget)
-      .select('rect')
-      .transition()
-      .duration(200)
-      .attr('filter', null);
+    // Always clear tooltip on leave
+    if (tooltip.visible) {
+      setTooltip({ visible: false, content: null, position: null });
+    }
+  };
+
+  const handleEraHover = (event, era, node) => {
+    // Show Era Tooltip
+    // Note: Event might need to be stopped from propagating if necessary, but SVG events are specific.
+    event.stopPropagation();
+    const content = TooltipBuilder.buildEraTooltip(era, node);
+    setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+  };
+
+  const handleEraHoverEnd = (event) => {
+    event.stopPropagation();
+    setTooltip({ visible: false, content: null, position: null });
   };
 
   return (

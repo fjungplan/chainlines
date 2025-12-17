@@ -31,7 +31,8 @@ export class DetailRenderer {
   /**
    * Add era timeline within node at detail level
    */
-  static renderEraTimeline(nodeGroup, node, scale, svg) {
+
+  static renderEraTimeline(nodeGroup, node, scale, svg, onEraHover, onEraHoverEnd) {
     const eras = node.eras;
     if (!eras || eras.length === 0) {
       nodeGroup.selectAll('.era-segment').remove();
@@ -91,7 +92,8 @@ export class DetailRenderer {
         y: 0, // Top of node
         width: Math.max(0, width),
         height: timelineHeight,
-        fill: fillStyle
+        fill: fillStyle,
+        originalEra: era // Pass original era object for tooltip
       };
     }).filter(d => d !== null);
 
@@ -108,7 +110,21 @@ export class DetailRenderer {
           .attr('y', d => d.y)
           .attr('width', d => d.width)
           .attr('height', d => d.height)
-          .attr('fill', d => d.fill),
+          .attr('fill', d => d.fill)
+          .style('cursor', 'pointer') // Indicate interactability
+          .on('mouseenter', (event, d) => {
+            if (onEraHover) onEraHover(event, d.originalEra, node);
+          })
+          .on('mousemove', (event, d) => {
+            // Ensure tooltip follows mouse if handled by parent state
+            if (onEraHover) onEraHover(event, d.originalEra, node);
+            // Note: optimization - parent usually tracks movement via separate handler or this one just updates position?
+            // TimelineGraph uses single Tooltip state. If we call onEraHover again it updates position.
+            // Actually TimelineGraph `handleEraHover` sets state. Calling it on mousemove updates position.
+          })
+          .on('mouseleave', (event) => {
+            if (onEraHoverEnd) onEraHoverEnd(event);
+          }),
         update => update
           .attr('x', d => d.x)
           .attr('y', d => d.y)
