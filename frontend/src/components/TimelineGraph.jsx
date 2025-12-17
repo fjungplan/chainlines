@@ -1024,7 +1024,9 @@ export default function TimelineGraph({
         }
 
         // 1. Toggle Labels
-        group.selectAll('text').style('display', isHighDetail ? null : 'none');
+        // Visible if scale < HIGH_DETAIL (1.2)
+        const isLabelVisible = scale < ZOOM_THRESHOLDS.HIGH_DETAIL;
+        group.selectAll('text').style('display', isLabelVisible ? null : 'none');
 
         // 2. Base Node Rect (Solid Color) - Nested Join
         // Visible only if NOT high detail
