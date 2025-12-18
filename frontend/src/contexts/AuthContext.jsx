@@ -116,6 +116,10 @@ export function AuthProvider({ children }) {
     return user?.role === 'NEW_USER';
   };
 
+  const isEditor = () => {
+    return user && ['NEW_USER', 'TRUSTED_USER', 'ADMIN'].includes(user.role);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -128,6 +132,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       isAdmin,
       canEdit,
+      isEditor,
       needsModeration
     }}>
       {children}
