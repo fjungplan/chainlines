@@ -35,6 +35,7 @@ async def test_create_team_era_valid(isolated_session):
             valid_from=date(2020, 1, 1),
             registered_name="Example Cycling Team",
             uci_code="ECT",
+            country_code="FRA",
             tier_level=1,
         )
         isolated_session.add(era)
@@ -182,3 +183,12 @@ async def test_team_era_validations(isolated_session):
     # Bad tier level
     with pytest.raises(ValueError):
         TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", tier_level=5)
+    # Bad country_code length
+    with pytest.raises(ValueError):
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", country_code="FR")
+    # Bad country_code case
+    with pytest.raises(ValueError):
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", country_code="fra")
+    # Bad country_code chars
+    with pytest.raises(ValueError):
+        TeamEra(node_id=node.node_id, season_year=2020, valid_from=date(2020, 1, 1), registered_name="X", country_code="123")
