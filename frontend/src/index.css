@@ -7,6 +7,7 @@
   font-weight: 300;
   src: url('/fonts/montserrat-v31-latin_latin-ext-300.woff2') format('woff2');
 }
+
 /* montserrat-300italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -15,6 +16,7 @@
   font-weight: 300;
   src: url('/fonts/montserrat-v31-latin_latin-ext-300italic.woff2') format('woff2');
 }
+
 /* montserrat-regular - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -23,6 +25,7 @@
   font-weight: 400;
   src: url('/fonts/montserrat-v31-latin_latin-ext-regular.woff2') format('woff2');
 }
+
 /* montserrat-italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -31,6 +34,7 @@
   font-weight: 400;
   src: url('/fonts/montserrat-v31-latin_latin-ext-italic.woff2') format('woff2');
 }
+
 /* montserrat-500 - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -39,6 +43,7 @@
   font-weight: 500;
   src: url('/fonts/montserrat-v31-latin_latin-ext-500.woff2') format('woff2');
 }
+
 /* montserrat-500italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -47,6 +52,7 @@
   font-weight: 500;
   src: url('/fonts/montserrat-v31-latin_latin-ext-500italic.woff2') format('woff2');
 }
+
 /* montserrat-600 - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -55,6 +61,7 @@
   font-weight: 600;
   src: url('/fonts/montserrat-v31-latin_latin-ext-600.woff2') format('woff2');
 }
+
 /* montserrat-600italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -63,6 +70,7 @@
   font-weight: 600;
   src: url('/fonts/montserrat-v31-latin_latin-ext-600italic.woff2') format('woff2');
 }
+
 /* montserrat-700 - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -71,6 +79,7 @@
   font-weight: 700;
   src: url('/fonts/montserrat-v31-latin_latin-ext-700.woff2') format('woff2');
 }
+
 /* montserrat-700italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -79,6 +88,7 @@
   font-weight: 700;
   src: url('/fonts/montserrat-v31-latin_latin-ext-700italic.woff2') format('woff2');
 }
+
 /* montserrat-800 - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -87,6 +97,7 @@
   font-weight: 800;
   src: url('/fonts/montserrat-v31-latin_latin-ext-800.woff2') format('woff2');
 }
+
 /* montserrat-800italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -95,6 +106,7 @@
   font-weight: 800;
   src: url('/fonts/montserrat-v31-latin_latin-ext-800italic.woff2') format('woff2');
 }
+
 /* montserrat-900 - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -103,6 +115,7 @@
   font-weight: 900;
   src: url('/fonts/montserrat-v31-latin_latin-ext-900.woff2') format('woff2');
 }
+
 /* montserrat-900italic - latin_latin-ext */
 @font-face {
   font-display: swap;
@@ -113,7 +126,9 @@
 }
 
 /* ===== CSS RESET ===== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -127,29 +142,29 @@
   --color-secondary: #f5f5f5;
   --color-accent: #646cff;
   --color-accent-hover: #535bf2;
-  
+
   /* Text Colors */
   --color-text-primary: #333333;
   --color-text-secondary: #666666;
   --color-text-light: #ffffff;
   --color-text-dark: #1a1a1a;
-  
+
   /* Background Colors */
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f5f5f5;
   --color-bg-code: #e8e8e8;
-  
+
   /* Border Colors */
   --color-border: #e0e0e0;
   --color-border-dark: #cccccc;
-  
+
   /* Typography */
   --font-family-base: Montserrat, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-mono: 'Courier New', Courier, monospace;
   --font-size-base: 16px;
   --line-height-base: 1.6;
 
-  
+
   /* Spacing */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
@@ -157,28 +172,28 @@
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
-  
+
   /* Breakpoints (as custom properties for JS access) */
   --breakpoint-mobile: 320px;
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
   --breakpoint-wide: 1200px;
-  
+
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
   --transition-slow: 0.4s ease;
-  
+
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
-  
+
   /* Border Radius */
   --radius-sm: 3px;
   --radius-md: 4px;
   --radius-lg: 8px;
-  
+
   /* Font rendering */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -192,16 +207,16 @@
     --color-primary: #646cff;
     --color-primary-dark: #535bf2;
     --color-secondary: #1a1a1a;
-    
+
     --color-text-primary: #e0e0e0;
     --color-text-secondary: #a0a0a0;
     --color-text-light: #ffffff;
     --color-text-dark: #1a1a1a;
-    
+
     --color-bg-primary: #242424;
     --color-bg-secondary: #1a1a1a;
     --color-bg-code: #333333;
-    
+
     --color-border: #333333;
     --color-border-dark: #444444;
   }
@@ -222,7 +237,12 @@ body {
 }
 
 /* ===== TYPOGRAPHY ===== */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 600;
   line-height: 1.2;
   margin-bottom: var(--spacing-md);
@@ -343,11 +363,11 @@ pre code {
   :root {
     --font-size-base: 18px;
   }
-  
+
   h1 {
     font-size: 3rem;
   }
-  
+
   h2 {
     font-size: 2.25rem;
   }
@@ -358,8 +378,37 @@ pre code {
   h1 {
     font-size: 3.5rem;
   }
-  
+
   h2 {
     font-size: 2.5rem;
   }
+}
+
+/* ===== SCROLLBARS ===== */
+/* Global Dark Scrollbar Theme */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2a2a2a;
+  /* Dark track matching typical background */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #555;
+  /* Dark grey thumb */
+  border-radius: 5px;
+  border: 2px solid #2a2a2a;
+  /* Creates padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #777;
+  /* Lighter on hover */
+}
+
+::-webkit-scrollbar-corner {
+  background: #2a2a2a;
 }

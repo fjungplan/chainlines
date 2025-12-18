@@ -5,9 +5,13 @@
   align-items: center;
   width: 100%;
   height: 100%;
-  padding: 20px;
+  /* Fill parent container */
+  padding: 20px 20px 40px 20px;
+  /* Extra bottom padding to ensure visibility */
   background: #2a2a2a;
-  overflow-y: hidden;
+  overflow: hidden;
+  /* Prevent page scroll, use inner scroll */
+  box-sizing: border-box;
 }
 
 /* Inner Container - Matches the max-width card look */
@@ -18,10 +22,16 @@
   border-radius: 8px;
   padding: 30px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  margin: 20px 0;
+  margin: 0;
+  /* Remove vertical margin to relying on parent padding */
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  flex: 1;
+  /* Fill remaining space in parent */
+  min-height: 0;
+  /* Important for nested flex scroll */
+  overflow: hidden;
+  /* Ensure content stays inside */
 }
 
 /* Header Styling */

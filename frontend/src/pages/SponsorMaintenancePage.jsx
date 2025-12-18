@@ -69,77 +69,77 @@ export default function SponsorMaintenancePage() {
 
     return (
         <div className="sponsor-page-container">
-            <div className="sponsor-inner-container">
-                <div className="sponsor-header">
-                    <h1>Sponsor Maintenance</h1>
-                </div>
-
-                <div className="sponsor-controls">
-                    <input
-                        type="text"
-                        placeholder="Search sponsors (e.g. Visma, Ineos)..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="search-input"
-                    />
-                    {(isEditor() || isAdmin()) && (
-                        <button className="primary-button" onClick={handleCreate}>
-                            + Create New Sponsor
-                        </button>
-                    )}
-                </div>
-
-                {loading ? (
-                    <LoadingSpinner message="Loading sponsors..." />
-                ) : error ? (
-                    <ErrorDisplay error={error} onRetry={fetchMasters} />
-                ) : (
-                    <div className="sponsor-list">
-                        {masters.length === 0 ? (
-                            <div className="empty-state">No sponsors found.</div>
-                        ) : (
-                            <table className="sponsor-table">
-                                <thead>
-                                    <tr>
-                                        <th>Legal Name</th>
-                                        <th>Industry</th>
-                                        <th>Brands</th>
-                                        <th className="actions-col">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {masters.map(master => (
-                                        <tr key={master.master_id}>
-                                            <td>
-                                                <div className="master-name">{master.legal_name}</div>
-                                                {master.is_protected && <span className="protected-badge" title="Protected Record">🛡️</span>}
-                                            </td>
-                                            <td>{master.industry_sector || '-'}</td>
-                                            <td>{master.brand_count}</td>
-                                            <td className="actions-col">
-                                                <button
-                                                    className="edit-button"
-                                                    onClick={() => handleEdit(master.master_id)}
-                                                    disabled={!isEditor() && !isAdmin()}
-                                                >
-                                                    Edit
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-                )}
-            </div>
-
-            {isEditorOpen && (
+            {isEditorOpen ? (
                 <SponsorMasterEditor
                     masterId={selectedMasterId}
                     onClose={handleEditorClose}
                     onSuccess={handleEditorSuccess}
                 />
+            ) : (
+                <div className="sponsor-inner-container">
+                    <div className="sponsor-header">
+                        <h1>Sponsor Maintenance</h1>
+                    </div>
+
+                    <div className="sponsor-controls">
+                        <input
+                            type="text"
+                            placeholder="Search sponsors (e.g. Visma, Ineos)..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="search-input"
+                        />
+                        {(isEditor() || isAdmin()) && (
+                            <button className="primary-button" onClick={handleCreate}>
+                                + Create New Sponsor
+                            </button>
+                        )}
+                    </div>
+
+                    {loading ? (
+                        <LoadingSpinner message="Loading sponsors..." />
+                    ) : error ? (
+                        <ErrorDisplay error={error} onRetry={fetchMasters} />
+                    ) : (
+                        <div className="sponsor-list">
+                            {masters.length === 0 ? (
+                                <div className="empty-state">No sponsors found.</div>
+                            ) : (
+                                <table className="sponsor-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Legal Name</th>
+                                            <th>Industry</th>
+                                            <th>Brands</th>
+                                            <th className="actions-col">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {masters.map(master => (
+                                            <tr key={master.master_id}>
+                                                <td>
+                                                    <div className="master-name">{master.legal_name}</div>
+                                                    {master.is_protected && <span className="protected-badge" title="Protected Record">🛡️</span>}
+                                                </td>
+                                                <td>{master.industry_sector || '-'}</td>
+                                                <td>{master.brand_count}</td>
+                                                <td className="actions-col">
+                                                    <button
+                                                        className="edit-button"
+                                                        onClick={() => handleEdit(master.master_id)}
+                                                        disabled={!isEditor() && !isAdmin()}
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );
