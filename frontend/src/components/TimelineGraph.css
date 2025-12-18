@@ -90,13 +90,9 @@
   max-width: 100%;
   width: 100%;
   padding: 0;
+}
 
-  .layout-main {
-    max-width: 100%;
-    width: 100%;
-    padding: 0;
-  }
-
+/* Timeline Sidebar Scrollbar */
   .timeline-sidebar::-webkit-scrollbar {
     width: 6px;
   }
