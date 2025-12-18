@@ -3,6 +3,7 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/*.pyc
 backend/**/*.pyc
+.env
 backend/.env
 backend/.venv/
 backend/alembic/versions/*.pyc

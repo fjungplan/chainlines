@@ -3,8 +3,8 @@ chainlines.cc {
     reverse_proxy frontend:80
 
     # FIX: Use 'backend' (matches docker-compose service name)
-    # 'handle_path' strips the '/api' prefix so FastAPI sees '/v1/...'
-    handle_path /api/* {
+    # Use 'handle' instead of 'handle_path' to preserve '/api' prefix
+    handle /api/* {
         reverse_proxy backend:8000
     }
 }

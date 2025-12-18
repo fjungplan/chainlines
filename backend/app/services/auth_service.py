@@ -7,7 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
-from app.models.user import User
+from app.core.security import create_access_token, create_refresh_token
+from app.models.user import User, UserRole
 from app.schemas.auth import TokenResponse
 
 
@@ -49,6 +50,10 @@ class AuthService:
         if user:
             # Update last login
             user.last_login_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            
+            # Auto-promote to admin if in config list
+            if user.email in settings.ADMIN_EMAILS and user.role != UserRole.ADMIN:
+                user.role = UserRole.ADMIN
         else:
             # Create new user
             user = User(
@@ -57,6 +62,11 @@ class AuthService:
                 display_name=google_user_info['display_name'],
                 avatar_url=google_user_info['avatar_url']
             )
+            
+            # Set initial role
+            if user.email in settings.ADMIN_EMAILS:
+                user.role = UserRole.ADMIN
+                
             session.add(user)
         
         # Flush to DB to get user_id, but don't commit yet (let caller manage transaction)
