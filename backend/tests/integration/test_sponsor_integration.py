@@ -4,8 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 
 
+import uuid
 from app.models.team import TeamNode, TeamEra
 from app.services.sponsor_service import SponsorService
+from app.schemas.sponsors import SponsorMasterCreate, SponsorBrandCreate
 
 
 @pytest.mark.asyncio
@@ -41,24 +43,33 @@ class TestSponsorIntegration:
         # Create master sponsor
         soudal_group = await SponsorService.create_master(
             db_session,
-            legal_name="Soudal Group",
-            industry_sector="Construction Materials"
+            data=SponsorMasterCreate(
+                legal_name="Soudal Group",
+                industry_sector="Construction Materials"
+            ),
+            user_id=None
         )
         await db_session.commit()
         
         # Create two brands under the same master
-        soudal_brand = await SponsorService.create_brand(
+        soudal_brand = await SponsorService.add_brand(
             db_session,
             master_id=soudal_group.master_id,
-            brand_name="Soudal",
-            default_hex_color="#0066CC"  # Blue
+            data=SponsorBrandCreate(
+                brand_name="Soudal",
+                default_hex_color="#0066CC"  # Blue
+            ),
+            user_id=None
         )
         
-        quick_step_brand = await SponsorService.create_brand(
+        quick_step_brand = await SponsorService.add_brand(
             db_session,
             master_id=soudal_group.master_id,
-            brand_name="Quick-Step",
-            default_hex_color="#FFFFFF"  # White
+            data=SponsorBrandCreate(
+                brand_name="Quick-Step",
+                default_hex_color="#FFFFFF"  # White
+            ),
+            user_id=None
         )
         await db_session.commit()
         
@@ -68,7 +79,8 @@ class TestSponsorIntegration:
             era_id=era.era_id,
             brand_id=soudal_brand.brand_id,
             rank_order=1,
-            prominence_percent=60
+            prominence_percent=60,
+            user_id=None
         )
         
         # Link Quick-Step as secondary sponsor (40%)
@@ -77,7 +89,8 @@ class TestSponsorIntegration:
             era_id=era.era_id,
             brand_id=quick_step_brand.brand_id,
             rank_order=2,
-            prominence_percent=40
+            prominence_percent=40,
+            user_id=None
         )
         await db_session.commit()
         
@@ -147,55 +160,55 @@ class TestSponsorIntegration:
         # Create three different master sponsors
         bike_company = await SponsorService.create_master(
             db_session,
-            "BikeManufacturer Inc",
-            "Bicycle Manufacturing"
+            data=SponsorMasterCreate(legal_name="BikeManufacturer Inc", industry_sector="Bicycle Manufacturing"),
+            user_id=None
         )
         
         beverage_company = await SponsorService.create_master(
             db_session,
-            "Energy Drinks Ltd",
-            "Beverages"
+            data=SponsorMasterCreate(legal_name="Energy Drinks Ltd", industry_sector="Beverages"),
+            user_id=None
         )
         
         apparel_company = await SponsorService.create_master(
             db_session,
-            "Sportswear Corp",
-            "Sports Apparel"
+            data=SponsorMasterCreate(legal_name="Sportswear Corp", industry_sector="Sports Apparel"),
+            user_id=None
         )
         await db_session.commit()
         
         # Create one brand for each
-        bike_brand = await SponsorService.create_brand(
+        bike_brand = await SponsorService.add_brand(
             db_session,
-            bike_company.master_id,
-            "SuperBike",
-            "#FF0000"  # Red
+            master_id=bike_company.master_id,
+            data=SponsorBrandCreate(brand_name="SuperBike", default_hex_color="#FF0000"),
+            user_id=None
         )
         
-        energy_brand = await SponsorService.create_brand(
+        energy_brand = await SponsorService.add_brand(
             db_session,
-            beverage_company.master_id,
-            "PowerDrink",
-            "#FFFF00"  # Yellow
+            master_id=beverage_company.master_id,
+            data=SponsorBrandCreate(brand_name="PowerDrink", default_hex_color="#FFFF00"),
+            user_id=None
         )
         
-        apparel_brand = await SponsorService.create_brand(
+        apparel_brand = await SponsorService.add_brand(
             db_session,
-            apparel_company.master_id,
-            "ProKit",
-            "#0000FF"  # Blue
+            master_id=apparel_company.master_id,
+            data=SponsorBrandCreate(brand_name="ProKit", default_hex_color="#0000FF"),
+            user_id=None
         )
         await db_session.commit()
         
         # Link all three with different prominences
         await SponsorService.link_sponsor_to_era(
-            db_session, era.era_id, bike_brand.brand_id, 1, 50
+            db_session, era.era_id, bike_brand.brand_id, 1, 50, user_id=None
         )
         await SponsorService.link_sponsor_to_era(
-            db_session, era.era_id, energy_brand.brand_id, 2, 30
+            db_session, era.era_id, energy_brand.brand_id, 2, 30, user_id=None
         )
         await SponsorService.link_sponsor_to_era(
-            db_session, era.era_id, apparel_brand.brand_id, 3, 20
+            db_session, era.era_id, apparel_brand.brand_id, 3, 20, user_id=None
         )
         await db_session.commit()
         
@@ -237,18 +250,22 @@ class TestSponsorIntegration:
         await db_session.flush()
         
         # Create sponsor
-        master = await SponsorService.create_master(db_session, "Small Sponsor Co")
-        brand = await SponsorService.create_brand(
+        master = await SponsorService.create_master(
+            db_session, 
+            data=SponsorMasterCreate(legal_name="Small Sponsor Co"),
+            user_id=None
+        )
+        brand = await SponsorService.add_brand(
             db_session,
-            master.master_id,
-            "SmallBrand",
-            "#00FF00"
+            master_id=master.master_id,
+            data=SponsorBrandCreate(brand_name="SmallBrand", default_hex_color="#00FF00"),
+            user_id=None
         )
         await db_session.commit()
         
         # Link with only 75% prominence (leaving 25% unsponsored)
         await SponsorService.link_sponsor_to_era(
-            db_session, era.era_id, brand.brand_id, 1, 75
+            db_session, era.era_id, brand.brand_id, 1, 75, user_id=None
         )
         await db_session.commit()
         
@@ -294,40 +311,58 @@ class TestSponsorIntegration:
         await db_session.flush()
         
         # Create sponsors
-        sponsor_a_master = await SponsorService.create_master(db_session, "Sponsor A")
-        sponsor_b_master = await SponsorService.create_master(db_session, "Sponsor B")
-        sponsor_c_master = await SponsorService.create_master(db_session, "Sponsor C")
+        sponsor_a_master = await SponsorService.create_master(
+            db_session, 
+            data=SponsorMasterCreate(legal_name="Sponsor A"),
+            user_id=None
+        )
+        sponsor_b_master = await SponsorService.create_master(
+            db_session, 
+            data=SponsorMasterCreate(legal_name="Sponsor B"),
+            user_id=None
+        )
+        sponsor_c_master = await SponsorService.create_master(
+            db_session, 
+            data=SponsorMasterCreate(legal_name="Sponsor C"),
+            user_id=None
+        )
         
-        brand_a = await SponsorService.create_brand(
-            db_session, sponsor_a_master.master_id, "Brand A", "#AA0000"
+        brand_a = await SponsorService.add_brand(
+            db_session, sponsor_a_master.master_id, 
+            data=SponsorBrandCreate(brand_name="Brand A", default_hex_color="#AA0000"),
+            user_id=None
         )
-        brand_b = await SponsorService.create_brand(
-            db_session, sponsor_b_master.master_id, "Brand B", "#00AA00"
+        brand_b = await SponsorService.add_brand(
+            db_session, sponsor_b_master.master_id, 
+            data=SponsorBrandCreate(brand_name="Brand B", default_hex_color="#00AA00"),
+            user_id=None
         )
-        brand_c = await SponsorService.create_brand(
-            db_session, sponsor_c_master.master_id, "Brand C", "#0000AA"
+        brand_c = await SponsorService.add_brand(
+            db_session, sponsor_c_master.master_id, 
+            data=SponsorBrandCreate(brand_name="Brand C", default_hex_color="#0000AA"),
+            user_id=None
         )
         await db_session.commit()
         
         # 2020: Brand A (100%)
         await SponsorService.link_sponsor_to_era(
-            db_session, era_2020.era_id, brand_a.brand_id, 1, 100
+            db_session, era_2020.era_id, brand_a.brand_id, 1, 100, user_id=None
         )
         
         # 2021: Brand A (70%) + Brand B (30%)
         await SponsorService.link_sponsor_to_era(
-            db_session, era_2021.era_id, brand_a.brand_id, 1, 70
+            db_session, era_2021.era_id, brand_a.brand_id, 1, 70, user_id=None
         )
         await SponsorService.link_sponsor_to_era(
-            db_session, era_2021.era_id, brand_b.brand_id, 2, 30
+            db_session, era_2021.era_id, brand_b.brand_id, 2, 30, user_id=None
         )
         
         # 2022: Brand B (60%) + Brand C (40%) - Brand A dropped
         await SponsorService.link_sponsor_to_era(
-            db_session, era_2022.era_id, brand_b.brand_id, 1, 60
+            db_session, era_2022.era_id, brand_b.brand_id, 1, 60, user_id=None
         )
         await SponsorService.link_sponsor_to_era(
-            db_session, era_2022.era_id, brand_c.brand_id, 2, 40
+            db_session, era_2022.era_id, brand_c.brand_id, 2, 40, user_id=None
         )
         await db_session.commit()
         
