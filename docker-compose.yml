@@ -63,6 +63,7 @@ services:
       args:
         # Passes the URL from your .env to the build process
         - VITE_API_URL=${VITE_API_URL}
+        - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
     container_name: cycling_frontend
     restart: always
     expose:
