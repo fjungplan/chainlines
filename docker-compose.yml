@@ -29,7 +29,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,6 +50,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     depends_on:
       postgres:
@@ -57,7 +58,7 @@ services:
 
   # --- Frontend ---
   frontend:
-    build: 
+    build:
       context: ./frontend
       args:
         # Passes the URL from your .env to the build process
