@@ -5,6 +5,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import { AuthProvider } from './contexts/AuthContext'
 import App from './App.jsx'
 import './index.css'
+import 'flag-icons/css/flag-icons.min.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

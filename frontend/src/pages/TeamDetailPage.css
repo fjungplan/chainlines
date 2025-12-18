@@ -108,31 +108,140 @@
   color: #aaa;
 }
 
-.era-tier {
-  display: inline-block;
-  padding: 2px 8px;
-  background-color: var(--color-accent, #646cff);
-  color: #ffffff;
-  border-radius: 3px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-right: 8px;
+.era-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
 }
 
-.era-uci {
-  display: inline-block;
-  font-family: monospace;
-  background-color: #444;
-  color: #eee;
-  padding: 2px 6px;
-  border-radius: 3px;
+.era-info h4 {
+  margin: 0 0 8px 0;
+  color: #ffffff;
+  font-size: 1.125rem;
+}
+
+.era-meta-pills {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  /* Fixed height for perfect alignment */
+  padding: 0 10px;
+  box-sizing: border-box;
+  border-radius: 4px;
   font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.meta-pill.flag-pill {
+  width: 28px;
+  /* Fixed width */
+  height: 21px;
+  /* Match height of other pills logic context or keep 24px if forced parent */
+  /* Parent meta-pill enforces 24px height. Let's let it fill that or center it. */
+  /* Actually layout enforces 24px. */
+  border-radius: 4px;
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  /* Subtle inset border */
+  padding: 0;
+}
+
+.meta-pill.flag-placeholder {
+  width: 28px;
+  background: repeating-linear-gradient(45deg,
+      #444,
+      #444 2px,
+      #555 2px,
+      #555 4px);
+  border: 1px solid #666;
+  padding: 0;
+}
+
+.meta-pill.uci {
+  background-color: #333;
+  color: #ccc;
+  font-family: monospace;
+  border: 1px solid #555;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.meta-pill.tier {
+  /* Default fallback */
+  background-color: #555;
+  color: #fff;
+}
+
+/* Tier 1: Gold */
+.meta-pill.tier.tier-1 {
+  background: linear-gradient(135deg, #FFD700 0%, #DAA520 100%);
+  color: #2a2a2a;
+  border: 1px solid #B8860B;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Tier 2: Silver */
+.meta-pill.tier.tier-2 {
+  background: linear-gradient(135deg, #E0E0E0 0%, #B0B0B0 100%);
+  color: #2a2a2a;
+  border: 1px solid #999;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Tier 3: Bronze */
+.meta-pill.tier.tier-3 {
+  background: linear-gradient(135deg, #CD7F32 0%, #A0522D 100%);
+  color: #fff;
+  border: 1px solid #8B4513;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.era-sponsors-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.era-sponsors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.sponsor-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  /* Match meta-pill height */
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .era-status {
   font-style: italic;
   color: #888;
   text-transform: capitalize;
+  margin-top: 8px;
+  font-size: 0.8rem;
 }
 
 .data-preview {
@@ -165,4 +274,11 @@
   overflow-y: auto;
   color: #ccc;
   border: 1px solid #333;
+}
+
+@media (max-width: 600px) {
+  .era-content {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }

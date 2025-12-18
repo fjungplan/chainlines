@@ -1,6 +1,7 @@
 """Schemas for mobile-optimized team detail/history responses."""
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field
+from app.schemas.sponsor import SponsorLinkResponse
 
 
 class TransitionInfo(BaseModel):
@@ -16,9 +17,11 @@ class TeamHistoryEra(BaseModel):
     name: str = Field(..., description="Registered team name")
     tier: Optional[int] = Field(None, description="UCI tier level (1, 2, 3)")
     uci_code: Optional[str] = Field(None, description="3-letter UCI code")
+    country_code: Optional[str] = Field(None, description="Alpha-3 Country Code (e.g. FRA, ITA)")
     status: str = Field(..., description="Era status: active, historical, dissolved")
     predecessor: Optional[TransitionInfo] = Field(None, description="Incoming lineage transition")
     successor: Optional[TransitionInfo] = Field(None, description="Outgoing lineage transition")
+    sponsors: List[SponsorLinkResponse] = Field(default_factory=list, description="List of sponsors for this era")
 
 
 class LineageSummary(BaseModel):

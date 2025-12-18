@@ -85,6 +85,7 @@ class TeamEra(Base):
     valid_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     registered_name: Mapped[str] = mapped_column(String(255), nullable=False)
     uci_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
+    country_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
     is_name_auto_generated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_manual_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_auto_filled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -110,6 +111,13 @@ class TeamEra(Base):
     def validate_name(self, key, value):
         if not value or not value.strip():
             raise ValueError("registered_name cannot be empty")
+        return value
+
+    @validates("country_code")
+    def validate_country_code(self, key, value):
+        if value is not None:
+            if len(value) != 3 or not value.isalpha() or not value.isupper():
+                raise ValueError("country_code must be 3 uppercase letters (ISO alpha-3)")
         return value
 
     @validates("uci_code")
