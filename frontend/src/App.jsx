@@ -7,6 +7,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import ModerationQueuePage from './pages/ModerationQueuePage';
 import MyEditsPage from './pages/MyEditsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
+import SponsorMaintenancePage from './pages/SponsorMaintenancePage';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
@@ -25,6 +26,7 @@ function App() {
             <Route path="moderation" element={<ModerationQueuePage />} />
             <Route path="me/edits" element={<MyEditsPage />} />
             <Route path="admin" element={<AdminPanelPage />} />
+            <Route path="maintenance/sponsors" element={<SponsorMaintenancePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

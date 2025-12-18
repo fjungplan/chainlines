@@ -1,5 +1,6 @@
+import uuid
 import pytest
-
+from app.schemas.sponsors import SponsorMasterCreate, SponsorBrandCreate
 
 @pytest.mark.asyncio
 async def test_team_history_no_lazy_load(test_client):
@@ -63,9 +64,20 @@ async def test_sponsor_service_composition_no_lazy_load(isolated_session, sample
     # Create a simple brand and link it to the sample era, then fetch composition.
     from app.services.sponsor_service import SponsorService
     from app.models.sponsor import SponsorMaster, SponsorBrand
-    master = await SponsorService.create_master(isolated_session, legal_name="Acme Corp")
-    brand = await SponsorService.create_brand(
-        isolated_session, master_id=master.master_id, brand_name="Acme", default_hex_color="#112233"
+    
+    master = await SponsorService.create_master(
+        isolated_session, 
+        data=SponsorMasterCreate(legal_name="Acme Corp"),
+        user_id=None
+    )
+    brand = await SponsorService.add_brand(
+        isolated_session,
+        master_id=master.master_id,
+        data=SponsorBrandCreate(
+            brand_name="Acme", 
+            default_hex_color="#112233"
+        ),
+        user_id=None
     )
     await SponsorService.link_sponsor_to_era(
         isolated_session,
@@ -73,8 +85,11 @@ async def test_sponsor_service_composition_no_lazy_load(isolated_session, sample
         brand_id=brand.brand_id,
         rank_order=1,
         prominence_percent=80,
+        user_id=None
     )
     composition = await SponsorService.get_era_jersey_composition(isolated_session, sample_team_era.era_id)
     assert composition and composition[0]["brand_name"] == "Acme"
     assert composition[0]["color"] == "#112233"
     assert composition[0]["prominence_percent"] == 80
+
+
