@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { LayoutCalculator } from '../utils/layoutCalculator';
 import { validateGraphData } from '../utils/graphUtils';
@@ -9,7 +9,7 @@ import { ZoomLevelManager, ZOOM_THRESHOLDS } from '../utils/zoomLevelManager';
 import { DetailRenderer } from '../utils/detailRenderer';
 import ControlPanel from './ControlPanel';
 import Tooltip from './Tooltip';
-import { TooltipBuilder } from '../utils/tooltipBuilder.jsx';
+import { TooltipBuilder } from '../utils/tooltipBuilder';
 import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
@@ -60,7 +60,8 @@ export default function TimelineGraph({
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [currentFilters, setCurrentFilters] = useState({
     startYear: currentStartYear || initialStartYear,
-    endYear: currentEndYear || initialEndYear
+    endYear: currentEndYear || initialEndYear,
+    isSidebarCollapsed: true
   });
 
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
@@ -242,7 +243,7 @@ export default function TimelineGraph({
   // Update filters when props change and trigger zoom (defined after zoomToYearRange to avoid TDZ)
   useEffect(() => {
     if (currentStartYear !== undefined && currentEndYear !== undefined) {
-      setCurrentFilters({ startYear: currentStartYear, endYear: currentEndYear });
+      setCurrentFilters(prev => ({ ...prev, startYear: currentStartYear, endYear: currentEndYear }));
       if (currentLayout.current) {
         setTimeout(() => {
           zoomToYearRange(currentStartYear, currentEndYear);
@@ -994,8 +995,6 @@ export default function TimelineGraph({
             .on('click', (event, d) => handleNodeClick(d))
             .on('mouseenter', (event, d) => {
               handleNodeHover(event, d);
-              const content = TooltipBuilder.buildNodeTooltip(d);
-              setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
             })
             .on('mousemove', (event) => {
               if (tooltip.visible) {
@@ -1023,7 +1022,9 @@ export default function TimelineGraph({
         }
 
         // 1. Toggle Labels
-        group.selectAll('text').style('display', isHighDetail ? null : 'none');
+        // Visible if scale < HIGH_DETAIL (1.2)
+        const isLabelVisible = scale < ZOOM_THRESHOLDS.HIGH_DETAIL;
+        group.selectAll('text').style('display', isLabelVisible ? null : 'none');
 
         // 2. Base Node Rect (Solid Color) - Nested Join
         // Visible only if NOT high detail
@@ -1048,7 +1049,7 @@ export default function TimelineGraph({
 
         // 3. Eras (High Detail) - DetailRenderer handles internal 1.2 threshold for gradients
         if (isHighDetail) {
-          DetailRenderer.renderEraTimeline(group, d, scale, svg);
+          DetailRenderer.renderEraTimeline(group, d, scale, svg, handleEraHover, handleEraHoverEnd);
         } else {
           group.selectAll('.era-segment').remove();
         }
@@ -1102,19 +1103,34 @@ export default function TimelineGraph({
   };
 
   const handleNodeHover = (event, node) => {
-    d3.select(event.currentTarget)
-      .select('rect')
-      .transition()
-      .duration(200)
-      .attr('filter', 'url(#underglow)');
+    // Context-aware tooltip:
+    // If scale < HIGH_DETAIL, show Node Summary.
+    // If scale >= HIGH_DETAIL, eras handles interaction (or no tooltip if hovering gap).
+    const currentScale = currentTransform.current ? currentTransform.current.k : 1;
+    if (currentScale < ZOOM_THRESHOLDS.HIGH_DETAIL) {
+      const content = TooltipBuilder.buildNodeTooltip(node);
+      setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+    }
   };
 
   const handleNodeHoverEnd = (event) => {
-    d3.select(event.currentTarget)
-      .select('rect')
-      .transition()
-      .duration(200)
-      .attr('filter', null);
+    // Always clear tooltip on leave
+    if (tooltip.visible) {
+      setTooltip({ visible: false, content: null, position: null });
+    }
+  };
+
+  const handleEraHover = (event, era, node) => {
+    // Show Era Tooltip
+    // Note: Event might need to be stopped from propagating if necessary, but SVG events are specific.
+    event.stopPropagation();
+    const content = TooltipBuilder.buildEraTooltip(era, node);
+    setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+  };
+
+  const handleEraHoverEnd = (event) => {
+    event.stopPropagation();
+    setTooltip({ visible: false, content: null, position: null });
   };
 
   return (
@@ -1130,62 +1146,79 @@ export default function TimelineGraph({
         </div>
         <svg ref={svgRef}></svg>
       </div>
+      <div className={`timeline-sidebar ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <button
+          className="sidebar-toggle-btn"
+          onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
+          aria-label={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {currentFilters.isSidebarCollapsed ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg> // Left arrow (expand) - assumes sidebar on right
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" />
+            </svg> // Right arrow (collapse) - assumes sidebar on right
+          )}
+        </button>
 
-      {/* Right sidebar with controls and actions */}
-      <div className="timeline-sidebar">
-        <ControlPanel
-          onYearRangeChange={onYearRangeChange}
-          onTierFilterChange={onTierFilterChange}
-          onZoomReset={handleZoomReset}
-          onTeamSelect={handleTeamSelect}
-          searchNodes={data?.nodes || []}
-          initialStartYear={initialStartYear}
-          initialEndYear={initialEndYear}
-          initialTiers={initialTiers}
-        />
+        <div className="sidebar-content">
+          <ControlPanel
+            onYearRangeChange={onYearRangeChange}
+            onTierFilterChange={onTierFilterChange}
+            onZoomReset={handleZoomReset}
+            onTeamSelect={handleTeamSelect}
+            searchNodes={data?.nodes || []}
+            initialStartYear={initialStartYear}
+            initialEndYear={initialEndYear}
+            initialTiers={initialTiers}
+          />
 
-        {/* Action buttons for merge/split/create - only show if user can edit */}
-        {canEdit() && (
-          <div className="wizard-actions">
-            <button
-              className="wizard-action-btn wizard-create"
-              onClick={() => setShowCreateWizard(true)}
-              title="Create a new team from scratch"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="16" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-              </svg>
-              Create Team
-            </button>
-            <button
-              className="wizard-action-btn"
-              onClick={() => setShowMergeWizard(true)}
-              title="Create a merge event"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                <path d="m8 6 4-4 4 4" />
-                <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" />
-                <path d="m20 22-5-5" />
-              </svg>
-              Merge Teams
-            </button>
-            <button
-              className="wizard-action-btn"
-              onClick={() => setShowSplitWizard(true)}
-              title="Create a split event"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                <path d="M16 3h5v5" />
-                <path d="M8 3H3v5" />
-                <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
-                <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22" />
-              </svg>
-              Split Team
-            </button>
-          </div>
-        )}
+          {/* Action buttons for merge/split/create - only show if user can edit */}
+          {canEdit() && (
+            <div className="wizard-actions">
+              <button
+                className="wizard-action-btn wizard-create"
+                onClick={() => setShowCreateWizard(true)}
+                title="Create a new team from scratch"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="16" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
+                Create Team
+              </button>
+              <button
+                className="wizard-action-btn"
+                onClick={() => setShowMergeWizard(true)}
+                title="Create a merge event"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
+                  <path d="m8 6 4-4 4 4" />
+                  <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" />
+                  <path d="m20 22-5-5" />
+                </svg>
+                Merge Teams
+              </button>
+              <button
+                className="wizard-action-btn"
+                onClick={() => setShowSplitWizard(true)}
+                title="Create a split event"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
+                  <path d="M16 3h5v5" />
+                  <path d="M8 3H3v5" />
+                  <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
+                  <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22" />
+                </svg>
+                Split Team
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <Tooltip

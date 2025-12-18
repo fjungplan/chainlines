@@ -52,6 +52,9 @@ SPONSORS_DATA = [
 
 TIERS = [1, 1, 1, 2, 2, 3] # Weighted towards Pro/WT for main teams
 
+
+COUNTRIES = ['FRA', 'ITA', 'BEL', 'ESP', 'USA', 'GBR', 'GER', 'NED', 'AUS', 'COL']
+
 def get_random_date(year):
     """Returns Jan 1st of the year."""
     return date(year, 1, 1)
@@ -124,10 +127,14 @@ def seed():
         return available
 
     # Helper to generate eras for a team
-    def create_team_history(key, name_base, start_year, end_year=2025, stable_sponsors=False):
+    def create_team_history(key, name_base, start_year, end_year=2025, stable_sponsors=False, country_code=None):
         node_id = str(uuid.uuid4())
         team_nodes[key] = node_id
         
+        # Pick country if not provided -> Stable lifetime country
+        if not country_code:
+            country_code = random.choice(COUNTRIES)
+
         # Create Node
         cur.execute(
             """
@@ -233,11 +240,11 @@ def seed():
             cur.execute(
                 """
                 INSERT INTO team_era (
-                    era_id, node_id, season_year, valid_from, registered_name, uci_code, tier_level, 
+                    era_id, node_id, season_year, valid_from, registered_name, uci_code, country_code, tier_level, 
                     is_manual_override, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                 """,
-                (era_id, node_id, current_year, valid_from, reg_name, uci_code, tier, False)
+                (era_id, node_id, current_year, valid_from, reg_name, uci_code, country_code, tier, False)
             )
             
             # Links & Prominence Calculation
@@ -301,26 +308,26 @@ def seed():
     # SCENARIOS
     
     # 1. Stable Long Runner
-    create_team_history("team_A", "Team Alpha", 2000, 2025, stable_sponsors=False)
+    create_team_history("team_A", "Team Alpha", 2000, 2025, stable_sponsors=False, country_code="FRA")
     
     # 2. The Merger: B + C -> BC
-    create_team_history("team_B", "Blue Riders", 2005, 2014, stable_sponsors=True)
-    create_team_history("team_C", "Crimson Velo", 2008, 2014, stable_sponsors=True)
-    create_team_history("team_BC", "Purple Fusion", 2015, 2025, stable_sponsors=False)
+    create_team_history("team_B", "Blue Riders", 2005, 2014, stable_sponsors=True, country_code="BEL")
+    create_team_history("team_C", "Crimson Velo", 2008, 2014, stable_sponsors=True, country_code="BEL")
+    create_team_history("team_BC", "Purple Fusion", 2015, 2025, stable_sponsors=False, country_code="BEL")
     
     # 3. The Split: D -> D1, D2
-    create_team_history("team_D", "Delta Force", 2000, 2010)
-    create_team_history("team_D1", "Delta One", 2011, 2025)
-    create_team_history("team_D2", "Delta Two", 2011, 2018) # Folded later
+    create_team_history("team_D", "Delta Force", 2000, 2010, country_code="ITA")
+    create_team_history("team_D1", "Delta One", 2011, 2025, country_code="ITA")
+    create_team_history("team_D2", "Delta Two", 2011, 2018, country_code="ITA") # Folded later
     
     # 4. License Transfer: E -> F
-    create_team_history("team_E", "Echo Base", 2002, 2008)
-    create_team_history("team_F", "Foxtrot Flyers", 2009, 2025)
+    create_team_history("team_E", "Echo Base", 2002, 2008, country_code="ESP")
+    create_team_history("team_F", "Foxtrot Flyers", 2009, 2025, country_code="RUS") # Flag change!
     
     # 5. Complex Chain: G -> H -> I
-    create_team_history("team_G", "Golf Club", 1995, 2005)
-    create_team_history("team_H", "Hotel Lobby", 2006, 2012)
-    create_team_history("team_I", "India Ink", 2013, 2025)
+    create_team_history("team_G", "Golf Club", 1995, 2005, country_code="USA")
+    create_team_history("team_H", "Hotel Lobby", 2006, 2012, country_code="USA")
+    create_team_history("team_I", "India Ink", 2013, 2025, country_code="USA")
     
     # 6. Filler Teams (Stable)
     for i in range(10):

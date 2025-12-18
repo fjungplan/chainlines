@@ -5,6 +5,7 @@ from datetime import datetime, date
 from uuid import UUID
 from pydantic import BaseModel, Field
 
+from app.schemas.sponsor import SponsorLinkResponse
 
 class TeamNodeBase(BaseModel):
     legal_name: str
@@ -35,6 +36,7 @@ class TeamEraBase(BaseModel):
     valid_until: Optional[date] = None
     registered_name: str
     uci_code: Optional[str] = None
+    country_code: Optional[str] = None
     tier_level: Optional[int] = None
     is_name_auto_generated: bool = True
     is_manual_override: bool = False
@@ -52,6 +54,7 @@ class TeamEraBase(BaseModel):
 class TeamEraResponse(TeamEraBase):
     era_id: UUID
     node_id: UUID
+    sponsors: List[SponsorLinkResponse] = Field(default_factory=list)
 
 
 class TeamNodeWithEras(TeamNodeResponse):
