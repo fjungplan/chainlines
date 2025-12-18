@@ -24,6 +24,8 @@ FROM nginx:alpine
 
 # Copy the built files from Stage 1
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Fix permissions for Nginx
+RUN chmod -R 755 /usr/share/nginx/html
 
 # Copy the nginx config you just created
 COPY nginx.conf /etc/nginx/conf.d/default.conf
