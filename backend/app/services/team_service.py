@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.team import TeamNode, TeamEra
+from app.schemas.team import (
+    TeamNodeCreate, TeamNodeUpdate, 
+    TeamEraCreate, TeamEraUpdate
+)
 from app.core.exceptions import (
     NodeNotFoundException,
     DuplicateEraException,
@@ -80,61 +84,143 @@ class TeamService:
         )
 
     @staticmethod
+    async def create_node(session: AsyncSession, data: TeamNodeCreate, user_id: Optional[uuid.UUID] = None) -> TeamNode:
+        # Check for unique legal_name
+        stmt = select(TeamNode).where(TeamNode.legal_name == data.legal_name)
+        existing = await session.execute(stmt)
+        if existing.scalar_one_or_none():
+            raise ValidationException(f"Team with legal_name '{data.legal_name}' already exists")
+
+        node = TeamNode(
+            **data.model_dump(),
+            created_by=user_id,
+            last_modified_by=user_id
+        )
+        session.add(node)
+        await session.commit()
+        await session.refresh(node)
+        return node
+
+    @staticmethod
+    async def update_node(
+        session: AsyncSession, 
+        node_id: uuid.UUID, 
+        data: TeamNodeUpdate, 
+        user_id: Optional[uuid.UUID] = None
+    ) -> TeamNode:
+        node = await TeamService.get_node_with_eras(session, node_id)
+        if not node:
+            raise NodeNotFoundException(f"TeamNode {node_id} not found")
+        
+        update_data = data.model_dump(exclude_unset=True)
+        if "legal_name" in update_data:
+            # Check uniqueness if name is changing
+            if update_data["legal_name"] != node.legal_name:
+                stmt = select(TeamNode).where(TeamNode.legal_name == update_data["legal_name"])
+                existing = await session.execute(stmt)
+                if existing.scalar_one_or_none():
+                    raise ValidationException(f"Team with legal_name '{update_data['legal_name']}' already exists")
+
+        for key, value in update_data.items():
+            setattr(node, key, value)
+        
+        node.last_modified_by = user_id
+        await session.commit()
+        await session.refresh(node)
+        return node
+
+    @staticmethod
+    async def delete_node(session: AsyncSession, node_id: uuid.UUID) -> bool:
+        node = await TeamRepository.get_by_id(session, node_id)
+        if not node:
+            return False
+            
+        await session.delete(node)
+        await session.commit()
+        TimelineService.invalidate_cache()
+        return True
+
+    @staticmethod
     async def create_era(
         session: AsyncSession,
         node_id: uuid.UUID,
-        year: int,
-        registered_name: str,
-        *,
-        uci_code: Optional[str] = None,
-        tier_level: Optional[int] = None,
-        source_origin: Optional[str] = None,
-        is_manual_override: bool = False,
+        data: TeamEraCreate,
+        user_id: Optional[uuid.UUID] = None
     ) -> TeamEra:
-        # Basic input validations BEFORE any DB I/O
-        if year < 1900 or year > 2100:
+        # Basic input validations
+        if data.season_year < 1900 or data.season_year > 2100:
             raise ValidationException("season_year must be between 1900 and 2100")
-        if tier_level is not None and tier_level not in (1, 2, 3):
+        if data.tier_level is not None and data.tier_level not in (1, 2, 3):
             raise ValidationException("tier_level must be 1, 2, or 3 when provided")
-        if uci_code is not None and (
-            len(uci_code) != 3 or not uci_code.isalpha() or not uci_code.isupper()
+        if data.uci_code is not None and (
+            len(data.uci_code) != 3 or not data.uci_code.isalpha() or not data.uci_code.isupper()
         ):
             raise ValidationException("uci_code must be exactly 3 uppercase letters")
-        if not registered_name or registered_name.strip() == "":
+        if not data.registered_name or data.registered_name.strip() == "":
             raise ValidationException("registered_name cannot be empty")
 
-        # Ensure node exists (DB I/O begins here)
-        node_stmt = select(TeamNode).where(TeamNode.node_id == node_id)
-        node_result = await session.execute(node_stmt)
-        node = node_result.scalar_one_or_none()
+        # Ensure node exists
+        node = await TeamService.get_node_with_eras(session, node_id)
         if not node:
-            await session.rollback()
-            raise NodeNotFoundException(f"TeamNode {node_id} not found")
+             raise NodeNotFoundException(f"TeamNode {node_id} not found")
 
         # Duplicate check
         dup_stmt = select(TeamEra).where(
-            TeamEra.node_id == node_id, TeamEra.season_year == year
+            TeamEra.node_id == node_id, TeamEra.season_year == data.season_year
         )
         dup_result = await session.execute(dup_stmt)
         if dup_result.scalar_one_or_none():
-            await session.rollback()
             raise DuplicateEraException(
-                f"Era for node {node_id} and year {year} already exists"
+                f"Era for node {node_id} and year {data.season_year} already exists"
             )
 
         era = TeamEra(
+            **data.model_dump(),
             node_id=node_id,
-            season_year=year,
-            valid_from=date(year, 1, 1),
-            registered_name=registered_name.strip(),
-            uci_code=uci_code,
-            tier_level=tier_level,
-            source_origin=source_origin,
-            is_manual_override=is_manual_override,
+            created_by=user_id,
+            last_modified_by=user_id
         )
         session.add(era)
         await session.commit()
-        # Invalidate timeline cache after data change
         TimelineService.invalidate_cache()
         await session.refresh(era)
         return era
+
+    @staticmethod
+    async def update_era(
+        session: AsyncSession,
+        era_id: uuid.UUID,
+        data: TeamEraUpdate,
+        user_id: Optional[uuid.UUID] = None
+    ) -> TeamEra:
+        stmt = select(TeamEra).where(TeamEra.era_id == era_id)
+        result = await session.execute(stmt)
+        era = result.scalar_one_or_none()
+        if not era:
+            raise ValidationException(f"TeamEra {era_id} not found")
+
+        update_data = data.model_dump(exclude_unset=True)
+        
+        # specific validation logic if needed (years etc)
+        
+        for key, value in update_data.items():
+            setattr(era, key, value)
+            
+        era.last_modified_by = user_id
+        await session.commit()
+        TimelineService.invalidate_cache()
+        await session.refresh(era)
+        return era
+
+    @staticmethod
+    async def delete_era(session: AsyncSession, era_id: uuid.UUID) -> bool:
+        stmt = select(TeamEra).where(TeamEra.era_id == era_id)
+        result = await session.execute(stmt)
+        era = result.scalar_one_or_none()
+        if not era:
+            return False
+            
+        await session.delete(era)
+        await session.commit()
+        TimelineService.invalidate_cache()
+        return True

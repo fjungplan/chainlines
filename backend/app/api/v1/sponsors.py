@@ -9,7 +9,8 @@ from app.models.user import User
 from app.schemas.sponsors import (
     SponsorMasterCreate, SponsorMasterUpdate, SponsorMasterResponse,
     SponsorBrandCreate, SponsorBrandUpdate, SponsorBrandResponse,
-    SponsorMasterListResponse
+    SponsorMasterListResponse,
+    TeamSponsorLinkCreate, TeamSponsorLinkResponse
 )
 from app.services.sponsor_service import SponsorService
 
@@ -155,3 +156,43 @@ async def delete_brand(
     success = await SponsorService.delete_brand(session, brand_id)
     if not success:
         raise HTTPException(status_code=404, detail="Sponsor brand not found")
+
+# --- Era Links ---
+
+@router.get("/eras/{era_id}/links", response_model=List[TeamSponsorLinkResponse])
+async def get_era_links(
+    era_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all sponsor links for an era."""
+    return await SponsorService.get_era_sponsor_links(session, era_id)
+
+@router.post("/eras/{era_id}/links", response_model=TeamSponsorLinkResponse)
+async def link_sponsor_to_era(
+    era_id: UUID,
+    data: TeamSponsorLinkCreate,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """Link a sponsor brand to an era."""
+    # Data validation happens in service
+    return await SponsorService.link_sponsor_to_era(
+        session,
+        era_id,
+        data.brand_id,
+        data.rank_order,
+        data.prominence_percent,
+        current_user.user_id
+    )
+
+@router.delete("/eras/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_sponsor_link(
+    link_id: UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """Remove a sponsor link from an era."""
+    success = await SponsorService.remove_sponsor_from_era(session, link_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Sponsor link not found")

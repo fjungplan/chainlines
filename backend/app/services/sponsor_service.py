@@ -160,7 +160,11 @@ class SponsorService:
 
     @staticmethod
     async def get_era_sponsor_links(session: AsyncSession, era_id: UUID) -> List[TeamSponsorLink]:
-        stmt = select(TeamSponsorLink).where(TeamSponsorLink.era_id == era_id)
+        stmt = (
+            select(TeamSponsorLink)
+            .options(selectinload(TeamSponsorLink.brand))
+            .where(TeamSponsorLink.era_id == era_id)
+        )
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -236,3 +240,16 @@ class SponsorService:
             }
             for link in links
         ]
+
+    @staticmethod
+    async def remove_sponsor_from_era(session: AsyncSession, link_id: UUID) -> bool:
+        stmt = select(TeamSponsorLink).where(TeamSponsorLink.link_id == link_id)
+        result = await session.execute(stmt)
+        link = result.scalar_one_or_none()
+        
+        if not link:
+            return False
+            
+        await session.delete(link)
+        await session.commit()
+        return True

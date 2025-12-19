@@ -12,7 +12,7 @@ export function useTimeline(params = {}) {
     queryFn: async () => {
       // Add timestamp to bust cache
       const response = await teamsApi.getTimeline({ ...params, _t: Date.now() });
-      return response.data;
+      return response;
     },
     staleTime: 0, // Always fetch fresh data during development
     cacheTime: 0, // Don't cache
@@ -30,7 +30,7 @@ export function useTeamHistory(nodeId) {
     queryKey: ['teamHistory', nodeId],
     queryFn: async () => {
       const response = await teamsApi.getTeamHistory(nodeId);
-      return response.data;
+      return response;
     },
     enabled: !!nodeId, // Only run query if nodeId exists
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -48,7 +48,7 @@ export function useTeams(params = {}) {
     queryKey: ['teams', params],
     queryFn: async () => {
       const response = await teamsApi.getTeams(params);
-      return response.data;
+      return response;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,

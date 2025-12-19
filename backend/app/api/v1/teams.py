@@ -16,7 +16,13 @@ from app.schemas.team import (
     TeamNodeResponse,
     TeamEraResponse,
     TeamListResponse,
+    TeamNodeCreate,
+    TeamNodeUpdate,
+    TeamEraCreate,
+    TeamEraUpdate,
 )
+from app.api.dependencies import get_current_user, require_editor, require_admin
+from app.models.user import User
 from app.schemas.team_detail import TeamHistoryResponse
 from app.services.team_detail_service import TeamDetailService
 from app.core.exceptions import NodeNotFoundException
@@ -52,6 +58,39 @@ async def get_team(
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "max-age=300"
     return node
+
+
+@router.post("", response_model=TeamNodeResponse, status_code=201)
+async def create_team_node(
+    data: TeamNodeCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Create a new TeamNode."""
+    return await TeamService.create_node(db, data, current_user.user_id)
+
+
+@router.put("/{node_id}", response_model=TeamNodeResponse)
+async def update_team_node(
+    node_id: UUID,
+    data: TeamNodeUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Update a TeamNode."""
+    return await TeamService.update_node(db, node_id, data, current_user.user_id)
+
+
+@router.delete("/{node_id}", status_code=204)
+async def delete_team_node(
+    node_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Delete a TeamNode."""
+    success = await TeamService.delete_node(db, node_id)
+    if not success:
+        raise NodeNotFoundException(f"TeamNode {node_id} not found")
 
 
 @router.get("/{node_id}/history", response_model=TeamHistoryResponse)
@@ -109,6 +148,40 @@ async def get_team_eras(
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "max-age=300"
     return eras
+
+
+@router.post("/{node_id}/eras", response_model=TeamEraResponse, status_code=201)
+async def create_team_era(
+    node_id: UUID,
+    data: TeamEraCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Add a new Era to a TeamNode."""
+    return await TeamService.create_era(db, node_id, data, current_user.user_id)
+
+
+@router.put("/eras/{era_id}", response_model=TeamEraResponse)
+async def update_team_era(
+    era_id: UUID,
+    data: TeamEraUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor),
+):
+    """Update a TeamEra."""
+    return await TeamService.update_era(db, era_id, data, current_user.user_id)
+
+
+@router.delete("/eras/{era_id}", status_code=204)
+async def delete_team_era(
+    era_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Delete a TeamEra."""
+    success = await TeamService.delete_era(db, era_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="TeamEra not found")
 
 
 @router.get("", response_model=TeamListResponse)
