@@ -204,7 +204,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         : (masterId ? 'Edit Sponsor' : 'Create New Sponsor');
 
     return (
-        <div className="sponsor-inner-container editor-full-page">
+        <div className="sponsor-inner-container centered-editor-container">
             <div className="editor-header">
                 <div className="header-left">
                     <button className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>

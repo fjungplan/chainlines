@@ -42,7 +42,7 @@
   color: #333;
 }
 
-.step-content > p {
+.step-content>p {
   margin: 0 0 20px 0;
   color: #666;
   font-size: 15px;
@@ -92,9 +92,9 @@
 .remove-button {
   width: 100%;
   padding: 8px 12px;
-  background: #dc3545;
-  color: white;
-  border: none;
+  /* background: #dc3545;  Removed color */
+  /* color: white; */
+  border: 1px solid var(--color-border-light);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -103,15 +103,16 @@
 }
 
 .remove-button:hover {
-  background: #c82333;
+  /* background: #c82333; Removed hover color */
+  background: var(--color-bg-tertiary);
 }
 
 .add-team-button {
   width: 100%;
   padding: 12px;
-  background: #28a745;
-  color: white;
-  border: none;
+  /* background: #28a745; Removed color */
+  /* color: white; */
+  border: 1px solid var(--color-border-light);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -120,7 +121,8 @@
 }
 
 .add-team-button:hover {
-  background: #218838;
+  /* background: #218838; Removed hover color */
+  background: var(--color-bg-tertiary);
 }
 
 .add-team-button:active {

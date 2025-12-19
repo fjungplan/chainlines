@@ -1,38 +1,4 @@
-/* Main Page Layout - Matches About/Imprint Page style */
-.sponsor-page-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  /* Fill parent container */
-  padding: 20px 20px 40px 20px;
-  /* Extra bottom padding to ensure visibility */
-  background: #2a2a2a;
-  overflow: hidden;
-  /* Prevent page scroll, use inner scroll */
-  box-sizing: border-box;
-}
-
-/* Inner Container - Matches the max-width card look */
-.sponsor-inner-container {
-  width: 100%;
-  max-width: 1000px;
-  background: #3a3a3a;
-  border-radius: 8px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  margin: 0;
-  /* Remove vertical margin to relying on parent padding */
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  /* Fill remaining space in parent */
-  min-height: 0;
-  /* Important for nested flex scroll */
-  overflow: hidden;
-  /* Ensure content stays inside */
-}
+/* Main Page Layout - Content specific overrides */
 
 /* Header Styling */
 .sponsor-header {
@@ -40,47 +6,24 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  border-bottom: 3px solid #4A90E2;
+  border-bottom: 3px solid var(--color-primary);
   padding-bottom: 15px;
 }
 
 .sponsor-header h1 {
   margin: 0;
   font-size: 32px;
-  color: #ffffff;
+  color: var(--color-text-light);
 }
 
-/* Controls - Flex row for search + button */
+/* Controls */
 .sponsor-controls {
   display: flex;
   flex-direction: row;
   align-items: center;
-  /* Ensure vertical centering */
   gap: 12px;
   margin-bottom: 1rem;
   width: 100%;
-}
-
-.search-input {
-  flex: 1;
-  /* Take available width */
-  max-width: 100%;
-  height: 42px;
-  /* Explicit height */
-  padding: 0 1rem;
-  /* Use flex centering for text if needed, or just padding */
-  border-radius: 6px;
-  border: 1px solid #444;
-  background-color: #2a2a2a;
-  color: #fff;
-  font-size: 1rem;
-  box-sizing: border-box;
-  /* Include border in height */
-}
-
-.search-input:focus {
-  outline: none;
-  border-color: #4A90E2;
 }
 
 /* Scrollable Table Container */
@@ -88,9 +31,9 @@
   flex: 1;
   overflow-y: auto;
   margin-top: 0;
-  border: 1px solid #444;
-  border-radius: 6px;
-  background-color: #2a2a2a;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-primary);
 }
 
 .sponsor-table {
@@ -102,70 +45,43 @@
 .sponsor-table thead th {
   position: sticky;
   top: 0;
-  background-color: #333;
-  /* Slightly lighter for header */
+  background-color: var(--color-bg-secondary);
   z-index: 10;
   text-align: left;
   padding: 0.75rem 1rem;
-  /* Compact padding */
-  color: #a0aec0;
+  color: var(--color-text-secondary);
   font-weight: 500;
-  border-bottom: 2px solid #333;
+  border-bottom: 2px solid var(--color-bg-secondary);
 }
 
 .sponsor-table td {
   padding: 0.5rem 1rem;
-  /* Compact padding for rows */
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--color-bg-code);
   vertical-align: middle;
-  color: #cccccc;
+  color: var(--color-text-primary);
   font-size: 0.95rem;
 }
 
 .sponsor-table tr:hover {
-  background-color: #333;
+  background-color: var(--color-bg-tertiary);
 }
 
-/* Buttons */
-.primary-button {
-  background-color: #3a3a3a;
-  /* Dark background like sidebar */
-  color: #cccccc;
-  border: 1px solid #555;
-  padding: 0 1.5rem;
-  height: 42px;
-  /* Explicit match with input */
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-}
-
-.primary-button:hover {
-  background-color: #444;
-  color: #ffffff;
-  border-color: #666;
-}
-
+/* Edit Button re-use from Team Page? Or just define locally for clarity */
 .edit-button {
   background-color: transparent;
-  border: 1px solid #4a5568;
-  color: #cbd5e0;
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
   padding: 0.25rem 0.6rem;
-  /* Smaller button */
   font-size: 0.9rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .edit-button:hover:not(:disabled) {
-  background-color: #4a5568;
-  color: white;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-light);
+  border-color: var(--color-text-secondary);
 }
 
 /* Badges */
@@ -173,7 +89,7 @@
   font-weight: 500;
   display: inline-block;
   margin-right: 0.5rem;
-  color: #fff;
+  color: var(--color-text-light);
 }
 
 .protected-badge {
@@ -189,5 +105,5 @@
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #718096;
+  color: var(--color-text-secondary);
 }

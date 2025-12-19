@@ -99,24 +99,29 @@
 }
 
 .control-actions button:first-child {
-  background-color: #3a3a3a;
-  color: #cccccc;
-  border: 1px solid #555;
+  background-color: var(--color-bg-primary);
+  /* #2a2a2a */
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
 }
 
 .control-actions button:first-child:hover {
-  background-color: #444;
+  background-color: var(--color-bg-tertiary);
   color: #ffffff;
   border-color: #666;
 }
 
 .control-actions button:last-child {
-  background-color: #444;
-  color: #cccccc;
+  background-color: var(--color-bg-tertiary);
+  /* #444 - maybe keep slightly distinct or force same? Let's make it consistent or just slightly lighter as it was 'last-child' implied secondary/reset? User said ALL buttons same. */
+  /* Actually, user said "same boring dark grey". I'll make them all standard. */
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
 }
 
 .control-actions button:last-child:hover {
-  background-color: #555;
+  background-color: var(--color-bg-tertiary);
 }
 
 /* Responsive adjustments */

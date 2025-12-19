@@ -276,29 +276,18 @@
   transition: all 0.2s;
 }
 
-.reject-button {
-  background: #5a3a3a;
-  color: #ff9999;
-}
-
-.reject-button:hover:not(:disabled) {
-  background: #6a4a4a;
-}
-
-.reject-button:disabled {
-  background: #444;
-  cursor: not-allowed;
-}
-
+/* .reject-button and .approve-button colors removed to enforce global neutral style */
+.reject-button,
 .approve-button {
-  background: #3a5a3a;
-  color: #99ff99;
+  /* No specific colors */
 }
 
+.reject-button:hover:not(:disabled),
 .approve-button:hover:not(:disabled) {
-  background: #4a6a4a;
+  /* No specific colors */
 }
 
+.reject-button:disabled,
 .approve-button:disabled {
   background: #444;
   cursor: not-allowed;
@@ -352,6 +341,7 @@
     transform: translateX(400px);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;

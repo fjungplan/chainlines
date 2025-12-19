@@ -2,21 +2,21 @@ import './AboutPage.css';
 
 export default function AboutPage() {
   return (
-    <div className="about-page">
-      <div className="about-container">
+    <div className="centered-page-container">
+      <div className="centered-content-card">
         <h1>About ChainLines</h1>
-        
+
         <section>
           <h2>What is ChainLines?</h2>
           <p>
-            ChainLines is an open-source platform dedicated to documenting and visualizing 
-            the evolutionary history of professional cycling teams from 1900 to the present day. We track team lineages, mergers, 
+            ChainLines is an open-source platform dedicated to documenting and visualizing
+            the evolutionary history of professional cycling teams from 1900 to the present day. We track team lineages, mergers,
             splits, and transformations across more than a century of professional cycling history.
           </p>
           <p>
-            Using an interactive D3.js "river" visualization, we show how teams evolve through rebrands, how squads merge together, 
-            and how new teams emerge from existing organizations. Our system uses the <strong>Managerial Node</strong> concept to 
-            represent the persistent legal entity behind a team—the organization that survives even when team names, sponsors, and 
+            Using an interactive D3.js "river" visualization, we show how teams evolve through rebrands, how squads merge together,
+            and how new teams emerge from existing organizations. Our system uses the <strong>Managerial Node</strong> concept to
+            represent the persistent legal entity behind a team—the organization that survives even when team names, sponsors, and
             jerseys change.
           </p>
         </section>
@@ -24,15 +24,15 @@ export default function AboutPage() {
         <section>
           <h2>Core Concepts</h2>
           <p>
-            <strong>Managerial Node:</strong> The persistent legal entity that represents organizational 
+            <strong>Managerial Node:</strong> The persistent legal entity that represents organizational
             continuity across name changes and rebrandings.
           </p>
           <p>
-            <strong>Team Era:</strong> A specific season snapshot of a team with complete metadata including name, UCI code, tier, 
+            <strong>Team Era:</strong> A specific season snapshot of a team with complete metadata including name, UCI code, tier,
             and sponsor information.
           </p>
           <p>
-            <strong>Lineage Event:</strong> Structural changes that alter team identity—legal transfers, spiritual successions, 
+            <strong>Lineage Event:</strong> Structural changes that alter team identity—legal transfers, spiritual successions,
             mergers, and splits that connect teams across time.
           </p>
           <p>
@@ -43,8 +43,8 @@ export default function AboutPage() {
         <section>
           <h2>Our Mission</h2>
           <p>
-            To create an accurate, comprehensive, and accessible record of professional cycling team histories, enabling fans, 
-            researchers, historians, and enthusiasts to understand the complex web of team relationships and evolution over time. 
+            To create an accurate, comprehensive, and accessible record of professional cycling team histories, enabling fans,
+            researchers, historians, and enthusiasts to understand the complex web of team relationships and evolution over time.
             We aim to preserve cycling's organizational heritage and make it freely available to everyone.
           </p>
         </section>
@@ -52,12 +52,12 @@ export default function AboutPage() {
         <section>
           <h2>Technology Stack</h2>
           <p>
-            ChainLines is built with modern web technologies: a <strong>Python FastAPI</strong> backend with <strong>PostgreSQL</strong> 
-            database, and a <strong>React</strong> frontend using <strong>D3.js</strong> for interactive visualizations. The entire 
+            ChainLines is built with modern web technologies: a <strong>Python FastAPI</strong> backend with <strong>PostgreSQL</strong>
+            database, and a <strong>React</strong> frontend using <strong>D3.js</strong> for interactive visualizations. The entire
             application is containerized with Docker and includes automated testing, database migrations, and CI/CD workflows.
           </p>
           <p>
-            We prioritize <strong>GDPR compliance</strong> by self-hosting fonts, using transparent authentication (Google OAuth), 
+            We prioritize <strong>GDPR compliance</strong> by self-hosting fonts, using transparent authentication (Google OAuth),
             and maintaining clear data handling practices in accordance with German data protection law (DSGVO).
           </p>
         </section>
@@ -65,8 +65,8 @@ export default function AboutPage() {
         <section>
           <h2>Data Sources</h2>
           <p>
-            Historical cycling data is collected through gentle web scraping from trusted sources including <strong>ProCyclingStats</strong>, 
-            <strong>Wikipedia</strong>, and <strong>FirstCycling</strong>. We respect rate limits and robots.txt guidelines, and 
+            Historical cycling data is collected through gentle web scraping from trusted sources including <strong>ProCyclingStats</strong>,
+            <strong>Wikipedia</strong>, and <strong>FirstCycling</strong>. We respect rate limits and robots.txt guidelines, and
             supplement automated collection with community contributions and manual verification.
           </p>
         </section>
@@ -74,17 +74,17 @@ export default function AboutPage() {
         <section>
           <h2>Community-Driven & Open Source</h2>
           <p>
-            ChainLines is built by the cycling community, for the cycling community. This is a <strong>non-commercial, personal, 
-            open-source project</strong> created for educational and historical documentation purposes. We believe in collaborative, 
+            ChainLines is built by the cycling community, for the cycling community. This is a <strong>non-commercial, personal,
+              open-source project</strong> created for educational and historical documentation purposes. We believe in collaborative,
             transparent knowledge sharing and welcome contributions from anyone passionate about cycling history.
           </p>
           <p>
-            Our wiki-style editing system allows community members to propose changes, corrections, and additions. All edits are 
+            Our wiki-style editing system allows community members to propose changes, corrections, and additions. All edits are
             reviewed through a moderation system to maintain data quality while encouraging broad participation.
           </p>
           <p>
-            The entire codebase is licensed under the <strong>Apache License 2.0</strong> and is available on GitHub. Researchers, 
-            developers, and fans are free to contribute, fork, and build upon our work. We're committed to maintaining transparency 
+            The entire codebase is licensed under the <strong>Apache License 2.0</strong> and is available on GitHub. Researchers,
+            developers, and fans are free to contribute, fork, and build upon our work. We're committed to maintaining transparency
             and accessibility in all aspects of the project.
           </p>
         </section>
@@ -95,9 +95,9 @@ export default function AboutPage() {
             The complete source code, documentation, and project history are available on GitHub:
           </p>
           <p className="github-link">
-            <a 
-              href="https://github.com/fjungplan/chainlines" 
-              target="_blank" 
+            <a
+              href="https://github.com/fjungplan/chainlines"
+              target="_blank"
               rel="noopener noreferrer"
               className="github-button"
             >
@@ -108,7 +108,7 @@ export default function AboutPage() {
             </a>
           </p>
           <p>
-            <strong>Contributions welcome!</strong> Whether you want to report a bug, suggest a feature, fix a typo, or add 
+            <strong>Contributions welcome!</strong> Whether you want to report a bug, suggest a feature, fix a typo, or add
             historical data, we encourage you to:
           </p>
           <ul>
@@ -123,7 +123,7 @@ export default function AboutPage() {
         <section>
           <h2>Contact</h2>
           <p>
-            For questions, licensing inquiries, or attribution clarifications, please open an issue on our 
+            For questions, licensing inquiries, or attribution clarifications, please open an issue on our
             <a href="https://github.com/fjungplan/chainlines/issues" target="_blank" rel="noopener noreferrer"> GitHub repository</a>.
           </p>
           <p>

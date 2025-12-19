@@ -110,7 +110,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
     if (loading) return <div className="team-inner-container"><LoadingSpinner /></div>;
 
     return (
-        <div className="team-inner-container editor-full-page">
+        <div className="team-inner-container centered-editor-container">
             {/* HEADER */}
             <div className="editor-header">
                 <div className="header-left">

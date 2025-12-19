@@ -138,7 +138,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
     if (loading) return <div className="team-inner-container"><LoadingSpinner /></div>;
 
     return (
-        <div className="team-inner-container editor-full-page">
+        <div className="team-inner-container centered-editor-container">
             <div className="editor-header">
                 <div className="header-left">
                     <button className="back-btn" onClick={() => onSuccess && onSuccess()} title="Back to Team">

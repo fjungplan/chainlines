@@ -114,7 +114,7 @@ export default function TeamMaintenancePage() {
     // --- Render ---
 
     return (
-        <div className="team-page-container">
+        <div className="maintenance-page-container">
             {viewMode === 'node' ? (
                 <TeamNodeEditor
                     nodeId={selectedNodeId}
@@ -130,7 +130,7 @@ export default function TeamMaintenancePage() {
                     onDelete={handleBackToNode}
                 />
             ) : (
-                <div className="team-inner-container">
+                <div className="maintenance-content-card">
                     <div className="team-header">
                         <h1>Team Maintenance</h1>
                     </div>
@@ -141,11 +141,11 @@ export default function TeamMaintenancePage() {
                             placeholder="Search teams..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="team-search-input"
+                            // removed team-search-input to use global default
                             disabled
                         />
                         {(isEditor() || isAdmin()) && (
-                            <button className="primary-button" onClick={handleCreateTeam}>
+                            <button className="btn btn-primary" onClick={handleCreateTeam}>
                                 + Create New Team
                             </button>
                         )}

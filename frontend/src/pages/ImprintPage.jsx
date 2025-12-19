@@ -2,8 +2,8 @@ import './ImprintPage.css';
 
 export default function ImprintPage() {
   return (
-    <div className="imprint-page">
-      <div className="imprint-container">
+    <div className="centered-page-container">
+      <div className="centered-content-card">
         <section className="impressum-section">
           <h1>Impressum</h1>
           <h2 id="m46">Diensteanbieter</h2>

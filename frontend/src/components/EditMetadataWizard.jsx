@@ -5,10 +5,10 @@ import './EditMetadataWizard.css';
 
 export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
   const { user } = useAuth();
-  
+
   console.log('EditMetadataWizard - node:', node);
   console.log('EditMetadataWizard - era:', era);
-  
+
   const [formData, setFormData] = useState({
     registered_name: era.name || '',
     uci_code: era.uci_code || '',
@@ -19,17 +19,17 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError(null);
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    
+
     try {
       // Only send changed fields
       const changes = {};
@@ -52,30 +52,30 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
         // Only include if there's a value to send
         changes.dissolution_year = formData.dissolution_year ? parseInt(formData.dissolution_year) : null;
       }
-      
+
       if (Object.keys(changes).length === 0) {
         setError('No changes detected');
         setSubmitting(false);
         return;
       }
-      
+
       // Validate reason
       if (!formData.reason || formData.reason.length < 10) {
         setError('Reason must be at least 10 characters');
         setSubmitting(false);
         return;
       }
-      
+
       const response = await editsApi.editMetadata({
         era_id: era.era_id,
         reason: formData.reason,
         ...changes  // Spread changes after reason so they override if present
       });
-      
+
       onSuccess(response.data);
     } catch (err) {
       console.error('Edit submission error:', err.response?.data);
-      
+
       // Handle different error formats
       let errorMessage = 'Failed to submit edit';
       if (err.response?.data) {
@@ -89,21 +89,21 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
           errorMessage = data.message;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
-  
+
   const isChanged = () => {
     return formData.registered_name !== era.name ||
-           formData.uci_code !== era.uci_code ||
-           (formData.tier_level && parseInt(formData.tier_level) !== era.tier) ||
-           (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) ||
-           formData.dissolution_year !== (node?.dissolution_year || '');
+      formData.uci_code !== era.uci_code ||
+      (formData.tier_level && parseInt(formData.tier_level) !== era.tier) ||
+      (formData.founding_year && parseInt(formData.founding_year) !== node?.founding_year) ||
+      formData.dissolution_year !== (node?.dissolution_year || '');
   };
-  
+
   return (
     <div className="wizard-overlay" onClick={onClose}>
       <div className="wizard-modal" onClick={(e) => e.stopPropagation()}>
@@ -111,7 +111,7 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
           <h2>Edit Team Information</h2>
           <button className="close-button" onClick={onClose}>×</button>
         </div>
-        
+
         <form onSubmit={handleSubmit}>
           <div className="form-section">
             <label>
@@ -123,7 +123,7 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
                 required
               />
             </label>
-            
+
             <label>
               UCI Code (3 letters)
               <input
@@ -134,7 +134,7 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
                 pattern="[A-Z]{3}"
               />
             </label>
-            
+
             <label>
               Tier Level
               <select
@@ -163,7 +163,7 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
                   required
                 />
               </label>
-              
+
               <label>
                 Dissolution Year (optional)
                 <input
@@ -180,7 +180,7 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
               Changing these years affects the team's timeline visualization
             </div>
           </div>
-          
+
           <div className="form-section">
             <label>
               Reason for Edit (required)
@@ -197,11 +197,11 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
               Please provide a clear explanation. Include sources if available.
             </div>
           </div>
-          
+
           {error && (
             <div className="error-message">{error}</div>
           )}
-          
+
           <div className="wizard-footer">
             <div className="moderation-notice">
               {user?.role === 'NEW_USER' ? (
@@ -214,19 +214,20 @@ export default function EditMetadataWizard({ node, era, onClose, onSuccess }) {
                 </span>
               )}
             </div>
-            
+
             <div className="button-group">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={onClose}
                 disabled={submitting}
+                className="btn btn-neutral"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 type="submit"
                 disabled={!isChanged() || !formData.reason || submitting}
-                className="primary"
+                className="btn btn-primary"
               >
                 {submitting ? 'Submitting...' : 'Submit Edit'}
               </button>

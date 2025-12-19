@@ -43,14 +43,29 @@
 /* -------------------------------------------------------------
    Header
 ------------------------------------------------------------- */
-.editor-full-page .editor-header {
-    background-color: #333;
-    padding: 0.75rem 2rem;
-    border-bottom: 2px solid #2a2a2a;
+/* -------------------------------------------------------------
+   Header
+------------------------------------------------------------- */
+/* Updated to support both full page and centered container */
+.editor-full-page .editor-header,
+.centered-editor-container .editor-header {
+    background-color: transparent;
+    /* Match maintenance card feel */
+    padding: 30px 30px 15px 30px;
+    /* Match properties of maintenance-content-card padding + page-header margin */
+    border-bottom: 3px solid var(--color-primary);
+    /* Match Global Page Header */
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 50px;
+    min-height: auto;
+}
+
+.centered-editor-container .editor-header h2 {
+    font-size: 2rem;
+    /* Match maintenance h1/h2 size */
+    color: var(--color-text-light);
+    margin: 0;
 }
 
 .header-left {
