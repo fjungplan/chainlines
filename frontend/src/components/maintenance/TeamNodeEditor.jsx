@@ -205,7 +205,8 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                             <textarea
                                 value={formData.source_notes}
                                 onChange={e => handleChange('source_notes', e.target.value)}
-                                rows={3}
+                                rows={1}
+                                style={{ minHeight: 'var(--input-height)', height: 'var(--input-height)', padding: '10px 1rem' }}
                             />
                         </div>
                     </form>
