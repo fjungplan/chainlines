@@ -14,7 +14,7 @@ import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { OptimizedRenderer } from '../utils/optimizedRenderer';
-import EditMetadataWizard from './EditMetadataWizard';
+
 
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -50,7 +50,7 @@ export default function TimelineGraph({
 
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
-  const [showEditWizard, setShowEditWizard] = useState(false);
+
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
@@ -1059,16 +1059,8 @@ export default function TimelineGraph({
   }, []);
 
   const handleNodeClick = (node) => {
-    console.log('Clicked node:', node);
-
-    // Only allow edits if user can edit (authenticated with proper role)
-    if (canEdit()) {
-      setSelectedNode(node);
-      setShowEditWizard(true);
-    } else {
-      // Navigate to team detail page for non-editors
-      navigate(`/team/${node.id}`);
-    }
+    // Navigate to team detail page for all users (replacing old Edit wizard)
+    navigate(`/team/${node.id}`);
   };
 
   const showToast = (message, type = 'success', duration = 3000) => {
@@ -1182,18 +1174,7 @@ export default function TimelineGraph({
         visible={tooltip.visible}
       />
 
-      {/* Wizard Modals */}
-      {showEditWizard && selectedNode && selectedNode.eras && selectedNode.eras.length > 0 && (
-        <EditMetadataWizard
-          node={selectedNode}
-          era={selectedNode.eras[selectedNode.eras.length - 1]}
-          onClose={() => {
-            setShowEditWizard(false);
-            setSelectedNode(null);
-          }}
-          onSuccess={handleWizardSuccess}
-        />
-      )}
+
 
 
 
