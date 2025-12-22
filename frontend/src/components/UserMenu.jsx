@@ -76,6 +76,12 @@ export default function UserMenu() {
               <button className="menu-item" onClick={() => handleMenuItemClick('/me/edits')}>
                 My Edits
               </button>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/maintenance/teams')}>
+                Team Maintenance
+              </button>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/maintenance/sponsors')}>
+                Sponsor Maintenance
+              </button>
               <div className="menu-divider" />
             </>
           )}

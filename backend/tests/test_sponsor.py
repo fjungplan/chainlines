@@ -531,7 +531,7 @@ class TestSponsorService:
         assert link.prominence_percent == 60
     
     async def test_link_sponsor_prominence_total_validation(self, db_session: AsyncSession):
-        """Test that total prominence cannot exceed 100%."""
+        """Test that total prominence CAN exceed 100% (validation relaxed for flexibility)."""
         # Setup
         node = TeamNode(founding_year=2010, legal_name="Sponsor Test Node")
         db_session.add(node)
@@ -575,28 +575,23 @@ class TestSponsorService:
         await db_session.commit()
         
         # Try to add second at 50% (total would be 110%)
-        with pytest.raises(ValidationException, match="exceed 100%"):
-            await SponsorService.link_sponsor_to_era(
-                db_session,
-                era.era_id,
-                brand2.brand_id,
-                rank_order=2,
-                prominence_percent=50,
-                user_id=None
-            )
-        
-        # But 40% should work (total 100%)
+        # This used to raise ValidationException, but now should succeed
         link2 = await SponsorService.link_sponsor_to_era(
             db_session,
             era.era_id,
             brand2.brand_id,
             rank_order=2,
-            prominence_percent=40,
+            prominence_percent=50,
             user_id=None
         )
         await db_session.commit()
         
-        assert link2.prominence_percent == 40
+        assert link2.prominence_percent == 50
+        
+        # Verify validation method reports it as invalid
+        validation = await SponsorService.validate_era_sponsors(db_session, era.era_id)
+        assert validation['valid'] is False
+        assert validation['total_percent'] == 110
     
     async def test_validate_era_sponsors(self, db_session: AsyncSession):
         """Test validate_era_sponsors method."""

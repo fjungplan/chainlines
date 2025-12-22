@@ -137,33 +137,40 @@
 /* ===== CSS VARIABLES ===== */
 :root {
   /* Colors */
-  --color-primary: #1a1a1a;
-  --color-primary-dark: #000000;
-  --color-secondary: #f5f5f5;
-  --color-accent: #646cff;
-  --color-accent-hover: #535bf2;
+  --color-primary: #4A90E2;
+  --color-primary-dark: #357ABD;
+  --color-secondary: #3a3a3a;
 
   /* Text Colors */
-  --color-text-primary: #333333;
-  --color-text-secondary: #666666;
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #666666;
   --color-text-light: #ffffff;
   --color-text-dark: #1a1a1a;
 
   /* Background Colors */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f5f5f5;
-  --color-bg-code: #e8e8e8;
+  --color-bg-primary: #2a2a2a;
+  --color-bg-secondary: #3a3a3a;
+  --color-bg-tertiary: #444444;
+  --color-bg-code: #333333;
 
   /* Border Colors */
-  --color-border: #e0e0e0;
-  --color-border-dark: #cccccc;
+  --color-border: #444444;
+  --color-border-focus: #4A90E2;
+  --color-border-light: #555555;
 
   /* Typography */
-  --font-family-base: Montserrat, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-family-mono: 'Courier New', Courier, monospace;
+  --font-family-base: Montserrat,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  --font-family-mono: 'Courier New',
+    Courier,
+    monospace;
   --font-size-base: 16px;
   --line-height-base: 1.6;
-
 
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -173,7 +180,7 @@
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
 
-  /* Breakpoints (as custom properties for JS access) */
+  /* Breakpoints */
   --breakpoint-mobile: 320px;
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1024px;
@@ -182,44 +189,28 @@
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
-  --transition-slow: 0.4s ease;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
 
   /* Border Radius */
   --radius-sm: 3px;
-  --radius-md: 4px;
+  --radius-md: 6px;
   --radius-lg: 8px;
+
+  /* Input sizing */
+  --input-height: 42px;
 
   /* Font rendering */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-primary: #646cff;
-    --color-primary-dark: #535bf2;
-    --color-secondary: #1a1a1a;
-
-    --color-text-primary: #e0e0e0;
-    --color-text-secondary: #a0a0a0;
-    --color-text-light: #ffffff;
-    --color-text-dark: #1a1a1a;
-
-    --color-bg-primary: #242424;
-    --color-bg-secondary: #1a1a1a;
-    --color-bg-code: #333333;
-
-    --color-border: #333333;
-    --color-border-dark: #444444;
-  }
+  /* Color Scheme for native controls (scrollbars, inputs) */
+  color-scheme: dark;
 }
 
 /* ===== BASE STYLES ===== */
@@ -234,6 +225,8 @@ body {
   background-color: var(--color-bg-primary);
   min-width: 320px;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 /* ===== TYPOGRAPHY ===== */
@@ -246,7 +239,7 @@ h6 {
   font-weight: 600;
   line-height: 1.2;
   margin-bottom: var(--spacing-md);
-  color: var(--color-text-primary);
+  color: var(--color-text-light);
 }
 
 h1 {
@@ -275,113 +268,276 @@ h6 {
 
 p {
   margin-bottom: var(--spacing-md);
+  color: var(--color-text-primary);
 }
 
 /* ===== LINKS ===== */
 a {
-  color: var(--color-accent);
+  color: var(--color-primary);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-accent-hover);
+  color: #5FA3F5;
+  /* Lighter shade of primary */
+  text-decoration: underline;
 }
 
 a:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-/* ===== BUTTONS ===== */
-button {
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 500;
-  padding: 0.6em 1.2em;
+/* ===== LAYOUT UTILITIES ===== */
+/* Centered container for standard pages (About, Legal, User Forms) */
+/* Centered container for standard pages (About, Legal, User Forms) */
+.centered-page-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  /* Ensures full height but allows growth */
+  height: 100vh;
+  /* Fixes viewport height */
+  overflow-y: auto;
+  /* Allows scrolling if content exceeds viewport */
+  padding: 20px;
+  background-color: var(--color-bg-primary);
+  box-sizing: border-box;
+}
+
+.centered-content-card {
+  width: 100%;
+  max-width: 800px;
+  /* Standard width for readability */
+  background: var(--color-bg-secondary);
   border-radius: var(--radius-lg);
-  border: 1px solid transparent;
-  background-color: var(--color-primary);
+  padding: 30px;
+  box-shadow: var(--shadow-md);
+  margin-top: 20px;
+  margin-bottom: 40px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Wider container for maintenance pages */
+.maintenance-page-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  /* Often framed in a layout */
+  padding: 20px;
+  background-color: var(--color-bg-primary);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.maintenance-content-card {
+  width: 100%;
+  max-width: 1200px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  box-shadow: var(--shadow-md);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* CRUD Editor Centered Container (New) */
+/* CRUD Editor Centered Container (New) */
+.centered-editor-container {
+  width: 100%;
+  max-width: 1200px;
+  /* height removed - let flex handle it */
+  max-height: 1000px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  margin: 0;
+  /* Remove margin as parent has padding */
+  display: flex;
+  flex: 1;
+  /* Fill available vertical space */
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+/* Page Headers */
+.page-header {
+  border-bottom: 3px solid var(--color-primary);
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 32px;
   color: var(--color-text-light);
+}
+
+/* ===== BUTTONS ===== */
+/* Button Base - "Boring" Dark Grey / Anthracite for ALL buttons */
+button,
+.btn {
+  font-family: inherit;
+  height: var(--input-height);
+  padding: 0 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: var(--transition-normal);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+
+  /* The "Boring" Style from SponsorEditor.css .footer-btn */
+  background-color: var(--color-bg-primary);
+  /* #2a2a2a */
+  border: 1px solid var(--color-border-light);
+  /* #555 */
+  color: var(--color-text-primary);
+  /* #e0e0e0 */
 }
 
-button:hover {
-  background-color: var(--color-primary-dark);
-  border-color: var(--color-accent);
+button:hover,
+.btn:hover {
+  background-color: var(--color-bg-tertiary);
+  /* #444 */
+  border-color: #666;
+  color: var(--color-text-light);
+  /* #fff */
 }
 
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-button:disabled {
+button:disabled,
+.btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
-/* ===== CODE ===== */
-code {
-  font-family: var(--font-family-mono);
-  font-size: 0.9em;
-  background-color: var(--color-bg-code);
-  padding: 0.2em 0.4em;
-  border-radius: var(--radius-sm);
+button:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 
-pre {
-  font-family: var(--font-family-mono);
-  background-color: var(--color-bg-code);
-  padding: var(--spacing-md);
+/* Overrides to kill specific colors */
+.btn-primary,
+.primary-button,
+.btn-secondary,
+.secondary-btn,
+.btn-danger,
+.btn-success,
+.save-button,
+.edit-button {
+  background-color: var(--color-bg-primary) !important;
+  border: 1px solid var(--color-border-light) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.btn-primary:hover,
+.primary-button:hover,
+.btn-secondary:hover,
+.secondary-btn:hover,
+.btn-danger:hover,
+.btn-success:hover,
+.save-button:hover,
+.edit-button:hover {
+  background-color: var(--color-bg-tertiary) !important;
+  /* #444 */
+  border-color: #666 !important;
+  color: var(--color-text-light) !important;
+}
+
+/* Tiny override for 'small' buttons if needed (keep size but kill color) */
+.btn-sm,
+.small {
+  height: 32px;
+  padding: 0 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* ===== FORMS & INPUTS ===== */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+select,
+textarea {
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-light);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow-x: auto;
+  padding: 0 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
 }
 
-pre code {
-  background-color: transparent;
-  padding: 0;
+/* Standard Height for single-line inputs */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+select {
+  height: var(--input-height);
+  line-height: normal;
+  /* Fix vertical alignment */
 }
 
-/* ===== UTILITIES ===== */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+textarea {
+  padding: 0.75rem 1rem;
+  min-height: 100px;
+  resize: vertical;
 }
 
-/* ===== RESPONSIVE BREAKPOINTS ===== */
-/* Mobile first approach - base styles are for mobile */
-/* Tablet: 768px and up */
-@media (min-width: 768px) {
-  :root {
-    --font-size-base: 18px;
-  }
-
-  h1 {
-    font-size: 3rem;
-  }
-
-  h2 {
-    font-size: 2.25rem;
-  }
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
 }
 
-/* Desktop: 1024px and up */
-@media (min-width: 1024px) {
-  h1 {
-    font-size: 3.5rem;
-  }
+/* Numerator / Number Input Styling */
+/* Ensure the controls are dark mode appropriate */
+input[type="number"] {
+  /* color-scheme: dark; is already set globally, which should handle the scroll styling on supported browsers */
+}
 
-  h2 {
-    font-size: 2.5rem;
-  }
+/* Just in case, explicit styling for webkit spin buttons if needed (often OS dependent) */
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  /* To fully customize, we might need to hide default and build custom, 
+       but `color-scheme: dark` usually fixes the specific "black arrow on white" issue 
+       by making it dark. Alternatively, invert filter can work. */
+  filter: invert(1) hue-rotate(180deg);
+  /* Simple trick if native dark isn't consistent */
+  height: auto;
+}
+
+/* Dropdowns */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23e0e0e0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem top 50%;
+  background-size: 0.65rem auto;
+  padding-right: 2.5rem;
+  /* Space for arrow */
 }
 
 /* ===== SCROLLBARS ===== */
@@ -393,22 +549,46 @@ pre code {
 
 ::-webkit-scrollbar-track {
   background: #2a2a2a;
-  /* Dark track matching typical background */
 }
 
 ::-webkit-scrollbar-thumb {
   background: #555;
-  /* Dark grey thumb */
   border-radius: 5px;
   border: 2px solid #2a2a2a;
-  /* Creates padding effect */
+  /* Padding effect */
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #777;
-  /* Lighter on hover */
 }
 
 ::-webkit-scrollbar-corner {
   background: #2a2a2a;
+}
+
+/* ===== CODE ===== */
+code {
+  font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  background-color: var(--color-bg-code);
+  color: var(--color-text-secondary);
+  padding: 0.2em 0.4em;
+  border-radius: var(--radius-sm);
+}
+
+pre {
+  font-family: var(--font-family-mono);
+  background-color: var(--color-bg-code);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  color: var(--color-text-secondary);
+}
+
+/* ===== RESPONSIVE UTILITIES ===== */
+@media (min-width: 768px) {
+  :root {
+    --font-size-base: 16px;
+    /* Keeping logical 16px base, can scale if desired but 18px often too big for apps */
+  }
 }

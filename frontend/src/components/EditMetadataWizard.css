@@ -14,13 +14,13 @@
 }
 
 .wizard-modal {
-  background: white;
-  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xl, 0 8px 24px rgba(0, 0, 0, 0.5));
 }
 
 .wizard-header {
@@ -28,20 +28,20 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .wizard-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--color-text-light);
 }
 
 .close-button {
   background: none;
   border: none;
   font-size: 2rem;
-  color: #999;
+  color: var(--color-text-secondary);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -54,8 +54,8 @@
 }
 
 .close-button:hover {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-light);
 }
 
 .wizard-modal form {
@@ -69,14 +69,14 @@
 .form-section h3 {
   font-size: 1.1rem;
   margin: 0 0 1rem 0;
-  color: #555;
+  color: var(--color-text-light);
 }
 
 .form-section label {
   display: block;
   margin-bottom: 1rem;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-light);
 }
 
 .form-row {
@@ -85,50 +85,30 @@
   gap: 1rem;
 }
 
+/* Inputs are handled globally in index.css, ensuring consistency */
 .form-section input,
 .form-section select,
 .form-section textarea {
-  display: block;
-  width: 100%;
-  padding: 0.75rem;
   margin-top: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-
-.form-section input:focus,
-.form-section select:focus,
-.form-section textarea:focus {
-  outline: none;
-  border-color: #666;
-  box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
-}
-
-.form-section textarea {
-  resize: vertical;
-  min-height: 100px;
 }
 
 .help-text {
   font-size: 0.875rem;
-  color: #666;
+  color: var(--color-text-secondary);
   margin-top: 0.5rem;
 }
 
 .error-message {
-  background: #FEE;
-  border: 1px solid #FCC;
-  color: #C33;
+  background: rgba(255, 0, 0, 0.1);
+  border: 1px solid rgba(255, 0, 0, 0.3);
+  color: #ff6b6b;
   padding: 1rem;
   border-radius: 4px;
   margin-bottom: 1rem;
 }
 
 .wizard-footer {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--color-border);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -152,8 +132,8 @@
 
 .notice-success {
   display: block;
-  background: #D4EDDA;
-  color: #155724;
+  background: rgba(40, 167, 69, 0.2);
+  color: #5ddc73;
   padding: 0.75rem;
   border-radius: 4px;
 }
@@ -164,40 +144,6 @@
   justify-content: flex-end;
 }
 
-.button-group button {
-  padding: 0.75rem 1.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: white;
-  color: #333;
-}
-
-.button-group button:hover:not(:disabled) {
-  background: #f5f5f5;
-  border-color: #999;
-}
-
-.button-group button.primary {
-  background: #3a3a3a;
-  color: #cccccc;
-  border-color: #666;
-}
-
-.button-group button.primary:hover:not(:disabled) {
-  background: #444;
-  border-color: #777;
-  color: #ffffff;
-}
-
-.button-group button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Responsive styles */
 @media (max-width: 768px) {
   .wizard-modal {
@@ -205,15 +151,15 @@
     max-height: 100vh;
     border-radius: 0;
   }
-  
+
   .wizard-overlay {
     padding: 0;
   }
-  
+
   .button-group {
     flex-direction: column;
   }
-  
+
   .button-group button {
     width: 100%;
   }

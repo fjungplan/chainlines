@@ -40,7 +40,7 @@
   margin: 0;
   font-size: 2rem;
   font-weight: 700;
-  color: var(--color-accent, #646cff);
+  color: var(--color-primary);
 }
 
 .data-preview {
@@ -59,7 +59,7 @@
 }
 
 .data-preview summary:hover {
-  color: var(--color-accent, #646cff);
+  color: var(--color-primary);
 }
 
 .data-preview pre {
@@ -77,11 +77,11 @@
   .summary-card {
     background-color: var(--color-bg-secondary, #1a1a1a);
   }
-  
+
   .data-preview {
     background-color: var(--color-bg-secondary, #1a1a1a);
   }
-  
+
   .data-preview pre {
     background-color: var(--color-bg-primary, #242424);
   }

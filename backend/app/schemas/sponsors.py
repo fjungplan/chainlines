@@ -72,3 +72,20 @@ class SponsorMasterListResponse(SponsorMasterBase):
     brand_count: int = 0  # Calculated field
     
     model_config = ConfigDict(from_attributes=True)
+
+class TeamSponsorLinkCreate(BaseModel):
+    brand_id: UUID
+    rank_order: int
+    prominence_percent: int
+    hex_color_override: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+class TeamSponsorLinkResponse(BaseModel):
+    link_id: UUID
+    era_id: UUID
+    brand_id: UUID
+    rank_order: int
+    prominence_percent: int
+    hex_color_override: Optional[str] = None
+    brand: Optional[SponsorBrandResponse] = None # Include brand details
+    
+    model_config = ConfigDict(from_attributes=True)

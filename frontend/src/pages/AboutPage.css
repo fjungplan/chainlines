@@ -1,87 +1,6 @@
-.about-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  padding: 20px;
-  background: #2a2a2a;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
+/* Specific styles for About Page content */
 
-.about-container {
-  max-width: 800px;
-  background: #3a3a3a;
-  border-radius: 8px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  margin: 20px 0;
-}
-
-.about-container h1 {
-  font-size: 32px;
-  color: #ffffff;
-  margin-bottom: 30px;
-  border-bottom: 3px solid #4A90E2;
-  padding-bottom: 15px;
-}
-
-.about-container section {
-  margin-bottom: 30px;
-}
-
-.about-container section:last-child {
-  margin-bottom: 0;
-}
-
-.about-container h2 {
-  font-size: 20px;
-  color: #ffffff;
-  margin-bottom: 12px;
-  font-weight: 600;
-}
-
-.about-container p {
-  font-size: 15px;
-  line-height: 1.6;
-  color: #cccccc;
-  margin-bottom: 12px;
-}
-
-.about-container p:last-child {
-  margin-bottom: 0;
-}
-
-.about-container ul {
-  margin: 12px 0;
-  padding-left: 24px;
-}
-
-.about-container ul li {
-  font-size: 15px;
-  line-height: 1.6;
-  color: #cccccc;
-  margin-bottom: 8px;
-}
-
-.about-container a {
-  color: #4A90E2;
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.about-container a:hover {
-  color: #6BA8E5;
-  text-decoration: underline;
-}
-
-.about-container strong {
-  color: #ffffff;
-  font-weight: 600;
-}
-
+/* GitHub button specific override if needed, or rely on global btn classes */
 .github-link {
   margin: 20px 0;
 }
@@ -102,4 +21,20 @@
 .github-button:hover {
   background: #2f363d;
   text-decoration: none !important;
+}
+
+/* Ensure strong text stands out */
+.centered-content-card strong {
+  color: var(--color-text-light);
+  font-weight: 600;
+}
+
+.centered-content-card ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.centered-content-card ul li {
+  margin-bottom: 8px;
+  color: var(--color-text-primary);
 }

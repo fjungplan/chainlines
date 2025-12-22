@@ -83,7 +83,7 @@
   padding: 15px;
   background-color: #2a2a2a;
   border-radius: 6px;
-  border-left: 4px solid var(--color-accent, #646cff);
+  border-left: 4px solid var(--color-primary);
   border: 1px solid #444;
   border-left-width: 4px;
 }
@@ -91,7 +91,7 @@
 .era-year {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--color-accent, #646cff);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
 }

@@ -1,10 +1,12 @@
 """Integration tests for TeamService using real database interactions."""
 import uuid
+from datetime import date
 import pytest
 from sqlalchemy import select
 
 from app.models.team import TeamNode
 from app.services.team_service import TeamService
+from app.schemas.team import TeamEraCreate
 from app.core.exceptions import NodeNotFoundException
 
 
@@ -18,9 +20,12 @@ async def test_full_team_service_workflow(isolated_session):
         node_id = node.node_id
 
     # Create multiple eras
-    await TeamService.create_era(isolated_session, node_id=node_id, year=2018, registered_name="Alpha 2018")
-    await TeamService.create_era(isolated_session, node_id=node_id, year=2019, registered_name="Alpha 2019", tier_level=1)
-    await TeamService.create_era(isolated_session, node_id=node_id, year=2020, registered_name="Alpha 2020", uci_code="ALP")
+    await TeamService.create_era(isolated_session, node_id=node_id, data=TeamEraCreate(season_year=2018, valid_from=date(2018, 1, 1), registered_name="Alpha 2018"))
+    await TeamService.create_era(isolated_session, node_id=node_id, data=TeamEraCreate(season_year=2019, valid_from=date(2019, 1, 1), registered_name="Alpha 2019", tier_level=1))
+    await TeamService.create_era(isolated_session, node_id=node_id, data=TeamEraCreate(season_year=2020, valid_from=date(2020, 1, 1), registered_name="Alpha 2020", uci_code="ALP"))
+
+    # Force expiration to ensure fresh fetch with populated eras
+    isolated_session.expire_all()
 
     # Fetch node with eras
     fetched = await TeamService.get_node_with_eras(isolated_session, node_id=node_id)

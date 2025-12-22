@@ -68,7 +68,7 @@ export default function SponsorMaintenancePage() {
     if (!user) return <div className="sponsor-page-container">Please log in.</div>;
 
     return (
-        <div className="sponsor-page-container">
+        <div className="maintenance-page-container">
             {isEditorOpen ? (
                 <SponsorMasterEditor
                     masterId={selectedMasterId}
@@ -76,7 +76,7 @@ export default function SponsorMaintenancePage() {
                     onSuccess={handleEditorSuccess}
                 />
             ) : (
-                <div className="sponsor-inner-container">
+                <div className="maintenance-content-card">
                     <div className="sponsor-header">
                         <h1>Sponsor Maintenance</h1>
                     </div>
@@ -87,10 +87,11 @@ export default function SponsorMaintenancePage() {
                             placeholder="Search sponsors (e.g. Visma, Ineos)..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="search-input"
+                        // removed search-input class to rely on global
+                        // className="search-input" 
                         />
                         {(isEditor() || isAdmin()) && (
-                            <button className="primary-button" onClick={handleCreate}>
+                            <button className="btn btn-primary" onClick={handleCreate}>
                                 + Create New Sponsor
                             </button>
                         )}
