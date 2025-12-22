@@ -17,12 +17,14 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
     const { user, isTrusted, isModerator, isAdmin } = useAuth();
 
     const isEditMode = !!eventId;
-    const canDirectSave = isTrusted() || isModerator() || isAdmin();
+    const canDirectSave = isTrusted() || isAdmin() || isModerator();
     const canProtect = isModerator() || isAdmin();
+    const showReasonField = !isModerator() && !isAdmin(); // Only hide for Mod/Admin
 
     const [loading, setLoading] = useState(isEditMode);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
+    const [warnings, setWarnings] = useState([]); // Array of warning strings
 
     // Form State
     const [eventType, setEventType] = useState('LEGAL_TRANSFER');
@@ -67,6 +69,38 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
         loadEvent();
     }, [eventId, isEditMode]);
 
+    // Validation Effect for Warnings
+    useEffect(() => {
+        const newWarnings = [];
+        const year = parseInt(eventYear, 10);
+
+        if (predecessorNode && !isNaN(year)) {
+            // Predecessor should ideally exist just before or during the event year
+            // Check if it dissolved way before
+            if (predecessorNode.dissolution_year && predecessorNode.dissolution_year < year - 1) {
+                newWarnings.push(`Predecessor '${predecessorNode.legal_name}' dissolved in ${predecessorNode.dissolution_year}, well before event year ${year}.`);
+            }
+            // Check if it started after
+            if (predecessorNode.founding_year && predecessorNode.founding_year > year) {
+                newWarnings.push(`Predecessor '${predecessorNode.legal_name}' was founded in ${predecessorNode.founding_year}, after event year ${year}.`);
+            }
+        }
+
+        if (successorNode && !isNaN(year)) {
+            // Successor should start around the event year or exist during it
+            // Check if it dissolved before event
+            if (successorNode.dissolution_year && successorNode.dissolution_year < year) {
+                newWarnings.push(`Successor '${successorNode.legal_name}' dissolved in ${successorNode.dissolution_year}, before event year ${year}.`);
+            }
+            // Check if it starts way after (e.g. > 1 year gap)
+            if (successorNode.founding_year && successorNode.founding_year > year + 1) {
+                newWarnings.push(`Successor '${successorNode.legal_name}' was founded in ${successorNode.founding_year}, later than event year ${year}.`);
+            }
+        }
+
+        setWarnings(newWarnings);
+    }, [eventYear, predecessorNode, successorNode]);
+
     const handleSave = async (shouldClose = false) => {
         setError(null);
 
@@ -83,7 +117,9 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
             setError("Predecessor and Successor cannot be the same team.");
             return;
         }
-        if (reason.length < 10) {
+
+        // Reason validation only for those who cannot direct save
+        if (!canDirectSave && reason.length < 10) {
             setError("Reason must be at least 10 characters.");
             return;
         }
@@ -116,7 +152,18 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
             }
         } catch (err) {
             console.error("Save failed:", err);
-            setError(err.response?.data?.detail || "Failed to save lineage event.");
+            let msg = "Failed to save lineage event.";
+            if (err.response?.data?.detail) {
+                const d = err.response.data.detail;
+                if (typeof d === 'string') {
+                    msg = d;
+                } else if (Array.isArray(d)) {
+                    msg = d.map(x => x.msg).join('; ');
+                } else {
+                    msg = JSON.stringify(d);
+                }
+            }
+            setError(msg);
             setSubmitting(false);
         }
     };
@@ -147,6 +194,23 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                 </div>
             </div>
 
+            {/* Warnings Display */}
+            {warnings.length > 0 && (
+                <div className="warning-banner" style={{
+                    backgroundColor: '#fff3cd',
+                    color: '#856404',
+                    padding: '1rem',
+                    marginBottom: '1rem',
+                    borderRadius: '4px',
+                    border: '1px solid #ffeeba'
+                }}>
+                    <strong>Compatibility Warnings:</strong>
+                    <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.5rem' }}>
+                        {warnings.map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
+                </div>
+            )}
+
             {/* SPLIT VIEW */}
             <div className="editor-split-view">
                 <div className="editor-column details-column" style={{ flex: 1, maxWidth: '100%', borderRight: 'none' }}>
@@ -162,6 +226,7 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                                 <span>Protected Record</span>
                             </label>
                         )}
+                        {isProtected && !canProtect && <span className="badge badge-warning">Protected (Read Only)</span>}
                     </div>
 
                     {error && <div className="error-banner">{error}</div>}
@@ -245,18 +310,25 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                             />
                         </div>
 
-                        {/* Change Reason */}
-                        <div className="form-group">
-                            <label>Change Reason *</label>
-                            <textarea
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                                rows={2}
-                                placeholder="Why is this change being made? (min 10 chars)"
-                                required
-                                minLength={10}
-                            />
-                        </div>
+                        {/* Change Reason (Conditional) */}
+                        {showReasonField && (
+                            <div className="form-group">
+                                <label>
+                                    Reason for Request *
+                                    <span style={{ fontWeight: 'normal', fontSize: '0.85rem', marginLeft: '0.5rem', color: '#666' }}>
+                                        (Required for audit logs)
+                                    </span>
+                                </label>
+                                <textarea
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    placeholder="Please provide a source or reason for this change..."
+                                    required
+                                    rows={2}
+                                    style={{ borderColor: '#fcd34d' }}
+                                />
+                            </div>
+                        )}
                     </form>
                 </div>
             </div>

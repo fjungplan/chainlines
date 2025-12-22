@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { sponsorsApi } from '../../api/sponsors';
+import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
 import './SponsorEditor.css';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,13 +14,18 @@ const INDUSTRIES = [
 ];
 
 export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
-    const { isAdmin } = useAuth();
+    const { isAdmin, isModerator, isTrusted } = useAuth();
+
+    // Determine Rights
+    const canDirectEdit = isTrusted(); // Trusted, Moderator, Admin
+    const showReasonField = !isModerator() && !isAdmin(); // Only hide for Mod/Admin
 
     // === STATE ===
     const [loading, setLoading] = useState(!!masterId);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [viewMode, setViewMode] = useState('MASTER'); // 'MASTER' or 'BRAND'
+    const [reason, setReason] = useState(''); // For edit requests
 
     // Master Data
     const [masterForm, setMasterForm] = useState({
@@ -40,7 +46,8 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         display_name: '',
         default_hex_color: '#ffffff',
         source_url: '',
-        source_notes: ''
+        source_notes: '',
+        is_protected: false // Added protection for brands
     });
 
     // UI Helpers
@@ -105,8 +112,10 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
             display_name: brand.display_name || '',
             default_hex_color: brand.default_hex_color,
             source_url: brand.source_url || '',
-            source_notes: brand.source_notes || ''
+            source_notes: brand.source_notes || '',
+            is_protected: brand.is_protected
         });
+        setReason(''); // Reset reason
         setViewMode('BRAND');
         setError(null);
     };
@@ -134,16 +143,45 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         setSubmitting(true);
         setError(null);
         try {
+            // Reason Validation
+            if (showReasonField && (!reason || reason.length < 10)) {
+                throw new Error("Please provide a reason for this change (at least 10 characters).");
+            }
+
+            const payload = { ...masterForm, reason: reason }; // Always include reason if present
+
+            let message = "";
+
             if (masterId) {
-                await sponsorsApi.updateMaster(masterId, masterForm);
-                if (shouldClose) onSuccess(); // Refresh list & close
-                else setSubmitting(false);
+                // UPDATE - Use Edits API for Audit
+                const requestData = {
+                    master_id: masterId,
+                    ...payload
+                };
+                await editsApi.updateSponsorMaster(masterId, requestData);
+                message = canDirectEdit ? "Sponsor updated successfully" : "Update request submitted for moderation";
+
+                if (shouldClose) onSuccess();
+                else {
+                    setSubmitting(false);
+                    alert(message);
+                    if (!canDirectEdit) onSuccess();
+                }
             } else {
-                await sponsorsApi.createMaster(masterForm);
-                onSuccess(); // Close for now (or we could redirect to edit mode with returned ID)
+                // CREATE
+                if (canDirectEdit) {
+                    await sponsorsApi.createMaster(payload);
+                    // Note: Reason lost here if sponsorsApi doesn't support it, but flow is smoother
+                    onSuccess();
+                } else {
+                    await editsApi.createSponsorMaster(payload);
+                    message = "Sponsor creation request submitted for moderation";
+                    alert(message);
+                    onSuccess();
+                }
             }
         } catch (err) {
-            setError(err.response?.data?.detail || "Failed to save sponsor");
+            setError(err.response?.data?.detail || err.message || "Failed to save sponsor");
             setSubmitting(false);
         }
     };
@@ -158,33 +196,59 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         setSubmitting(true);
         setError(null);
         try {
-            if (currentBrand) {
-                // Update
-                await sponsorsApi.updateBrand(currentBrand.brand_id, brandForm);
-            } else {
-                // Create
-                await sponsorsApi.addBrand(masterId, brandForm);
+            // Reason Validation
+            if (showReasonField && (!reason || reason.length < 10)) {
+                throw new Error("Please provide a reason for this change (at least 10 characters).");
             }
 
-            // Reload brands to reflect changes
-            await loadMasterData();
+            const payload = { ...brandForm, reason: reason };
+
+            let message = "";
+
+            if (currentBrand) {
+                // Update - Use Edits API
+                const requestData = {
+                    brand_id: currentBrand.brand_id,
+                    master_id: masterId,
+                    ...payload
+                };
+                await editsApi.updateSponsorBrand(currentBrand.brand_id, requestData);
+                message = canDirectEdit ? "Brand updated successfully" : "Brand update request submitted for moderation";
+
+                if (canDirectEdit) await loadMasterData(); // Refresh list
+                else alert(message);
+
+            } else {
+                // Create
+                if (canDirectEdit) {
+                    await sponsorsApi.addBrand(masterId, payload);
+                    message = "Brand created successfully";
+                    if (canDirectEdit) await loadMasterData();
+                } else {
+                    const requestData = {
+                        master_id: masterId,
+                        ...payload
+                    };
+                    await editsApi.createSponsorBrand(requestData);
+                    message = "Brand creation request submitted for moderation";
+                    alert(message);
+                }
+            }
 
             if (shouldClose) {
                 setViewMode('MASTER');
+                setReason('');
+                if (canDirectEdit) await loadMasterData();
             } else {
                 setSubmitting(false);
-                if (!currentBrand) {
-                    // If we just created, ideally we switch to edit mode for it, 
-                    // but reloading data might have lost our specific new ID reference easily.
-                    // For safety/simplicity, we go back to Master on "Save & Close", 
-                    // but for "Save" we might need to find the new brand. 
-                    // Let's just go back to Master for now if it was a create, to be safe.
-                    // Or keep form dirty? No, safer to go back.
+                if (!currentBrand && canDirectEdit) {
+                    // Go back to Master list to refresh brands
                     setViewMode('MASTER');
+                    setReason('');
                 }
             }
         } catch (err) {
-            setError(err.response?.data?.detail || "Failed to save brand");
+            setError(err.response?.data?.detail || err.message || "Failed to save brand");
             setSubmitting(false);
         }
     };
@@ -202,6 +266,14 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
     const headerTitle = isBrandMode
         ? (currentBrand ? 'Edit Brand Identity' : 'Add Brand Identity')
         : (masterId ? 'Edit Sponsor' : 'Create New Sponsor');
+
+    // Protection Handling
+    const isProtected = isBrandMode
+        ? (brandForm.is_protected && !isModerator()) // Brand protected
+        : (masterId && masterForm.is_protected && !isModerator()); // Master protected
+
+    const saveBtnLabel = canDirectEdit ? "Save" : "Request Update";
+    const saveCloseBtnLabel = canDirectEdit ? "Save & Close" : "Request & Close";
 
     return (
         <div className="sponsor-inner-container centered-editor-container">
@@ -221,35 +293,24 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 <div className="editor-column details-column">
                     {/* Header Varies by Mode for Alignment */}
                     {isBrandMode ? (
-                        <div className="form-row" style={{ marginBottom: '1.5rem', alignItems: 'center', height: '28px' }}>
-                            <div style={{ flex: 1.5 }}>
-                                <h3>Brand Details</h3>
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div className="header-color-picker full-width">
-                                    <label>Color</label>
-                                    <div className="color-inputs">
-                                        <input
-                                            type="color"
-                                            value={brandForm.default_hex_color}
-                                            onChange={e => handleBrandChange('default_hex_color', e.target.value)}
-                                            title="Choose color"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={brandForm.default_hex_color}
-                                            onChange={e => handleBrandChange('default_hex_color', e.target.value)}
-                                            pattern="^#[0-9A-Fa-f]{6}$"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                        <div className="column-header">
+                            <h3>Brand Details</h3>
+                            {isModerator() && (
+                                <label className="protected-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={brandForm.is_protected}
+                                        onChange={e => handleBrandChange('is_protected', e.target.checked)}
+                                    />
+                                    <span>Protected Record</span>
+                                </label>
+                            )}
+                            {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
                         </div>
                     ) : (
                         <div className="column-header">
                             <h3>Sponsor Details</h3>
-                            {isAdmin() && (
+                            {isModerator() && (
                                 <label className="protected-toggle">
                                     <input
                                         type="checkbox"
@@ -259,6 +320,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                     <span>Protected Record</span>
                                 </label>
                             )}
+                            {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
                         </div>
                     )}
 
@@ -275,6 +337,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                         value={masterForm.legal_name}
                                         onChange={e => handleMasterChange('legal_name', e.target.value)}
                                         required
+                                        readOnly={isProtected}
                                     />
                                 </div>
 
@@ -284,10 +347,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                         type="text"
                                         value={masterForm.industry_sector}
                                         onChange={e => handleMasterChange('industry_sector', e.target.value)}
-                                        onFocus={() => setShowIndustryDropdown(true)}
+                                        onFocus={() => !isProtected && setShowIndustryDropdown(true)}
                                         placeholder="Select or type..."
                                         className="industry-input"
                                         autoComplete="off"
+                                        readOnly={isProtected}
                                     />
                                     {showIndustryDropdown && filteredIndustries.length > 0 && (
                                         <ul className="custom-dropdown-list">
@@ -310,6 +374,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                     type="url"
                                     value={masterForm.source_url}
                                     onChange={e => handleMasterChange('source_url', e.target.value)}
+                                    readOnly={isProtected}
                                 />
                             </div>
 
@@ -319,12 +384,15 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                     value={masterForm.source_notes}
                                     onChange={e => handleMasterChange('source_notes', e.target.value)}
                                     rows={3}
+                                    readOnly={isProtected}
                                 />
                             </div>
                         </form>
                     ) : (
                         /* --- BRAND FORM --- */
                         <form onSubmit={(e) => { e.preventDefault(); }}>
+                            {/* Color Picker moved here for consistency */}
+
                             <div className="form-row">
                                 <div className="form-group" style={{ flex: 1.5 }}>
                                     <label>Brand Name * (e.g. Visma)</label>
@@ -334,6 +402,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                         onChange={e => handleBrandChange('brand_name', e.target.value)}
                                         placeholder="e.g. Visma"
                                         required
+                                        readOnly={isProtected}
                                     />
                                 </div>
 
@@ -344,17 +413,45 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                         value={brandForm.display_name}
                                         onChange={e => handleBrandChange('display_name', e.target.value)}
                                         placeholder="if different"
+                                        readOnly={isProtected}
                                     />
                                 </div>
                             </div>
 
-                            <div className="form-group">
-                                <label>Source URL</label>
-                                <input
-                                    type="url"
-                                    value={brandForm.source_url}
-                                    onChange={e => handleBrandChange('source_url', e.target.value)}
-                                />
+                            <div className="form-row">
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label>Source URL</label>
+                                    <input
+                                        type="url"
+                                        value={brandForm.source_url}
+                                        onChange={e => handleBrandChange('source_url', e.target.value)}
+                                        readOnly={isProtected}
+                                    />
+                                </div>
+                                <div className="form-group" style={{ width: '240px' }}>
+                                    <label>Brand Color</label>
+                                    <div className="color-input-group">
+                                        <div className="color-preview-wrapper" style={{ backgroundColor: brandForm.default_hex_color }}>
+                                            <input
+                                                type="color"
+                                                value={brandForm.default_hex_color}
+                                                onChange={e => handleBrandChange('default_hex_color', e.target.value)}
+                                                title="Choose color"
+                                                disabled={isProtected}
+                                                style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', padding: 0, margin: 0, border: 'none', cursor: 'pointer', opacity: 0 }}
+                                            />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={brandForm.default_hex_color}
+                                            onChange={e => handleBrandChange('default_hex_color', e.target.value)}
+                                            pattern="^#[0-9A-Fa-f]{6}$"
+                                            required
+                                            readOnly={isProtected}
+                                            style={{ flex: 1, fontFamily: 'monospace' }}
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="form-group">
@@ -363,9 +460,25 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                     value={brandForm.source_notes}
                                     onChange={e => handleBrandChange('source_notes', e.target.value)}
                                     rows={3}
+                                    readOnly={isProtected}
                                 />
                             </div>
                         </form>
+                    )}
+
+                    {/* REASON FIELD FOR REQUESTS */}
+                    {showReasonField && (
+                        <div className="form-group reason-group" style={{ marginTop: '1rem' }}>
+                            <label>Reason for Request *</label>
+                            <textarea
+                                value={reason}
+                                onChange={e => setReason(e.target.value)}
+                                placeholder="Please explain why you are making this change..."
+                                required
+                                rows={2}
+                                style={{ borderColor: '#fcd34d' }}
+                            />
+                        </div>
                     )}
                 </div>
 
@@ -374,7 +487,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                     <div className="column-header">
                         <h3>Brand Identities</h3>
                         {masterId && (
-                            <button className="secondary-btn small" onClick={handleAddBrand}>
+                            <button className="secondary-btn small" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
                                 + Add
                             </button>
                         )}
@@ -418,28 +531,32 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 <button
                     type="button"
                     className="footer-btn cancel"
-                    onClick={handleBack} // Back logic handles 'Cancel' effectively
+                    onClick={handleBack}
                     disabled={submitting}
                 >
-                    {isBrandMode ? 'Cancel' : 'Cancel'}
+                    Cancel
                 </button>
                 <div className="footer-actions-right">
-                    <button
-                        type="button"
-                        className="footer-btn save"
-                        onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
-                        disabled={submitting}
-                    >
-                        Save
-                    </button>
-                    <button
-                        type="button"
-                        className="footer-btn save-close"
-                        onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
-                        disabled={submitting}
-                    >
-                        {isBrandMode ? 'Save & Close' : 'Save & Close'}
-                    </button>
+                    {!isProtected && (
+                        <>
+                            <button
+                                type="button"
+                                className="footer-btn save"
+                                onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
+                                disabled={submitting}
+                            >
+                                {saveBtnLabel}
+                            </button>
+                            <button
+                                type="button"
+                                className="footer-btn save-close"
+                                onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
+                                disabled={submitting}
+                            >
+                                {saveCloseBtnLabel}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

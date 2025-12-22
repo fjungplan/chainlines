@@ -27,8 +27,9 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
     });
 
     // Determine Rights
-    const canDirectEdit = isTrusted(); // Trusted, Moderator, Admin
+    const canDirectEdit = isTrusted() || isAdmin() || isModerator();
     const isProtected = !!nodeId && formData.is_protected && !isModerator();
+    const showReasonField = !isModerator() && !isAdmin();
 
     // Initial Load
     useEffect(() => {
@@ -67,8 +68,8 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
         setSubmitting(true);
         setError(null);
         try {
-            // Validate Reason if Request Mode
-            if (!canDirectEdit && (!formData.reason || formData.reason.length < 10)) {
+            // Validate Reason if field is shown
+            if (showReasonField && (!formData.reason || formData.reason.length < 10)) {
                 throw new Error("Please provide a reason for this change (at least 10 characters).");
             }
 
@@ -80,68 +81,51 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
             if (typeof payload.founding_year === 'string')
                 payload.founding_year = parseInt(payload.founding_year, 10);
 
-            let currentNodeId = nodeId;
             let message = "";
 
             if (nodeId) {
-                // UPDATE
-                if (canDirectEdit) {
-                    await teamsApi.updateTeamNode(nodeId, payload);
-                    message = "Team updated successfully";
-                } else {
-                    // Update Request
-                    const requestData = {
-                        node_id: nodeId,
-                        legal_name: payload.legal_name,
-                        display_name: payload.display_name,
-                        founding_year: payload.founding_year,
-                        dissolution_year: payload.dissolution_year,
-                        source_url: payload.source_url,
-                        source_notes: payload.source_notes,
-                        is_protected: payload.is_protected,
-                        reason: payload.reason
-                    };
-                    await editsApi.updateNode(requestData);
-                    message = "Update request submitted for moderation";
-                }
+                // UPDATE - Always use Edits API to ensure audit log/reason is captured
+                const requestData = {
+                    node_id: nodeId,
+                    legal_name: payload.legal_name,
+                    display_name: payload.display_name,
+                    founding_year: payload.founding_year,
+                    dissolution_year: payload.dissolution_year,
+                    source_url: payload.source_url,
+                    source_notes: payload.source_notes,
+                    is_protected: payload.is_protected,
+                    reason: payload.reason
+                };
+                await editsApi.updateNode(requestData);
+                message = canDirectEdit ? "Team updated successfully" : "Update request submitted for moderation";
             } else {
-                // CREATE
-                if (canDirectEdit) {
-                    const newTeam = await teamsApi.createTeamNode(payload);
-                    currentNodeId = newTeam.node_id;
-                    message = "Team created successfully";
-                    if (onSuccess) onSuccess(currentNodeId);
-                } else {
-                    // Create Request
-                    const requestData = {
-                        legal_name: payload.legal_name,
-                        registered_name: payload.display_name || payload.legal_name, // Schema requires registered_name (initial era)
-                        founding_year: payload.founding_year,
-                        uci_code: null, // Basic create doesn't ask for UCI yet
-                        tier_level: 3, // Default for now, or add field? Assuming 3 or need UI.
-                        reason: payload.reason
-                    };
-                    // Wait, schema requires tier. Let's assume 3 or add field.
-                    // For now, defaulting to 3. Ideally UI should have Tier selector for new team.
-                    await editsApi.createTeamEdit(requestData);
-                    message = "Team creation request submitted for moderation";
-                    // Can't return ID immediately if pending.
-                    if (shouldClose) {
-                        alert(message);
-                        onClose();
-                        return;
-                    }
-                }
+                // CREATE - Use Edits API to ensure audit log
+                // Warning: We don't get the new ID back easily from Edits API in simplified mode.
+                const requestData = {
+                    legal_name: payload.legal_name,
+                    registered_name: payload.display_name || payload.legal_name,
+                    founding_year: payload.founding_year,
+                    uci_code: null,
+                    tier_level: 3,
+                    reason: payload.reason
+                };
+                await editsApi.createTeamEdit(requestData);
+                message = canDirectEdit ? "Team created (see list)" : "Team creation request submitted for moderation";
             }
 
             if (shouldClose) {
-                onClose(); // Back to List
-            } else if (!nodeId && canDirectEdit) {
-                if (onSuccess) onSuccess(currentNodeId);
+                onClose();
             } else {
+                // If we didn't close, we ideally want to switch to Edit mode, but we don't have the new ID.
+                // So we force close or reset.
                 setSubmitting(false);
+                if (!nodeId) {
+                    onClose(); // Force close on create
+                }
                 alert(message);
             }
+            // Trigger refresh
+            if (onSuccess) onSuccess();
         } catch (err) {
             console.error(err);
             setError(err.response?.data?.detail || err.message || "Failed to save team");
@@ -278,7 +262,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                         </div>
 
                         {/* REASON FIELD FOR REQUESTS */}
-                        {!canDirectEdit && (
+                        {showReasonField && (
                             <div className="form-group reason-group">
                                 <label>Reason for Request *</label>
                                 <textarea

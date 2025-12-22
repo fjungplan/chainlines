@@ -30,6 +30,9 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
 
     const { user, isModerator, isAdmin, isTrusted, isEditor, canEdit } = useAuth();
 
+    // UI Visibility: Only hide reason for Admins/Mods (Trusted must explain edits)
+    const showReasonField = !isModerator() && !isAdmin();
+
     // Determine rights
     // If era exists (edit mode):
     // - Protected: Only MOD/ADMIN can direct save. Shared: View only? Or request?
@@ -187,55 +190,62 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
 
             let resultId = eraId;
 
-            if (canDirectSave()) {
-                // Direct Save via Teams API
-                if (eraId) {
-                    await teamsApi.updateTeamEra(eraId, payload);
-                } else {
+            if (eraId) {
+                // UPDATE - FORCE Edit API usage to capture audit reason
+                // Validation:
+                if (showReasonField && (!payload.reason || payload.reason.length < 10)) {
+                    throw new Error("Please provide a reason for this change (at least 10 characters).");
+                }
+
+                const reqPayload = {
+                    era_id: eraId,
+                    registered_name: payload.registered_name,
+                    uci_code: payload.uci_code || null,
+                    country_code: payload.country_code || null,
+                    tier_level: payload.tier_level,
+                    valid_from: payload.valid_from,
+                    reason: payload.reason
+                };
+
+                await editsApi.editMetadata(reqPayload);
+                const msg = canDirectSave() ? "Era updated successfully" : "Update request submitted for moderation";
+                if (!canDirectSave()) alert(msg); // Only alert if request, direct save is silent/smooth usually? 
+                // Or maybe alert for both for consistency? Sponsormaster alerts only if request (or if staying open).
+                // Let's keep existing behavior:
+                // Previous code did NOT alert on direct save success, just onSuccess().
+                // I will alert if it's a request.
+                if (!canDirectSave()) alert(msg);
+
+                if (onSuccess) onSuccess(shouldClose ? undefined : eraId);
+
+            } else {
+                // CREATE
+                if (canDirectSave()) {
+                    // Direct Save via Teams API (To preserve Copy Sponsors feature which needs ID)
+                    // Note: Reason is NOT captured here as TeamsAPI doesn't support it.
                     const res = await teamsApi.createTeamEra(nodeId, payload);
                     resultId = res.era_id;
                     // Handle prefilled sponsors copy for direct create
                     await copySponsors(resultId);
-                }
-                if (onSuccess) onSuccess(shouldClose ? undefined : resultId);
-            } else {
-                // Request Mode via Edits API
-                if (!payload.reason || payload.reason.length < 10) {
-                    throw new Error("A reason (min 10 chars) is required for edit requests.");
-                }
-
-                if (eraId) {
-                    // Update Request (Generic Metadata for now, until specific EraRequest endpoint if needed, 
-                    // or usage of editMetadata with table 'team_eras')
-                    // Actually editsApi.editMetadata expects era_id in payload.
-                    const reqPayload = {
-                        era_id: eraId,
-                        registered_name: payload.registered_name,
-                        uci_code: payload.uci_code,
-                        country_code: payload.country_code,
-                        tier_level: payload.tier_level,
-                        valid_from: payload.valid_from,
-                        reason: payload.reason,
-                        // Include node fields? logic is mixed in CreateMetadataEdit.
-                        // Assuming editMetadata handles era fields now.
-                    };
-                    await editsApi.editMetadata(reqPayload);
-                    alert("Update request submitted for moderation.");
+                    if (onSuccess) onSuccess(shouldClose ? undefined : resultId);
                 } else {
-                    // Create Request
+                    // Request Mode via Edits API
+                    if (!payload.reason || payload.reason.length < 10) {
+                        throw new Error("A reason (min 10 chars) is required for edit requests.");
+                    }
                     const reqPayload = {
                         node_id: nodeId,
                         season_year: payload.season_year,
                         registered_name: payload.registered_name,
-                        uci_code: payload.uci_code,
-                        country_code: payload.country_code,
+                        uci_code: payload.uci_code || null,
+                        country_code: payload.country_code || null,
                         tier_level: payload.tier_level,
                         reason: payload.reason
                     };
                     await editsApi.createEraEdit(reqPayload);
                     alert("Creation request submitted for moderation.");
+                    if (onSuccess) onSuccess();
                 }
-                if (onSuccess) onSuccess(); // Always close/back on request
             }
 
             if (!canDirectSave() || shouldClose) {
@@ -310,21 +320,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                     <h2>{eraId ? `Edit Era (Season): ${formData.season_year}` : 'Add New Era (Season)'}</h2>
                 </div>
                 <div className="header-right">
-                    {canModifyProtection() && (
-                        <div className="protection-toggle">
-                            <label>
-                                <input
-                                    type="checkbox"
-                                    checked={formData.is_protected}
-                                    onChange={e => handleChange('is_protected', e.target.checked)}
-                                />
-                                Protected
-                            </label>
-                        </div>
-                    )}
-                    {isProtected && !canModifyProtection() && (
-                        <div className="badge protected-badge">Protected Record</div>
-                    )}
+                    {/* Protection moved to Column Header */}
                 </div>
             </div>
 
@@ -333,6 +329,17 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 <div className="editor-column details-column">
                     <div className="column-header">
                         <h3>Era (Season) Properties</h3>
+                        {canModifyProtection() && (
+                            <label className="protected-toggle">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.is_protected}
+                                    onChange={e => handleChange('is_protected', e.target.checked)}
+                                />
+                                <span>Protected Record</span>
+                            </label>
+                        )}
+                        {isProtected && !canModifyProtection() && <span className="badge badge-warning">Protected (Read Only)</span>}
                     </div>
 
                     {error && <div className="error-banner">{error}</div>}
@@ -439,18 +446,18 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                             </div>
                         </div>
 
-                        {/* REASON FIELD FOR REQUESTS */}
-                        {isRequestMode() && (
+                        {/* REASON FIELD FOR REQUESTS OR TRUSTED EDITS */}
+                        {showReasonField && (eraId || !canDirectSave()) && (
                             <div className="form-row">
                                 <div className="form-group full-width">
-                                    <label>Reason for Change (Required) *</label>
+                                    <label>Reason / Change Log *</label>
                                     <textarea
                                         value={formData.reason}
                                         onChange={e => handleChange('reason', e.target.value)}
-                                        placeholder="Please provide a source or reason for this change..."
+                                        placeholder={eraId ? "Please explain this change (captured in audit log)..." : "Please provide a reason for this request..."}
                                         rows={2}
                                         required
-                                        style={{ width: '100%', resize: 'vertical' }}
+                                        style={{ width: '100%', resize: 'vertical', borderColor: '#fcd34d' }}
                                     />
                                     <small style={{ color: '#666' }}>Min 10 characters.</small>
                                 </div>

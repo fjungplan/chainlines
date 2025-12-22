@@ -1,0 +1,111 @@
+.team-search-container {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.team-search-container label {
+    display: block;
+    margin-bottom: 0.5rem;
+    /* Increased slightly for spacing */
+    color: #cbd5e0;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* Input Styling */
+.team-search-input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.team-search-input:focus {
+    outline: none;
+    border-color: #4A90E2;
+}
+
+.team-search-input::placeholder {
+    color: #718096;
+}
+
+/* Dropdown Styling */
+.team-search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background-color: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    max-height: 300px;
+    overflow-y: auto;
+    list-style: none;
+    padding: 0;
+    margin-top: 4px;
+}
+
+.team-search-dropdown li {
+    padding: 0.75rem;
+    border-bottom: 1px solid #333;
+    cursor: pointer;
+    transition: background-color 0.1s;
+    color: #e2e8f0;
+}
+
+.team-search-dropdown li:last-child {
+    border-bottom: none;
+}
+
+.team-search-dropdown li:hover {
+    background-color: #4A90E2;
+    color: white;
+}
+
+.team-search-dropdown .team-meta {
+    font-size: 0.8rem;
+    color: #a0aec0;
+    margin-top: 2px;
+}
+
+.team-search-dropdown li:hover .team-meta {
+    color: #e2e8f0;
+}
+
+/* Scrollbar styling for dropdown */
+.team-search-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+.team-search-dropdown::-webkit-scrollbar-track {
+    background: #2a2a2a;
+}
+
+.team-search-dropdown::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 4px;
+}
+
+.team-search-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Wrapper and Loader */
+.search-input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.search-loader {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}

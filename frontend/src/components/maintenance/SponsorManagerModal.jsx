@@ -322,14 +322,15 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                         </div>
                                     </div>
                                     <div className="form-group" style={{ flex: 1 }}>
-                                        <label>Hex Color</label>
+                                        <label>Brand Color Override</label>
                                         <div className="color-input-group">
-                                            <div className="color-preview-wrapper" style={{ background: colorOverride }}>
+                                            <div className="color-preview-wrapper" style={{ backgroundColor: colorOverride }}>
                                                 <input
                                                     type="color"
                                                     value={colorOverride}
                                                     onChange={e => setColorOverride(e.target.value)}
                                                     title="Choose color"
+                                                    style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', padding: 0, margin: 0, border: 'none', cursor: 'pointer', opacity: 0 }}
                                                 />
                                             </div>
                                             <input
@@ -337,6 +338,7 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                                 value={colorOverride}
                                                 onChange={e => setColorOverride(e.target.value)}
                                                 placeholder="#RRGGBB"
+                                                style={{ flex: 1, fontFamily: 'monospace' }}
                                             />
                                         </div>
                                     </div>

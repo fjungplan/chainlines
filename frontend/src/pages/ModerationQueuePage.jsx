@@ -104,11 +104,11 @@ export default function ModerationQueuePage() {
         <button className={filter === 'METADATA' ? 'active' : ''} onClick={() => setFilter('METADATA')}>
           Metadata ({stats?.pending_by_type?.METADATA || 0})
         </button>
-        <button className={filter === 'MERGE' ? 'active' : ''} onClick={() => setFilter('MERGE')}>
-          Merges ({stats?.pending_by_type?.MERGE || 0})
+        <button className={filter === 'SPONSOR' ? 'active' : ''} onClick={() => setFilter('SPONSOR')}>
+          Sponsors ({stats?.pending_by_type?.SPONSOR || 0})
         </button>
-        <button className={filter === 'SPLIT' ? 'active' : ''} onClick={() => setFilter('SPLIT')}>
-          Splits ({stats?.pending_by_type?.SPLIT || 0})
+        <button className={filter === 'MERGE' ? 'active' : ''} onClick={() => setFilter('MERGE')}>
+          Lineage ({((stats?.pending_by_type?.MERGE || 0) + (stats?.pending_by_type?.SPLIT || 0))})
         </button>
       </div>
       <div className="edits-list">
@@ -118,7 +118,7 @@ export default function ModerationQueuePage() {
           </div>
         ) : (
           edits.map(edit => (
-            <div key={edit.edit_id} className="edit-card" onClick={() => setSelectedEdit(edit)} tabIndex={0} role="button" aria-pressed="false" onKeyDown={e => {if(e.key==='Enter'){setSelectedEdit(edit);}}}>
+            <div key={edit.edit_id} className="edit-card" onClick={() => setSelectedEdit(edit)} tabIndex={0} role="button" aria-pressed="false" onKeyDown={e => { if (e.key === 'Enter') { setSelectedEdit(edit); } }}>
               <div className="edit-header">
                 <span className="edit-type">{edit.edit_type}</span>
                 <span className="edit-date">{new Date(edit.created_at).toLocaleDateString()}</span>

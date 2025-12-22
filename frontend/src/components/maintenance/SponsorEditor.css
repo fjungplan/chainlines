@@ -558,3 +558,41 @@
     font-size: 0.8rem;
     height: auto;
 }
+/* -------------------------------------------------------------
+   Standardized Color Input (From SponsorManagerModal)
+------------------------------------------------------------- */
+.color-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.color-preview-wrapper {
+    width: 38px;
+    height: 38px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.color-preview-wrapper input[type="color"] {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.color-input-group input[type="text"] {
+    flex: 1;
+    font-family: monospace;
+}"

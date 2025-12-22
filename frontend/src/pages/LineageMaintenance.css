@@ -5,9 +5,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
+    margin-bottom: 20px;
     border-bottom: 3px solid var(--color-primary);
-    padding-bottom: 1rem;
+    padding-bottom: 15px;
 }
 
 .lineage-header h1 {

@@ -117,7 +117,7 @@ const LineageMaintenance = () => {
                                 className="btn btn-primary"
                                 onClick={handleAddClick}
                             >
-                                + New Event
+                                + Create New Event
                             </button>
                         )}
                     </div>
@@ -156,7 +156,7 @@ const LineageMaintenance = () => {
                                                     {event.successor_node ? (event.successor_node.display_name || event.successor_node.legal_name) : '-'}
                                                 </td>
                                                 <td style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {event.notes}
+                                                    {event.notes || '-'}
                                                 </td>
                                                 <td className="actions-col">
                                                     {canEditEvent && (
