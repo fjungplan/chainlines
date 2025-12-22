@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.api.dependencies import get_current_user, require_editor
 from app.models.user import User
-from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest, CreateTeamRequest, CreateEraEditRequest, UpdateNodeRequest
+from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest, CreateTeamRequest, CreateEraEditRequest, UpdateNodeRequest, LineageEditRequest
 from app.services.edit_service import EditService
 
 router = APIRouter(prefix="/api/v1/edits", tags=["edits"])
@@ -148,6 +148,57 @@ async def edit_node(
     """
     try:
         result = await EditService.create_node_edit(
+            session,
+            current_user,
+            request
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/lineage", response_model=EditMetadataResponse)
+async def create_lineage(
+    request: LineageEditRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Create a new lineage connection (event).
+    
+    - NEW_USER: Goes to moderation queue (PENDING)
+    - TRUSTED/ADMIN: Auto-approved
+    """
+    try:
+        result = await EditService.create_lineage_edit(
+            session,
+            current_user,
+            request
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/lineage/{event_id}", response_model=EditMetadataResponse)
+async def update_lineage(
+    event_id: str,
+    request: LineageEditRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Update an existing lineage event.
+    
+    - NEW_USER: Goes to moderation queue (PENDING)
+    - TRUSTED/ADMIN: Auto-approved (unless protected & not mod)
+    """
+    try:
+        if request.event_id and request.event_id != event_id:
+             raise ValueError("Event ID in path does not match body")
+        request.event_id = event_id # Ensure it's set
+        
+        result = await EditService.update_lineage_edit(
             session,
             current_user,
             request

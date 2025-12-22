@@ -37,18 +37,21 @@ This project tracks the evolutionary history of professional cycling teams.
     * `SPIRITUAL_SUCCESSION`: New legal entity, but same staff/riders.
     * `MERGE`: Two nodes becoming one.
     * `SPLIT`: One node becoming two.
+* `is_protected` (Boolean): If True, only `MODERATOR`/`ADMIN` can edit.
 
 ### C. Sponsor System (Many-to-Many)
 **`SponsorMaster`** (The Corporation)
 * `master_id` (UUID, PK)
 * `legal_name` (String): e.g., "Soudal Holding NV".
 * `industry_sector` (String): e.g., "Adhesives".
+* `is_protected` (Boolean): Access control flag.
 
 **`SponsorBrand`** (The Marketing Name)
 * `brand_id` (UUID, PK)
 * `master_id` (UUID, FK): Parent company.
 * `brand_name` (String): e.g., "Soudal" (or "Fix ALL" for specific races).
 * `default_hex_color` (String): e.g., "#FF0000".
+* `is_protected` (Boolean): Access control flag.
 
 **`TeamSponsorLink`** (The Connection)
 * `link_id` (UUID, PK)

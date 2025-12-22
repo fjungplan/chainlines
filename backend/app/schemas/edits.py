@@ -253,3 +253,31 @@ class UpdateNodeRequest(BaseModel):
         return v
 
 
+
+from app.models.enums import LineageEventType
+
+class LineageEditRequest(BaseModel):
+    event_id: Optional[str] = None # If present, treat as UPDATE
+    event_type: LineageEventType
+    event_year: int
+    event_date: Optional[date] = None
+    predecessor_node_id: str
+    successor_node_id: str
+    notes: Optional[str] = None
+    source_url: Optional[str] = None
+    is_protected: Optional[bool] = None
+    reason: str
+
+    @field_validator('event_year')
+    @classmethod
+    def validate_year(cls, v):
+        if v < 1900 or v > 2100:
+            raise ValueError('Year must be between 1900 and 2100')
+        return v
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v.strip()

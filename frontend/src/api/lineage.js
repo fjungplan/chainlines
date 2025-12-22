@@ -6,6 +6,18 @@ export const lineageApi = {
         return response.data;
     },
 
-    // Future: edit/delete if needed
-    // deleteEvent: async (id) => { ... }
+    getEvent: async (eventId) => {
+        const response = await api.get(`/api/v1/lineage/${eventId}`);
+        return response.data;
+    },
+
+    createEvent: async (data) => {
+        const response = await api.post('/api/v1/edits/lineage', data);
+        return response.data;
+    },
+
+    updateEvent: async (eventId, data) => {
+        const response = await api.put(`/api/v1/edits/lineage/${eventId}`, data);
+        return response.data;
+    }
 };

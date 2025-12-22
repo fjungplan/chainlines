@@ -18,7 +18,9 @@ from app.schemas.edits import (
     MergeEventRequest,
     SplitEventRequest,
     CreateTeamRequest,
+    CreateTeamRequest,
     UpdateNodeRequest,
+    LineageEditRequest,
 )
 
 
@@ -830,6 +832,225 @@ class EditService:
         await session.commit()
         await session.refresh(edit)
 
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def create_lineage_edit(
+        session: AsyncSession,
+        user: User,
+        request: LineageEditRequest
+    ) -> EditMetadataResponse:
+        """Create a new lineage connection (event)"""
+        # Validate nodes
+        try:
+            pred_id = UUID(request.predecessor_node_id)
+            succ_id = UUID(request.successor_node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node ID format")
+
+        if pred_id == succ_id:
+            raise ValueError("Predecessor and Successor cannot be the same node")
+
+        pred_node = await session.get(TeamNode, pred_id)
+        succ_node = await session.get(TeamNode, succ_id)
+
+        if not pred_node:
+            raise ValueError(f"Predecessor node {pred_id} not found")
+        if not succ_node:
+            raise ValueError(f"Successor node {succ_id} not found")
+
+        # Protection Check
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if request.is_protected and not is_mod:
+            raise ValueError("Only moderators can create protected lineage events")
+
+        snapshot_before = None # Create
+        
+        # Prepare Create Data
+        create_data = {
+            "predecessor_node_id": str(pred_node.node_id),
+            "successor_node_id": str(succ_node.node_id),
+            "event_year": request.event_year,
+            "event_type": request.event_type.value,
+            "event_date": request.event_date.isoformat() if request.event_date else None,
+            "notes": request.notes,
+            "source_url": request.source_url,
+            "is_protected": request.is_protected or False
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply Immediately
+            event = LineageEvent(
+                predecessor_node_id=pred_node.node_id,
+                successor_node_id=succ_node.node_id,
+                event_year=request.event_year,
+                event_type=request.event_type,
+                event_date=request.event_date,
+                notes=request.notes,
+                source_url=request.source_url,
+                is_protected=request.is_protected or False,
+                created_by=user.user_id
+            )
+            session.add(event)
+            await session.flush()
+
+            snapshot_after = {"event": create_data, "event_id": str(event.event_id)}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Lineage event created successfully"
+        else:
+            # Pending
+            snapshot_after = {"proposed_event": create_data}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=uuid.uuid4(), # Placeholder
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Lineage event submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def update_lineage_edit(
+        session: AsyncSession,
+        user: User,
+        request: LineageEditRequest
+    ) -> EditMetadataResponse:
+        """Update an existing lineage event"""
+        if not request.event_id:
+            raise ValueError("Event ID required for update")
+        
+        try:
+            event_id = UUID(request.event_id)
+        except ValueError:
+            raise ValueError("Invalid Event ID")
+            
+        event = await session.get(LineageEvent, event_id)
+        if not event:
+            raise ValueError("Lineage event not found")
+            
+        # Protection Check
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if event.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected lineage event")
+            
+        if request.is_protected is not None and request.is_protected != event.is_protected:
+            if not is_mod:
+                raise ValueError("Only moderators can change protection status")
+                
+        # Validate Nodes (if changing)
+        pred_id = UUID(request.predecessor_node_id)
+        succ_id = UUID(request.successor_node_id)
+        
+        if pred_id == succ_id:
+             raise ValueError("Predecessor and Successor cannot be the same node")
+
+        # Snapshot Before
+        snapshot_before = {
+            "event": {
+                "event_id": str(event.event_id),
+                "predecessor_node_id": str(event.predecessor_node_id),
+                "successor_node_id": str(event.successor_node_id),
+                "event_year": event.event_year,
+                "event_type": event.event_type.value,
+                "event_date": event.event_date.isoformat() if event.event_date else None,
+                "notes": event.notes,
+                "is_protected": event.is_protected
+            }
+        }
+        
+        changes = {
+            "predecessor_node_id": str(pred_id),
+            "successor_node_id": str(succ_id),
+            "event_year": request.event_year,
+            "event_type": request.event_type.value,
+            "event_date": request.event_date.isoformat() if request.event_date else None,
+            "notes": request.notes,
+            "source_url": request.source_url,
+            "is_protected": request.is_protected if request.is_protected is not None else event.is_protected
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply Immediately
+            event.predecessor_node_id = pred_id
+            event.successor_node_id = succ_id
+            event.event_year = request.event_year
+            event.event_type = request.event_type
+            event.event_date = request.event_date
+            event.notes = request.notes
+            event.source_url = request.source_url
+            if request.is_protected is not None:
+                event.is_protected = request.is_protected
+            
+            event.last_modified_by = user.user_id
+            event.updated_at = datetime.utcnow()
+            
+            snapshot_after = {"event": changes}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Lineage event updated successfully"
+        else:
+            # Pending
+            snapshot_after = {"proposed_event": changes}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+            
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        
         return EditMetadataResponse(
             edit_id=str(edit.edit_id),
             status=edit.status.value,

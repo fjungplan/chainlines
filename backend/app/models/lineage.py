@@ -2,7 +2,7 @@ from typing import Optional
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String
+from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String, Boolean
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base, utc_now
 from app.db.types import GUID
@@ -20,6 +20,7 @@ class LineageEvent(Base):
     event_year: Mapped[int] = mapped_column(Integer, nullable=False)
     event_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     event_type: Mapped[LineageEventType] = mapped_column(Enum(LineageEventType, name="event_type_enum", native_enum=False), nullable=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     source_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -169,15 +169,14 @@ class LineageService:
     async def list_events(
         self,
         skip: int = 0,
-        limit: int = 50
+        limit: int = 50,
+        search: Optional[str] = None
     ) -> Tuple[List[LineageEvent], int]:
-        # Count
-        count_stmt = select(func.count(LineageEvent.event_id))
-        total_result = await self.db.execute(count_stmt)
-        total = total_result.scalar()
-
-        # Query
-        stmt = (
+        """List lineage events with optional search by team name."""
+        from sqlalchemy import or_
+        
+        # Base query with eager loading
+        base_query = (
             select(LineageEvent)
             .options(
                 selectinload(LineageEvent.predecessor_node),
@@ -185,6 +184,33 @@ class LineageService:
                 selectinload(LineageEvent.created_by_user),
                 selectinload(LineageEvent.last_modified_by_user)
             )
+        )
+        
+        # Apply search filter if provided
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            # Join with TeamNode to search by name
+            base_query = base_query.join(
+                TeamNode,
+                or_(
+                    LineageEvent.predecessor_node_id == TeamNode.node_id,
+                    LineageEvent.successor_node_id == TeamNode.node_id
+                )
+            ).where(
+                or_(
+                    TeamNode.legal_name.ilike(search_term),
+                    TeamNode.display_name.ilike(search_term)
+                )
+            ).distinct()
+        
+        # Count
+        count_stmt = select(func.count()).select_from(base_query.subquery())
+        total_result = await self.db.execute(count_stmt)
+        total = total_result.scalar()
+
+        # Query with pagination
+        stmt = (
+            base_query
             .order_by(LineageEvent.event_year.desc(), LineageEvent.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -193,3 +219,38 @@ class LineageService:
         events = result.scalars().all()
         
         return list(events), total
+
+    async def get_event_by_id(self, event_id: str) -> Optional[dict]:
+        """Get a single lineage event by ID with related node info."""
+        try:
+            event_uuid = uuid.UUID(event_id)
+        except ValueError:
+            return None
+        
+        stmt = (
+            select(LineageEvent)
+            .options(
+                selectinload(LineageEvent.predecessor_node),
+                selectinload(LineageEvent.successor_node),
+            )
+            .where(LineageEvent.event_id == event_uuid)
+        )
+        result = await self.db.execute(stmt)
+        event = result.scalar_one_or_none()
+        
+        if not event:
+            return None
+        
+        return {
+            "event_id": str(event.event_id),
+            "event_type": event.event_type.value,
+            "event_year": event.event_year,
+            "event_date": event.event_date.isoformat() if event.event_date else None,
+            "predecessor_node_id": str(event.predecessor_node_id),
+            "predecessor_name": event.predecessor_node.display_name or event.predecessor_node.legal_name if event.predecessor_node else None,
+            "successor_node_id": str(event.successor_node_id),
+            "successor_name": event.successor_node.display_name or event.successor_node.legal_name if event.successor_node else None,
+            "notes": event.notes,
+            "source_url": event.source_url,
+            "is_protected": event.is_protected
+        }

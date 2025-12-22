@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { lineageApi } from '../api/lineage';
 import { useAuth } from '../contexts/AuthContext';
-import LineageEditor from '../components/maintenance/LineageEditor';
 import { LoadingSpinner } from '../components/Loading';
+import LineageEventEditor from './LineageEventEditorPage';
 import './LineageMaintenance.css';
 import './TeamMaintenancePage.css';
 
@@ -33,22 +33,24 @@ const EventTypeChip = ({ type }) => {
 
 const LineageMaintenance = () => {
     const navigate = useNavigate();
-    const { canEdit, isTrusted } = useAuth();
+    const { canEdit, isModerator, isAdmin } = useAuth();
     const [events, setEvents] = useState([]);
     const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
+    // View State
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'editor'
+    const [selectedEventId, setSelectedEventId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [showEditor, setShowEditor] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // Pagination
-    const PAGE_SIZE = 1000; // Load all events (effectively)
+    const PAGE_SIZE = 1000;
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (search = '') => {
         setIsLoading(true);
         try {
             const data = await lineageApi.listEvents({
                 skip: 0,
-                limit: PAGE_SIZE
+                limit: PAGE_SIZE,
+                search: search || undefined
             });
             setEvents(data.items);
             setTotal(data.total);
@@ -59,96 +61,130 @@ const LineageMaintenance = () => {
         }
     };
 
+    // Debounced search
     useEffect(() => {
-        fetchEvents();
-    }, []);
+        const timer = setTimeout(() => {
+            fetchEvents(searchQuery);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const handleAddClick = () => {
-        setShowEditor(true);
+        setSelectedEventId(null);
+        setViewMode('editor');
+    };
+
+    const handleEditClick = (eventId) => {
+        setSelectedEventId(eventId);
+        setViewMode('editor');
+    };
+
+    const handleCloseEditor = () => {
+        setViewMode('list');
+        setSelectedEventId(null);
+    };
+
+    const handleSuccess = () => {
+        fetchEvents(searchQuery);
+        handleCloseEditor();
     };
 
     return (
         <div className="maintenance-page-container">
-            <div className="maintenance-content-card">
-                <div className="lineage-header">
-                    <h1>Lineage Events</h1>
-                </div>
-
-                <div className="lineage-controls">
-                    {canEdit() && (
-                        <button
-                            className="btn btn-primary"
-                            onClick={handleAddClick}
-                        >
-                            + New Event
-                        </button>
-                    )}
-                </div>
-
-                <div className="team-list">
-                    {isLoading ? (
-                        <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
-                    ) : (
-                        <table className="team-table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '80px' }}>Year</th>
-                                    <th style={{ width: '120px' }}>Type</th>
-                                    <th>Predecessor</th>
-                                    <th>Successor</th>
-                                    <th>Notes</th>
-                                    <th className="actions-col">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {events.map((event) => (
-                                    <tr key={event.event_id}>
-                                        <td>{event.event_year}</td>
-                                        <td>
-                                            <EventTypeChip type={event.event_type} />
-                                        </td>
-                                        <td>
-                                            {event.predecessor_node ? (event.predecessor_node.display_name || event.predecessor_node.legal_name) : '-'}
-                                        </td>
-                                        <td>
-                                            {event.successor_node ? (event.successor_node.display_name || event.successor_node.legal_name) : '-'}
-                                        </td>
-                                        <td style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {event.notes}
-                                        </td>
-                                        <td className="actions-col">
-                                            {canEdit() && (
-                                                <button className="edit-button" disabled title="Editing existing events is not yet supported">
-                                                    Edit
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {events.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>No events found</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            </div>
-
-            {/* Editor Dialog */}
-            {showEditor && (
-                <LineageEditor
-                    open={showEditor}
-                    onClose={() => setShowEditor(false)}
-                    onSuccess={() => {
-                        fetchEvents();
-                        setShowEditor(false);
-                    }}
+            {viewMode === 'editor' ? (
+                <LineageEventEditor
+                    eventId={selectedEventId}
+                    onClose={handleCloseEditor}
+                    onSuccess={handleSuccess}
                 />
+            ) : (
+                <div className="maintenance-content-card">
+                    <div className="lineage-header">
+                        <h1>Lineage Events</h1>
+                    </div>
+
+                    <div className="lineage-controls">
+                        <input
+                            type="text"
+                            placeholder="Search by team name (predecessor or successor)..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="search-input"
+                            style={{ flex: 1, marginRight: '1rem' }}
+                        />
+                        {canEdit() && (
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleAddClick}
+                            >
+                                + New Event
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="team-list">
+                        {isLoading ? (
+                            <div style={{ padding: '2rem' }}><LoadingSpinner /></div>
+                        ) : (
+                            <table className="team-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '80px' }}>Year</th>
+                                        <th style={{ width: '120px' }}>Type</th>
+                                        <th>Predecessor</th>
+                                        <th>Successor</th>
+                                        <th>Notes</th>
+                                        <th className="actions-col">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {events.map((event) => {
+                                        const isProtectedEvent = event.is_protected;
+                                        const canEditEvent = canEdit() && (!isProtectedEvent || isModerator() || isAdmin());
+
+                                        return (
+                                            <tr key={event.event_id}>
+                                                <td>{event.event_year}</td>
+                                                <td>
+                                                    <EventTypeChip type={event.event_type} />
+                                                    {isProtectedEvent && <span title="Protected">🛡️</span>}
+                                                </td>
+                                                <td>
+                                                    {event.predecessor_node ? (event.predecessor_node.display_name || event.predecessor_node.legal_name) : '-'}
+                                                </td>
+                                                <td>
+                                                    {event.successor_node ? (event.successor_node.display_name || event.successor_node.legal_name) : '-'}
+                                                </td>
+                                                <td style={{ maxWidth: '300px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {event.notes}
+                                                </td>
+                                                <td className="actions-col">
+                                                    {canEditEvent && (
+                                                        <button
+                                                            className="edit-button"
+                                                            onClick={() => handleEditClick(event.event_id)}
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {events.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>No events found</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
 };
 
 export default LineageMaintenance;
+
