@@ -65,10 +65,21 @@ class TeamService:
             tier_level=tier_level,
         )
         # Defensive: ensure eras are attached to each node to avoid async lazy-loads later
+        # Also compute dynamic fields (latest_team_name, current_tier) for list view
         for n in nodes:
             if 'eras' not in n.__dict__:
                 eras = await TeamRepository.get_eras_for_node(session, n.node_id)
                 n.__dict__['eras'] = eras
+            else:
+                eras = n.eras
+            
+            if eras:
+                # Find latest era by season_year
+                latest_era = max(eras, key=lambda e: e.season_year)
+                n.latest_team_name = latest_era.display_name
+                n.latest_uci_code = latest_era.uci_code
+                n.current_tier = latest_era.tier_level
+                
         return nodes, total
 
     @staticmethod

@@ -27,14 +27,65 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
     const [isCountryOpen, setIsCountryOpen] = useState(false);
 
+    const [prefilledSponsors, setPrefilledSponsors] = useState([]);
+
     useEffect(() => {
         if (eraId) {
             loadEraData();
+            setPrefilledSponsors([]);
+        } else if (nodeId) {
+            loadLatestEraForPrepopulation();
         } else {
             setFormData(prev => ({ ...prev, registered_name: `Team ${prev.season_year}` }));
             setLoading(false);
         }
-    }, [eraId]);
+    }, [eraId, nodeId]);
+
+    const loadLatestEraForPrepopulation = async () => {
+        setLoading(true);
+        try {
+            const eras = await teamsApi.getTeamEras(nodeId);
+            if (eras && eras.length > 0) {
+                // Find latest by season_year
+                const sorted = eras.sort((a, b) => b.season_year - a.season_year);
+                const latest = sorted[0];
+                const nextYear = latest.season_year + 1;
+
+                setFormData({
+                    season_year: nextYear,
+                    valid_from: `${nextYear}-01-01`,
+                    registered_name: latest.registered_name,
+                    tier_level: latest.tier_level,
+                    uci_code: latest.uci_code || '',
+                    country_code: latest.country_code || ''
+                });
+
+                // Fetch sponsors to pre-populate
+                try {
+                    const links = await sponsorsApi.getEraLinks(latest.era_id);
+                    if (links.length > 0) {
+                        setPrefilledSponsors(links);
+                        // Populate stats for display
+                        const total = links.reduce((s, l) => s + l.prominence_percent, 0);
+                        const sortedLinks = [...links].sort((a, b) => a.rank_order - b.rank_order);
+                        setStats({
+                            count: links.length,
+                            totalProminence: total,
+                            allSponsors: sortedLinks
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Failed to load prev sponsors", e);
+                }
+            } else {
+                setFormData(prev => ({ ...prev, registered_name: `Team ${prev.season_year}` }));
+            }
+        } catch (e) {
+            console.error("Pre-pop failed", e);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const loadEraData = async () => {
         setLoading(true);
@@ -98,6 +149,31 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
             } else {
                 const res = await teamsApi.createTeamEra(nodeId, payload);
                 resultId = res.era_id;
+
+                // Copy sponsors if pre-filled
+                if (prefilledSponsors.length > 0) {
+                    try {
+                        const uniqueBrands = new Set();
+                        // Filter duplicates just in case, though logically shouldn't be any
+                        const sponsorPayload = prefilledSponsors
+                            .filter(l => {
+                                const bid = l.brand?.brand_id || l.brand_id;
+                                if (uniqueBrands.has(bid)) return false;
+                                uniqueBrands.add(bid);
+                                return true;
+                            })
+                            .map(l => ({
+                                brand_id: l.brand?.brand_id || l.brand_id,
+                                rank_order: l.rank_order,
+                                prominence_percent: l.prominence_percent,
+                                hex_color_override: l.hex_color_override
+                            }));
+                        await sponsorsApi.replaceEraLinks(resultId, sponsorPayload);
+                    } catch (spErr) {
+                        console.error("Failed to copy sponsors", spErr);
+                    }
+                }
+
                 if (onSuccess) onSuccess(resultId);
             }
 
@@ -131,6 +207,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
     // Callback for right-col clicks: navigate to sibling era (Switch ID). 
     // Parent handles "onSuccess" usually as "Back", but if we pass a specific ID, parent should switch view.
     // We reuse onSuccess signature: if (id) -> switch, if () -> back.
+    // If id === 'NEW', switch to create mode.
     const handleEraSwitch = (newId) => {
         if (onSuccess) onSuccess(newId);
     };
@@ -256,17 +333,23 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                         </div>
 
                         {/* Sponsor Section */}
-                        {eraId && (
+                        {(eraId || stats) && (
                             <div className="era-sponsors-section">
                                 <div className="section-header">
                                     <label>Era Sponsors</label>
-                                    <button
-                                        className="secondary-btn small"
-                                        type="button"
-                                        onClick={() => setIsSponsorModalOpen(true)}
-                                    >
-                                        Manage Sponsors
-                                    </button>
+                                    {eraId ? (
+                                        <button
+                                            className="secondary-btn small"
+                                            type="button"
+                                            onClick={() => setIsSponsorModalOpen(true)}
+                                        >
+                                            Manage Sponsors
+                                        </button>
+                                    ) : (
+                                        <span style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
+                                            (Sponsors copied from previous era. Save to edit.)
+                                        </span>
+                                    )}
                                 </div>
 
                                 {stats ? (
@@ -297,14 +380,14 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 <div className="editor-column brands-column">
                     <div className="column-header">
                         <h3>Team Timeline</h3>
-                        <button className="secondary-btn small" onClick={() => handleEraSwitch(null)}>
+                        <button className="secondary-btn small" onClick={() => handleEraSwitch('NEW')}>
                             + New Era
                         </button>
                     </div>
                     <TeamEraBubbles
                         nodeId={nodeId}
                         onEraSelect={handleEraSwitch}
-                        onCreateEra={() => handleEraSwitch(null)}
+                        onCreateEra={() => handleEraSwitch('NEW')}
                     />
                 </div>
             </div>
@@ -356,6 +439,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 isOpen={isSponsorModalOpen}
                 onClose={() => setIsSponsorModalOpen(false)}
                 eraId={eraId}
+                seasonYear={formData.season_year}
                 onUpdate={loadSponsorStats}
             />
         </div>

@@ -23,6 +23,8 @@ export default function TeamMaintenancePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    // Sorting State
+    const [sortConfig, setSortConfig] = useState({ key: 'legal_name', direction: 'asc' });
 
     const fetchTeams = async () => {
         setLoading(true);
@@ -42,6 +44,33 @@ export default function TeamMaintenancePage() {
     useEffect(() => {
         fetchTeams();
     }, []);
+
+    // --- Sorting Logic ---
+    const handleSort = (key) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const sortedTeams = [...teams].sort((a, b) => {
+        const { key, direction } = sortConfig;
+        let valA = a[key];
+        let valB = b[key];
+
+        // Handle string comparison case-insensitively
+        if (typeof valA === 'string') valA = valA.toLowerCase();
+        if (typeof valB === 'string') valB = valB.toLowerCase();
+
+        // Handle nulls always at bottom? Or standard behavior.
+        // Let's treat null as low value
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
 
     // --- Actions ---
 
@@ -98,7 +127,10 @@ export default function TeamMaintenancePage() {
 
     const handleEraSuccess = (newEraId) => {
         // If searching/switching within Era Editor:
-        if (newEraId) {
+        if (newEraId === 'NEW') {
+            setSelectedEraId(null);
+            setViewMode('era');
+        } else if (newEraId) {
             setSelectedEraId(newEraId);
             // Ensure we stay in era view?
             setViewMode('era');
@@ -163,25 +195,35 @@ export default function TeamMaintenancePage() {
                                 <table className="team-table">
                                     <thead>
                                         <tr>
-                                            <th>Legal Name</th>
-                                            <th>Founding Year</th>
-                                            <th>Dissolution</th>
-                                            <th>Active</th>
-                                            <th>Current Tier</th>
+                                            <th onClick={() => handleSort('legal_name')} className="sortable">
+                                                Legal Name {sortConfig.key === 'legal_name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th onClick={() => handleSort('latest_team_name')} className="sortable">
+                                                Current Name {sortConfig.key === 'latest_team_name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th onClick={() => handleSort('founding_year')} className="sortable">
+                                                Founding {sortConfig.key === 'founding_year' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th onClick={() => handleSort('dissolution_year')} className="sortable">
+                                                Dissolution {sortConfig.key === 'dissolution_year' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th onClick={() => handleSort('is_active')} className="sortable">
+                                                Active {sortConfig.key === 'is_active' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </th>
                                             <th className="actions-col">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {teams.map(team => (
+                                        {sortedTeams.map(team => (
                                             <tr key={team.node_id}>
                                                 <td>
                                                     <div className="team-name">{team.legal_name}</div>
                                                     {team.is_protected && <span className="protected-badge" title="Protected Record">🛡️</span>}
                                                 </td>
+                                                <td>{team.latest_team_name || '-'}</td>
                                                 <td>{team.founding_year}</td>
                                                 <td>{team.dissolution_year || '-'}</td>
                                                 <td>{team.is_active ? 'Yes' : 'No'}</td>
-                                                <td>{team.current_tier || '-'}</td>
                                                 <td className="actions-col">
                                                     <button
                                                         className="edit-button"

@@ -3,7 +3,7 @@ import { sponsorsApi } from '../../api/sponsors';
 import { LoadingSpinner } from '../Loading';
 import './SponsorManagerModal.css';
 
-export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }) {
+export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, seasonYear }) {
     if (!isOpen) return null;
 
     const [links, setLinks] = useState([]);
@@ -48,6 +48,12 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
     // Search Brands
     useEffect(() => {
         const delaySearch = setTimeout(async () => {
+            // Don't search if the term matches the currently selected brand (avoid reopening on edit)
+            if (selectedBrand && searchTerm === selectedBrand.brand_name) {
+                setSearchResults([]);
+                return;
+            }
+
             if (searchTerm.length >= 2) {
                 try {
                     const results = await sponsorsApi.searchBrands(searchTerm);
@@ -60,7 +66,7 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
             }
         }, 500);
         return () => clearTimeout(delaySearch);
-    }, [searchTerm]);
+    }, [searchTerm, selectedBrand]);
 
     const handleAddClick = () => {
         setIsAdding(true);
@@ -191,8 +197,7 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
         <div className="modal-overlay">
             <div className="modal-content sponsor-manager-modal">
                 <div className="modal-header">
-                    <h2>Manage Sponsors</h2>
-                    <h2>Manage Sponsors</h2>
+                    <h2>Manage Sponsors {seasonYear ? `- ${seasonYear}` : ''}</h2>
                     {/* Replaced top Close button with just an X that warns or functionality driven by bottom button? 
                         User said: "only thn can I leave the modal by clicking a separate save&close button"
                         But usually X is safe "Cancel/Dismiss without saving further". 
@@ -301,37 +306,39 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
                                     )}
                                 </div>
 
-                                <div className="form-group">
-                                    <label>Prominence % *</label>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="100"
-                                            value={prominence}
-                                            onChange={e => setProminence(parseInt(e.target.value))}
-                                            style={{ flex: 1 }}
-                                        />
-                                        <span style={{ color: '#666', fontSize: '0.9rem' }}>%</span>
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Hex Color</label>
-                                    <div className="color-input-group">
-                                        <div className="color-preview-wrapper" style={{ background: colorOverride }}>
+                                <div className="form-row-group" style={{ display: 'flex', gap: '1rem' }}>
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <label>Prominence % *</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <input
-                                                type="color"
+                                                type="number"
+                                                min="1"
+                                                max="100"
+                                                value={prominence}
+                                                onChange={e => setProminence(parseInt(e.target.value))}
+                                                style={{ flex: 1 }}
+                                            />
+                                            <span style={{ color: '#666', fontSize: '0.9rem' }}>%</span>
+                                        </div>
+                                    </div>
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <label>Hex Color</label>
+                                        <div className="color-input-group">
+                                            <div className="color-preview-wrapper" style={{ background: colorOverride }}>
+                                                <input
+                                                    type="color"
+                                                    value={colorOverride}
+                                                    onChange={e => setColorOverride(e.target.value)}
+                                                    title="Choose color"
+                                                />
+                                            </div>
+                                            <input
+                                                type="text"
                                                 value={colorOverride}
                                                 onChange={e => setColorOverride(e.target.value)}
-                                                title="Choose color"
+                                                placeholder="#RRGGBB"
                                             />
                                         </div>
-                                        <input
-                                            type="text"
-                                            value={colorOverride}
-                                            onChange={e => setColorOverride(e.target.value)}
-                                            placeholder="#RRGGBB"
-                                        />
                                     </div>
                                 </div>
                                 <div className="form-actions" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #444' }}>
