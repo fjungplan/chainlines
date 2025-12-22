@@ -190,11 +190,11 @@ class SponsorService:
         if existing_rank:
              raise ValidationException(f"Rank {rank_order} is already occupied for this era")
 
-        # Check total prominence
-        existing_links = await SponsorService.get_era_sponsor_links(session, era_id)
-        current_total = sum(l.prominence_percent for l in existing_links)
-        if current_total + prominence_percent > 100:
-             raise ValidationException(f"Total prominence cannot exceed 100%. Current: {current_total}%, Adding: {prominence_percent}%")
+        # Check total prominence - REMOVED for flexibility
+        # existing_links = await SponsorService.get_era_sponsor_links(session, era_id)
+        # current_total = sum(l.prominence_percent for l in existing_links)
+        # if current_total + prominence_percent > 100:
+        #      raise ValidationException(f"Total prominence cannot exceed 100%. Current: {current_total}%, Adding: {prominence_percent}%")
 
         link = TeamSponsorLink(
             era_id=era_id,
@@ -208,6 +208,106 @@ class SponsorService:
         await session.commit()
         await session.refresh(link)
         return link
+
+    @staticmethod
+    async def update_sponsor_link(
+        session: AsyncSession,
+        link_id: UUID,
+        prominence_percent: int,
+        rank_order: int,
+        hex_color_override: Optional[str] = None,
+        user_id: Optional[UUID] = None
+    ) -> Optional[TeamSponsorLink]:
+        stmt = select(TeamSponsorLink).where(TeamSponsorLink.link_id == link_id)
+        link = (await session.execute(stmt)).scalar_one_or_none()
+        
+        if not link:
+            return None
+
+        # Validate prominence
+        if prominence_percent <= 0 or prominence_percent > 100:
+            raise ValidationException("Prominence must be between 1 and 100")
+
+        # Check rank collision if rank changed
+        if link.rank_order != rank_order:
+             stmt = select(TeamSponsorLink).where(
+                TeamSponsorLink.era_id == link.era_id, 
+                TeamSponsorLink.rank_order == rank_order
+            )
+             existing_rank = (await session.execute(stmt)).scalar_one_or_none()
+             if existing_rank:
+                 raise ValidationException(f"Rank {rank_order} is already occupied for this era")
+
+        link.prominence_percent = prominence_percent
+        link.rank_order = rank_order
+        link.hex_color_override = hex_color_override
+        link.last_modified_by = user_id
+
+        await session.commit()
+        await session.refresh(link)
+        return link
+
+    @staticmethod
+    async def replace_era_sponsor_links(
+        session: AsyncSession,
+        era_id: UUID,
+        links_data: List[dict],
+        user_id: Optional[UUID] = None
+    ) -> List[TeamSponsorLink]:
+        """
+        Replace all sponsor links for an era with a new set.
+        strictly validates total prominence == 100% for the new set.
+        """
+        # 1. Validate constraints of the new set
+        total_prominence = sum(l['prominence_percent'] for l in links_data)
+        if abs(total_prominence - 100) > 0.1: # float tolerance just in case, though int used
+             raise ValidationException(f"Total prominence must be exactly 100%. Got {total_prominence}%")
+        
+        ranks = [l['rank_order'] for l in links_data]
+        if len(ranks) != len(set(ranks)):
+             raise ValidationException("Duplicate rank orders are not allowed")
+             
+        # 2. Delete existing links
+        stmt = select(TeamSponsorLink).where(TeamSponsorLink.era_id == era_id)
+        existing_links = (await session.execute(stmt)).scalars().all()
+        
+        for link in existing_links:
+            await session.delete(link)
+            
+        # Flush to ensure deletions are processed before insertions to avoid UniqueConstraint violations
+        await session.flush()
+            
+        # 3. Create new links
+        new_links = []
+        for data in links_data:
+            link = TeamSponsorLink(
+                era_id=era_id,
+                brand_id=data['brand_id'],
+                # If these come from creating a new list, they might not have link_id yet, 
+                # or if we are just re-creating, we generate new IDs. 
+                # Simpler to treat as new inserts.
+                rank_order=data['rank_order'],
+                prominence_percent=data['prominence_percent'],
+                hex_color_override=data.get('hex_color_override'),
+                created_by=user_id,
+                last_modified_by=user_id
+            )
+            session.add(link)
+            new_links.append(link)
+            
+        await session.commit()
+        
+        # Re-fetch with eager loading for response serialization
+        # This prevents "Lazy load operation of attribute..." errors during Pydantic validation
+        stmt = (
+            select(TeamSponsorLink)
+            .options(selectinload(TeamSponsorLink.brand))
+            .where(TeamSponsorLink.era_id == era_id)
+            .order_by(TeamSponsorLink.rank_order)
+        )
+        final_links = (await session.execute(stmt)).scalars().all()
+        
+        return final_links
 
     @staticmethod
     async def validate_era_sponsors(session: AsyncSession, era_id: UUID) -> dict:

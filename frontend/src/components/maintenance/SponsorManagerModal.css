@@ -163,6 +163,20 @@
     border-bottom: none;
 }
 
+.mini-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+.mini-table tbody tr:hover {
+    background-color: #333;
+}
+
+.mini-table tbody tr.selected-row {
+    background-color: rgba(74, 144, 226, 0.15);
+    border-left: 3px solid #4A90E2;
+}
+
 .brand-cell {
     display: flex;
     align-items: center;
@@ -430,4 +444,73 @@
     border-radius: 6px;
     margin-bottom: 1rem;
     font-size: 0.9rem;
+}
+
+/* Modal Footer Actions */
+.modal-footer-action {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.save-close-btn {
+    width: 100%;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-close-btn.active {
+    background-color: #10b981;
+    color: white;
+}
+
+.save-close-btn.active:hover {
+    background-color: #059669;
+}
+
+.save-close-btn.disabled {
+    background-color: #333;
+    color: #666;
+    cursor: not-allowed;
+    border: 1px solid #444;
+}
+
+.prominence-warning {
+    text-align: center;
+    color: #fd7e7e;
+    font-size: 0.85rem;
+}
+
+.text-btn.small {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    background: none;
+    border: 1px solid #555;
+    color: #ccc;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.text-btn.small:hover {
+    background: #444;
+    color: #fff;
+}
+
+.form-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.form-header-row h4 {
+    margin: 0;
 }

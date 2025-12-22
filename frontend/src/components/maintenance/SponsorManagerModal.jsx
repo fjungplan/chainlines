@@ -10,8 +10,9 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Add Mode
+    // State for managing current work
     const [isAdding, setIsAdding] = useState(false);
+    const [editingLink, setEditingLink] = useState(null); // The full link object being edited
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     // Form for new link
@@ -39,6 +40,11 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
         }
     };
 
+    // Warn on unsaved changes if closing not via Save & Close
+    // We can't easily block the 'X' button or overlay click without custom onClose logic in parent, 
+    // but we can add a confirm if they try to close and total != 100 or just generic "discard changes?"
+    // For now, relies on user intent as per plan.
+
     // Search Brands
     useEffect(() => {
         const delaySearch = setTimeout(async () => {
@@ -58,6 +64,7 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
 
     const handleAddClick = () => {
         setIsAdding(true);
+        setEditingLink(null);
         // Default rank order to next available (backend requirement)
         const nextRank = links.length > 0 ? Math.max(...links.map(l => l.rank_order)) + 1 : 1;
         setRankOrder(nextRank);
@@ -73,50 +80,127 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
         setSearchResults([]); // Hide list
     };
 
+    const handleEditClick = (link) => {
+        setEditingLink(link);
+        setIsAdding(false);
+
+        setSelectedBrand(link.brand);
+        setRankOrder(link.rank_order);
+        setProminence(link.prominence_percent);
+        setColorOverride(link.hex_color_override || link.brand?.default_hex_color);
+        setSearchTerm(link.brand?.brand_name || '');
+    };
+
     const calculateTotalProminence = () => {
         return links.reduce((sum, link) => sum + link.prominence_percent, 0);
     };
 
-    const handleSaveLink = async () => {
+    const handleSaveLink = () => {
         if (!selectedBrand) return;
+        // Local validation only
+        const otherLinks = links.filter(l => editingLink ? l.brand?.brand_id !== editingLink.brand?.brand_id : true);
+        if (otherLinks.some(l => l.brand?.brand_id === selectedBrand.brand_id)) {
+            setError("This brand is already a sponsor");
+            return;
+        }
+
+        const newLink = {
+            link_id: editingLink?.link_id || `temp-${Date.now()}`,
+            brand_id: selectedBrand.brand_id,
+            brand: selectedBrand,
+            rank_order: rankOrder,
+            prominence_percent: prominence,
+            hex_color_override: colorOverride
+        };
+
+        if (editingLink) {
+            setLinks(prev => {
+                const updated = prev.map(l => l.link_id === editingLink.link_id ? newLink : l);
+                return updated.sort((a, b) => b.prominence_percent - a.prominence_percent);
+            });
+        } else {
+            setLinks(prev => {
+                const updated = [...prev, newLink];
+                return updated.sort((a, b) => b.prominence_percent - a.prominence_percent);
+            });
+        }
+
+        if (isAdding) {
+            handleAddClick();
+        } else {
+            setEditingLink(null);
+            setSelectedBrand(null);
+            setSearchTerm('');
+        }
+        setError(null);
+    };
+
+    // Check if we can close
+    const canClose = Math.abs(calculateTotalProminence() - 100) < 0.1; // Float safety measures
+
+    const handleSaveAndClose = async () => {
+        if (!canClose) return;
         setSubmitting(true);
         setError(null);
         try {
-            await sponsorsApi.linkSponsor(eraId, {
-                brand_id: selectedBrand.brand_id,
-                rank_order: rankOrder,
-                prominence_percent: prominence,
-                hex_color_override: colorOverride
-            });
-            await loadLinks();
-            setIsAdding(false);
+            // Send batch update
+            const payload = links.map(l => ({
+                brand_id: l.brand.brand_id || l.brand_id,
+                rank_order: l.rank_order,
+                prominence_percent: l.prominence_percent,
+                hex_color_override: l.hex_color_override
+            }));
+
+            await sponsorsApi.replaceEraLinks(eraId, payload);
             if (onUpdate) onUpdate();
+            onClose();
         } catch (err) {
-            setError(err.response?.data?.detail || "Failed to add sponsor");
+            console.error(err);
+            setError(err.response?.data?.detail || "Failed to save changes");
         } finally {
             setSubmitting(false);
         }
     };
 
-    const handleRemoveLink = async (linkId) => {
+    const handleRemoveLink = (linkId) => {
         if (!window.confirm("Remove this sponsor?")) return;
-        try {
-            await sponsorsApi.removeLink(linkId);
-            await loadLinks();
-            if (onUpdate) onUpdate();
-        } catch (err) {
-            setError("Failed to remove sponsor");
+        setLinks(prev => prev.filter(l => l.link_id !== linkId));
+        if (editingLink?.link_id === linkId) {
+            setEditingLink(null);
+            setSelectedBrand(null);
+            setSearchTerm('');
         }
     };
 
     const totalProminence = calculateTotalProminence();
+
+    const handleClose = () => {
+        // Warn if changes might be lost (simple check if local state doesn't match loaded? 
+        // For now just check invalid state per user request context)
+        if (links.length > 0 && Math.abs(calculateTotalProminence() - 100) > 0.1) {
+            if (!window.confirm("Total prominence is not 100%. Changes will be lost. Close anyway?")) {
+                return;
+            }
+        }
+        onClose();
+    };
+
+
 
     return (
         <div className="modal-overlay">
             <div className="modal-content sponsor-manager-modal">
                 <div className="modal-header">
                     <h2>Manage Sponsors</h2>
-                    <button className="close-btn" onClick={onClose}>
+                    <h2>Manage Sponsors</h2>
+                    {/* Replaced top Close button with just an X that warns or functionality driven by bottom button? 
+                        User said: "only thn can I leave the modal by clicking a separate save&close button"
+                        But usually X is safe "Cancel/Dismiss without saving further". 
+                        Since we save immediately on "Save" button, X is fine to just close. 
+                        But we should probably encourage the bottom button. 
+                        Let's keep X for emergency exit. 
+                    */}
+                    <button className="close-btn" onClick={handleClose} title="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
@@ -146,7 +230,11 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
                                     </thead>
                                     <tbody>
                                         {links.map(link => (
-                                            <tr key={link.link_id}>
+                                            <tr
+                                                key={link.link_id}
+                                                onClick={() => handleEditClick(link)}
+                                                className={editingLink?.link_id === link.link_id ? 'selected-row' : ''}
+                                            >
                                                 <td>{link.rank_order}</td>
                                                 <td>
                                                     <div className="brand-cell">
@@ -156,7 +244,11 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
                                                 </td>
                                                 <td>{link.prominence_percent}%</td>
                                                 <td>
-                                                    <button className="icon-btn delete" onClick={() => handleRemoveLink(link.link_id)} title="Remove Sponsor">
+                                                    <button
+                                                        className="icon-btn delete"
+                                                        onClick={(e) => { e.stopPropagation(); handleRemoveLink(link.link_id); }}
+                                                        title="Remove Sponsor"
+                                                    >
                                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
                                                         </svg>
@@ -170,20 +262,33 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
                         )}
                     </div>
 
-                    {/* RIGHT COLUMN: Add Form */}
                     <div className="modal-column-right">
                         {error && <div className="error-banner">{error}</div>}
 
                         <div className="add-sponsor-container">
-                            <h4>Add Sponsor</h4>
+                            <div className="form-header-row">
+                                <h4>{editingLink ? 'Edit Sponsor' : 'Add Sponsor'}</h4>
+                                {editingLink && (
+                                    <button className="text-btn small" onClick={handleAddClick}>
+                                        + New
+                                    </button>
+                                )}
+                            </div>
                             <div className="add-sponsor-form">
                                 <div className="form-group search-group">
-                                    <label>Search Brand *</label>
+                                    <label>Brand *</label>
                                     <input
                                         type="text"
                                         value={searchTerm}
-                                        onChange={e => setSearchTerm(e.target.value)}
+                                        onChange={e => {
+                                            setSearchTerm(e.target.value);
+                                            if (selectedBrand && e.target.value !== selectedBrand.brand_name) {
+                                                // If start typing new name, clear selection
+                                                setSelectedBrand(null);
+                                            }
+                                        }}
                                         placeholder="Type brand name..."
+                                        disabled={!!editingLink} // Lock brand when editing existing link
                                     />
                                     {searchResults.length > 0 && (
                                         <ul className="dropdown-results">
@@ -235,21 +340,34 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate }
                                         onClick={() => {
                                             setSelectedBrand(null);
                                             setSearchTerm('');
-                                            // Reset other fields if desired, but keeping previous values is often UX-friendly
+                                            setEditingLink(null);
                                         }}
                                     >
-                                        Clear
+                                        Cancel
                                     </button>
                                     <button
                                         className="footer-btn save"
                                         onClick={handleSaveLink}
-                                        disabled={submitting || !selectedBrand}
-                                        title={!selectedBrand ? "Select a brand first" : "Add Link"}
+                                        disabled={!selectedBrand}
+                                        title={!selectedBrand ? "Select a brand first" : (editingLink ? "Update Link" : "Add Link")}
                                     >
-                                        {submitting ? 'Adding...' : 'Add Link'}
+                                        {editingLink ? 'Update' : 'Add'}
                                     </button>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* New Footer for Modal Exit */}
+                        <div className="modal-footer-action">
+                            <button
+                                className={`save-close-btn ${canClose ? 'active' : 'disabled'}`}
+                                onClick={handleSaveAndClose}
+                                disabled={!canClose || submitting}
+                                title={canClose ? "Save & Close" : "Total prominence must be 100%"}
+                            >
+                                {submitting ? 'Saving...' : 'Save & Close'}
+                            </button>
+                            {!canClose && <div className="prominence-warning">Total must be 100%</div>}
                         </div>
                     </div>
                 </div>

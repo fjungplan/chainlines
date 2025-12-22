@@ -159,6 +159,37 @@ async def delete_brand(
 
 # --- Era Links ---
 
+# --- Era Links ---
+
+@router.put("/eras/{era_id}/links", response_model=List[TeamSponsorLinkResponse])
+async def replace_era_links(
+    era_id: UUID,
+    links: List[TeamSponsorLinkCreate],
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Replace ALL sponsor links for an era with a new list.
+    Required for "Batch Save" operations.
+    Validates that total prominence is exactly 100%.
+    """
+    # Convert Pydantic models to dicts
+    links_data = [l.model_dump() for l in links]
+    
+    try:
+        new_links = await SponsorService.replace_era_sponsor_links(
+            session,
+            era_id,
+            links_data,
+            current_user.user_id
+        )
+        return new_links
+    except Exception as e:
+        # Pass through validation exceptions
+        if "ValidationException" in str(type(e)):
+             raise HTTPException(status_code=400, detail=str(e))
+        raise e
+
 @router.get("/eras/{era_id}/links", response_model=List[TeamSponsorLinkResponse])
 async def get_era_links(
     era_id: UUID,
@@ -185,6 +216,31 @@ async def link_sponsor_to_era(
         data.prominence_percent,
         current_user.user_id
     )
+
+@router.put("/eras/links/{link_id}", response_model=TeamSponsorLinkResponse)
+async def update_sponsor_link(
+    link_id: UUID,
+    data: TeamSponsorLinkCreate, # Reusing Create schema as it has the same fields we need (rank, prominence, color, brand_id ignored)
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Update a sponsor link (prominence, rank, color).
+    Does NOT strictly validate total prominence <= 100%.
+    """
+    # Note: data.brand_id is ignored for updates usually, or we can enforce it matches current
+    # For now, we only update mutable fields
+    link = await SponsorService.update_sponsor_link(
+        session,
+        link_id,
+        data.prominence_percent,
+        data.rank_order,
+        data.hex_color_override,
+        current_user.user_id
+    )
+    if not link:
+        raise HTTPException(status_code=404, detail="Sponsor link not found")
+    return link
 
 @router.delete("/eras/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_sponsor_link(

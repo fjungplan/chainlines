@@ -64,8 +64,18 @@ export const sponsorsApi = {
         return response.data;
     },
 
+    updateLink: async (linkId, data) => {
+        const response = await apiClient.put(`/api/v1/sponsors/eras/links/${linkId}`, data);
+        return response.data;
+    },
+
     removeLink: async (linkId) => {
         const response = await apiClient.delete(`/api/v1/sponsors/eras/links/${linkId}`);
+        return response.data;
+    },
+
+    replaceEraLinks: async (eraId, links) => {
+        const response = await apiClient.put(`/api/v1/sponsors/eras/${eraId}/links`, links);
         return response.data;
     }
 };
