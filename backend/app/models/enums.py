@@ -29,3 +29,4 @@ class EditType(str, enum.Enum):
     MERGE = "MERGE"
     SPLIT = "SPLIT"
     CREATE = "CREATE"
+    SPONSOR = "SPONSOR"

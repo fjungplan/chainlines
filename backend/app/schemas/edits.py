@@ -12,7 +12,7 @@ class EditMetadataRequest(BaseModel):
     valid_from: Optional[date] = None
     founding_year: Optional[int] = None
     dissolution_year: Optional[int] = None
-    reason: str  # Why this edit is being made
+    reason: Optional[str] = None  # Why this edit is being made
     
     @field_validator('uci_code')
     @classmethod
@@ -45,9 +45,11 @@ class EditMetadataRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
-        if len(v) < 10:
+        if not v or not v.strip():
+            return v
+        if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
-        return v
+        return v.strip()
 
 
 class CreateTeamRequest(BaseModel):
@@ -96,11 +98,11 @@ class CreateTeamRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
-        if v is None:
+        if not v or not v.strip():
             return v
-        if len(v) < 10:
+        if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
-        return v
+        return v.strip()
 
 class EditMetadataResponse(BaseModel):
     model_config = {"from_attributes": True}
@@ -115,7 +117,7 @@ class MergeEventRequest(BaseModel):
     merge_year: int
     new_team_name: str
     new_team_tier: int
-    reason: str
+    reason: Optional[str] = None
     
     @field_validator('source_node_ids')
     @classmethod
@@ -153,6 +155,8 @@ class MergeEventRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
         if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
         return v.strip()
@@ -183,7 +187,7 @@ class SplitEventRequest(BaseModel):
     source_node_id: str  # Team being split
     split_year: int
     new_teams: list[NewTeamInfo]  # 2-5 new teams
-    reason: str
+    reason: Optional[str] = None
     
     @field_validator('new_teams')
     @classmethod
@@ -205,6 +209,8 @@ class SplitEventRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
         if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
         return v.strip()
@@ -222,9 +228,11 @@ class CreateEraEditRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
-        if v and len(v.strip()) < 10:
+        if not v or not v.strip():
+            return v
+        if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
-        return v
+        return v.strip()
 
 
 class UpdateNodeRequest(BaseModel):
@@ -236,14 +244,16 @@ class UpdateNodeRequest(BaseModel):
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
     is_protected: Optional[bool] = None # Only modifiable if user has rights, checked in service
-    reason: str
+    reason: Optional[str] = None
 
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
         if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
-        return v
+        return v.strip()
 
     @field_validator('founding_year')
     @classmethod
@@ -266,7 +276,7 @@ class LineageEditRequest(BaseModel):
     notes: Optional[str] = None
     source_url: Optional[str] = None
     is_protected: Optional[bool] = None
-    reason: str
+    reason: Optional[str] = None
 
     @field_validator('event_year')
     @classmethod
@@ -278,6 +288,65 @@ class LineageEditRequest(BaseModel):
     @field_validator('reason')
     @classmethod
     def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
         if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
         return v.strip()
+
+
+class SponsorMasterEditRequest(BaseModel):
+    master_id: Optional[str] = None  # If present, treat as UPDATE
+    legal_name: str
+    display_name: Optional[str] = None
+    industry_sector: Optional[str] = None
+    source_url: Optional[str] = None
+    source_notes: Optional[str] = None
+    is_protected: Optional[bool] = None
+    reason: Optional[str] = None
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v.strip()
+
+    @field_validator('legal_name')
+    @classmethod
+    def validate_legal_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Legal name must be at least 2 characters')
+        return v.strip()
+
+
+class SponsorBrandEditRequest(BaseModel):
+    brand_id: Optional[str] = None  # If present, treat as UPDATE
+    master_id: str  # Required to link to master
+    brand_name: str
+    display_name: Optional[str] = None
+    default_hex_color: str
+    source_url: Optional[str] = None
+    source_notes: Optional[str] = None
+    is_protected: Optional[bool] = None
+    reason: Optional[str] = None
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v.strip()
+
+    @field_validator('default_hex_color')
+    @classmethod
+    def validate_hex_color(cls, v):
+        import re
+        if not re.match(r"^#[0-9A-Fa-f]{6}$", v):
+            raise ValueError(f"Invalid hex color format: {v}")
+        return v
+

@@ -1056,3 +1056,350 @@ class EditService:
             status=edit.status.value,
             message=message
         )
+
+    @staticmethod
+    async def create_sponsor_master_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorMasterEditRequest"
+    ) -> EditMetadataResponse:
+        """Create a new sponsor master."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorMasterCreate
+
+        snapshot_before = None
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorMasterCreate(
+                legal_name=request.legal_name,
+                display_name=request.display_name,
+                industry_sector=request.industry_sector,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
+                is_protected=request.is_protected or False
+            )
+            master = await SponsorService.create_master(session, data, user.user_id)
+            
+            snapshot_after = {
+                "master": {
+                    "master_id": str(master.master_id),
+                    "legal_name": master.legal_name
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Sponsor created successfully"
+        else:
+            snapshot_after = {
+                "proposed_sponsor": {
+                    "legal_name": request.legal_name,
+                    "display_name": request.display_name,
+                    "industry_sector": request.industry_sector,
+                    "source_url": request.source_url,
+                    "source_notes": request.source_notes
+                }
+            }
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=uuid.uuid4(), 
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Sponsor creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def update_sponsor_master_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorMasterEditRequest"
+    ) -> EditMetadataResponse:
+        """Update an existing sponsor master."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorMasterUpdate
+        
+        try:
+            master_id = UUID(request.master_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid master_id")
+
+        master = await SponsorService.get_master_by_id(session, master_id)
+        if not master:
+            raise ValueError("Sponsor master not found")
+
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if master.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected record")
+            
+        changes = {}
+        if request.legal_name: changes['legal_name'] = request.legal_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.industry_sector is not None: changes['industry_sector'] = request.industry_sector
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        
+        if request.is_protected is not None:
+             if not is_mod:
+                 raise ValueError("Only moderators can change protection status")
+             changes['is_protected'] = request.is_protected
+
+        if not changes:
+             raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "master": {
+                "master_id": str(master.master_id),
+                "legal_name": master.legal_name,
+                "display_name": master.display_name,
+                "industry_sector": master.industry_sector,
+                "is_protected": master.is_protected
+            }
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorMasterUpdate(**changes)
+            updated = await SponsorService.update_master(session, master_id, data, user.user_id)
+            
+            snapshot_after = {
+                "master": {
+                    "master_id": str(updated.master_id),
+                    "legal_name": updated.legal_name,
+                    "display_name": updated.display_name,
+                    "is_protected": updated.is_protected
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Sponsor updated successfully"
+        else:
+            snapshot_after = {
+                "master": snapshot_before["master"],
+                "proposed_changes": changes
+            }
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def create_sponsor_brand_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorBrandEditRequest"
+    ) -> EditMetadataResponse:
+        """Create a new sponsor brand."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorBrandCreate
+
+        try:
+            master_id = UUID(request.master_id)
+        except:
+             raise ValueError("Invalid master_id")
+
+        # Verify master exists
+        master = await SponsorService.get_master_by_id(session, master_id)
+        if not master:
+            raise ValueError("Sponsor master not found")
+
+        snapshot_before = None
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorBrandCreate(
+                brand_name=request.brand_name,
+                display_name=request.display_name,
+                default_hex_color=request.default_hex_color,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
+                is_protected=request.is_protected or False
+            )
+            brand = await SponsorService.add_brand(session, master_id, data, user.user_id)
+            
+            snapshot_after = {
+                "brand": {
+                    "brand_id": str(brand.brand_id),
+                    "brand_name": brand.brand_name,
+                    "master_id": str(brand.master_id)
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Brand created successfully"
+        else:
+            snapshot_after = {
+                "proposed_brand": {
+                    "master_id": str(master_id),
+                    "brand_name": request.brand_name,
+                    "default_hex_color": request.default_hex_color
+                }
+            }
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=uuid.uuid4(),
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Brand creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def update_sponsor_brand_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorBrandEditRequest"
+    ) -> EditMetadataResponse:
+        """Update an existing sponsor brand."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorBrandUpdate
+
+        try:
+            brand_id = UUID(request.brand_id)
+        except:
+             raise ValueError("Invalid brand_id")
+
+        # Get existing brand (need a getter in service or query directly)
+        # SponsorService doesn't have get_brand_by_id helper easily public? update_brand selects it.
+        # I'll check update_brand or just use session.get(SponsorBrand)
+        brand = await session.get(SponsorBrand, brand_id)
+        if not brand:
+             raise ValueError("Brand not found")
+
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if brand.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected brand")
+
+        changes = {}
+        if request.brand_name: changes['brand_name'] = request.brand_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.default_hex_color: changes['default_hex_color'] = request.default_hex_color
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        
+        if request.is_protected is not None:
+             if not is_mod:
+                 raise ValueError("Only moderators can change protection status")
+             changes['is_protected'] = request.is_protected
+
+        if not changes:
+             raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "brand": {
+                 "brand_id": str(brand.brand_id),
+                 "brand_name": brand.brand_name,
+                 "default_hex_color": brand.default_hex_color,
+                 "is_protected": brand.is_protected
+            }
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorBrandUpdate(**changes)
+            updated = await SponsorService.update_brand(session, brand_id, data, user.user_id)
+            
+            snapshot_after = {
+                "brand": {
+                    "brand_id": str(updated.brand_id),
+                    "brand_name": updated.brand_name,
+                    "default_hex_color": updated.default_hex_color,
+                    "is_protected": updated.is_protected
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Brand updated successfully"
+        else:
+             snapshot_after = {
+                 "brand": snapshot_before["brand"],
+                 "proposed_changes": changes
+             }
+             edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+             message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
