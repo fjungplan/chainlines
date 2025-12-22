@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.api.dependencies import get_current_user, require_editor
 from app.models.user import User
-from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest, CreateTeamRequest
+from app.schemas.edits import EditMetadataRequest, EditMetadataResponse, MergeEventRequest, SplitEventRequest, CreateTeamRequest, CreateEraEditRequest, UpdateNodeRequest
 from app.services.edit_service import EditService
 
 router = APIRouter(prefix="/api/v1/edits", tags=["edits"])
@@ -97,6 +97,57 @@ async def create_team(
     """
     try:
         result = await EditService.create_team_edit(
+            session,
+            current_user,
+            request
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/era", response_model=EditMetadataResponse)
+async def create_era(
+    request: CreateEraEditRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Create a new team era (season).
+    
+    This endpoint allows authenticated users to create a new season for a team.
+    - NEW_USER: Creation goes to moderation queue (PENDING status)
+    - TRUSTED_USER/ADMIN: Era is auto-created immediately
+    """
+    try:
+        result = await EditService.create_era_edit(
+            session,
+            current_user,
+            request
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/node", response_model=EditMetadataResponse)
+async def edit_node(
+    request: UpdateNodeRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Edit team node details.
+    
+    This endpoint allows authenticated users to edit team node details.
+    - NEW_USER: Edit goes to moderation queue (PENDING status)
+    - TRUSTED_USER/ADMIN: Edit is auto-approved
+    """
+    try:
+        result = await EditService.create_node_edit(
             session,
             current_user,
             request

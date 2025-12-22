@@ -46,3 +46,4 @@ docker-compose.override.yml
 .coverage
 htmlcov/
 backups/
+repomix-output.xml

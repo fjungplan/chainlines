@@ -1,13 +1,15 @@
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 
 
 class EditMetadataRequest(BaseModel):
     era_id: str
     registered_name: Optional[str] = None
     uci_code: Optional[str] = None
+    country_code: Optional[str] = None
     tier_level: Optional[int] = None
+    valid_from: Optional[date] = None
     founding_year: Optional[int] = None
     dissolution_year: Optional[int] = None
     reason: str  # Why this edit is being made
@@ -206,3 +208,48 @@ class SplitEventRequest(BaseModel):
         if len(v.strip()) < 10:
             raise ValueError('Reason must be at least 10 characters')
         return v.strip()
+
+
+class CreateEraEditRequest(BaseModel):
+    season_year: int
+    node_id: str
+    registered_name: str
+    uci_code: Optional[str] = None
+    country_code: Optional[str] = None
+    tier_level: Optional[int] = None
+    reason: Optional[str] = None
+    
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if v and len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v
+
+
+class UpdateNodeRequest(BaseModel):
+    node_id: str
+    legal_name: Optional[str] = None
+    display_name: Optional[str] = None
+    founding_year: Optional[int] = None
+    dissolution_year: Optional[int] = None
+    source_url: Optional[str] = None
+    source_notes: Optional[str] = None
+    is_protected: Optional[bool] = None # Only modifiable if user has rights, checked in service
+    reason: str
+
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v
+
+    @field_validator('founding_year')
+    @classmethod
+    def validate_founding_year(cls, v):
+        if v and (v < 1900 or v > 2100):
+            raise ValueError('Founding year must be between 1900 and 2100')
+        return v
+
+

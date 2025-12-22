@@ -18,6 +18,7 @@ from app.schemas.edits import (
     MergeEventRequest,
     SplitEventRequest,
     CreateTeamRequest,
+    UpdateNodeRequest,
 )
 
 
@@ -52,6 +53,12 @@ class EditService:
             changes['uci_code'] = request.uci_code
         if request.tier_level:
             changes['tier_level'] = request.tier_level
+        if request.uci_code:
+            changes['uci_code'] = request.uci_code
+        if request.country_code:
+            changes['country_code'] = request.country_code
+        if request.valid_from:
+            changes['valid_from'] = request.valid_from
         if request.founding_year is not None:
             changes['founding_year'] = request.founding_year
         if request.dissolution_year is not None:
@@ -66,7 +73,9 @@ class EditService:
                 "era_id": str(era.era_id),
                 "registered_name": era.registered_name,
                 "uci_code": era.uci_code,
+                "country_code": era.country_code,
                 "tier_level": era.tier_level,
+                "valid_from": era.valid_from.isoformat() if era.valid_from else None,
             },
             "node": {
                 "node_id": str(node.node_id),
@@ -122,6 +131,12 @@ class EditService:
                 snapshot_after['era']['uci_code'] = changes['uci_code']
             if 'tier_level' in changes:
                 snapshot_after['era']['tier_level'] = changes['tier_level']
+            if 'uci_code' in changes:
+                snapshot_after['era']['uci_code'] = changes['uci_code']
+            if 'country_code' in changes:
+                snapshot_after['era']['country_code'] = changes['country_code']
+            if 'valid_from' in changes:
+                snapshot_after['era']['valid_from'] = changes['valid_from'].isoformat()
             if 'founding_year' in changes:
                 snapshot_after['node']['founding_year'] = changes['founding_year']
             if 'dissolution_year' in changes:
@@ -148,7 +163,102 @@ class EditService:
             status=edit.status.value,
             message=message
         )
-    
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def create_era_edit(
+        session: AsyncSession,
+        user: User,
+        request: "CreateEraEditRequest" 
+    ) -> EditMetadataResponse:
+        """Create a new era edit (create era)"""
+        from app.services.team_service import TeamService 
+        from app.schemas.team import TeamEraCreate
+
+        # Validate node exists
+        try:
+            node_id = UUID(request.node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node_id format")
+
+        node = await TeamService.get_node_with_eras(session, node_id)
+        if not node:
+             raise ValueError("Team node not found")
+        
+        # Build TeamEraCreate data (we default valid_from to Jan 1 of season year for now)
+        era_create_data = TeamEraCreate(
+            season_year=request.season_year,
+            registered_name=request.registered_name,
+            valid_from=date(request.season_year, 1, 1),
+            uci_code=request.uci_code,
+            country_code=request.country_code,
+            tier_level=request.tier_level,
+            source_origin=f"user_{user.user_id}",
+            is_manual_override=True,
+            is_auto_filled=False
+        )
+
+        snapshot_before = None # Creation
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+             # Apply immediately
+             era = await TeamService.create_era(session, node_id, era_create_data, user.user_id)
+             
+             snapshot_after = {
+                 "era": {
+                     "era_id": str(era.era_id),
+                     "registered_name": era.registered_name,
+                     "season_year": era.season_year
+                 }
+             }
+
+             edit = EditHistory(
+                entity_type="team_era",
+                entity_id=era.era_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+             )
+             user.approved_edits_count += 1
+             message = "Era created successfully"
+        else:
+            # Pending
+            snapshot_after = {
+                "proposed_era": {
+                    **era_create_data.model_dump(mode='json'),
+                    "node_id": str(node.node_id)
+                }
+            }
+            edit = EditHistory(
+                entity_type="team_era",
+                entity_id=uuid.uuid4(), # Placeholder
+                user_id=user.user_id,
+                action=EditAction.CREATE, 
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Era creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
     @staticmethod
     async def _apply_metadata_changes(
         session: AsyncSession,
@@ -156,15 +266,19 @@ class EditService:
         node: TeamNode,
         changes: Dict,
         user: User
-    ):
+    ) -> None:
         """Apply metadata changes to an era and/or node"""
         # Apply era-level changes
         if 'registered_name' in changes:
             era.registered_name = changes['registered_name']
         if 'uci_code' in changes:
             era.uci_code = changes['uci_code']
+        if 'country_code' in changes:
+            era.country_code = changes['country_code']
         if 'tier_level' in changes:
             era.tier_level = changes['tier_level']
+        if 'valid_from' in changes:
+            era.valid_from = changes['valid_from']
         
         # Apply node-level changes
         if 'founding_year' in changes:
@@ -610,3 +724,114 @@ class EditService:
 
         await session.commit()
         return new_nodes
+
+    @staticmethod
+    async def create_node_edit(
+        session: AsyncSession,
+        user: User,
+        request: UpdateNodeRequest
+    ) -> EditMetadataResponse:
+        """Create a node edit (update)"""
+        try:
+            node_id = UUID(request.node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node_id format")
+
+        node = await session.get(TeamNode, node_id)
+        if not node:
+            raise ValueError("Team node not found")
+
+        # Protection Checks
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if node.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected record")
+        
+        if request.is_protected is not None and request.is_protected != node.is_protected:
+            if not is_mod:
+                raise ValueError("Only moderators can change protection status")
+
+        # Build changes
+        changes = {}
+        if request.legal_name is not None: changes['legal_name'] = request.legal_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.founding_year is not None: changes['founding_year'] = request.founding_year
+        if request.dissolution_year is not None: changes['dissolution_year'] = request.dissolution_year
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        if request.is_protected is not None: changes['is_protected'] = request.is_protected
+
+        if not changes:
+            raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "node": {
+                "node_id": str(node.node_id),
+                "legal_name": node.legal_name,
+                "display_name": node.display_name,
+                "founding_year": node.founding_year,
+                "dissolution_year": node.dissolution_year,
+                "is_protected": node.is_protected
+            }
+        }
+
+        # Auto-approve for trusted/admin/mod
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply immediately
+            for k, v in changes.items():
+                setattr(node, k, v)
+            
+            node.last_modified_by = user.user_id
+            node.updated_at = datetime.utcnow()
+            
+            snapshot_after = {
+                "node": {
+                    "node_id": str(node.node_id),
+                    "legal_name": node.legal_name,
+                    "display_name": node.display_name,
+                    "founding_year": node.founding_year,
+                    "dissolution_year": node.dissolution_year,
+                    "is_protected": node.is_protected
+                }
+            }
+
+            edit = EditHistory(
+                entity_type="team_node",
+                entity_id=node.node_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Team updated successfully"
+        else:
+            # Pending
+            snapshot_after = dict(snapshot_before)
+            for k, v in changes.items():
+                snapshot_after['node'][k] = v
+            
+            edit = EditHistory(
+                entity_type="team_node",
+                entity_id=node.node_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )

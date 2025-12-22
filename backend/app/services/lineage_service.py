@@ -1,7 +1,8 @@
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+from sqlalchemy import func
 from app.models.lineage import LineageEvent
 from app.models.team import TeamNode
 from app.models.enums import LineageEventType
@@ -164,3 +165,31 @@ class LineageService:
             raise ValidationException("event_year after next node's dissolution_year.")
         # Add more timeline validation as needed
 
+
+    async def list_events(
+        self,
+        skip: int = 0,
+        limit: int = 50
+    ) -> Tuple[List[LineageEvent], int]:
+        # Count
+        count_stmt = select(func.count(LineageEvent.event_id))
+        total_result = await self.db.execute(count_stmt)
+        total = total_result.scalar()
+
+        # Query
+        stmt = (
+            select(LineageEvent)
+            .options(
+                selectinload(LineageEvent.predecessor_node),
+                selectinload(LineageEvent.successor_node),
+                selectinload(LineageEvent.created_by_user),
+                selectinload(LineageEvent.last_modified_by_user)
+            )
+            .order_by(LineageEvent.event_year.desc(), LineageEvent.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        events = result.scalars().all()
+        
+        return list(events), total

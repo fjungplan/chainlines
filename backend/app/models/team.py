@@ -89,6 +89,7 @@ class TeamEra(Base):
     is_name_auto_generated: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_manual_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_auto_filled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tier_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     has_license: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source_origin: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

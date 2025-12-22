@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
+import { editsApi } from '../../api/edits';
 import { sponsorsApi } from '../../api/sponsors';
 import { LoadingSpinner } from '../Loading';
 import SponsorManagerModal from './SponsorManagerModal';
@@ -21,8 +23,44 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
         registered_name: '',
         tier_level: 1,
         uci_code: '',
-        country_code: ''
+        country_code: '',
+        is_protected: false,
+        reason: ''
     });
+
+    const { user, isModerator, isAdmin, isTrusted, isEditor, canEdit } = useAuth();
+
+    // Determine rights
+    // If era exists (edit mode):
+    // - Protected: Only MOD/ADMIN can direct save. Shared: View only? Or request?
+    // - Unprotected: TRUSTED/MOD/ADMIN direct save. EDITOR requests.
+    // If new (create mode):
+    // - TRUSTED/MOD/ADMIN direct save. EDITOR requests.
+
+    const isProtected = formData.is_protected;
+
+    const canDirectSave = () => {
+        if (isModerator() || isAdmin()) return true;
+        if (isProtected) return false; // Only Mod/Admin can touch protected
+        if (isTrusted()) return true;
+        return false; // Regular editors must request
+    };
+
+    const isRequestMode = () => {
+        return !canDirectSave() && isEditor(); // Request if can't save but is editor
+    };
+
+    const canModifyProtection = () => {
+        return isModerator() || isAdmin();
+    };
+
+    const canDelete = () => {
+        if (!eraId) return false;
+        if (isProtected) return isModerator() || isAdmin(); // Only Mod/Admin can delete protected? Or just Admin? 
+        // Let's say Mod/Admin can delete protected eras. 
+        // Unprotected: Trusted/Mod/Admin.
+        return isTrusted() || isModerator() || isAdmin();
+    };
 
     const [isSponsorModalOpen, setIsSponsorModalOpen] = useState(false);
     const [isCountryOpen, setIsCountryOpen] = useState(false);
@@ -57,7 +95,9 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                     registered_name: latest.registered_name,
                     tier_level: latest.tier_level,
                     uci_code: latest.uci_code || '',
-                    country_code: latest.country_code || ''
+                    country_code: latest.country_code || '',
+                    is_protected: latest.is_protected || false,
+                    reason: '' // Reset reason
                 });
 
                 // Fetch sponsors to pre-populate
@@ -102,7 +142,9 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 registered_name: era.registered_name,
                 tier_level: era.tier_level,
                 uci_code: era.uci_code || '',
-                country_code: era.country_code || ''
+                country_code: era.country_code || '',
+                is_protected: era.is_protected || false,
+                reason: ''
             });
 
             loadSponsorStats();
@@ -144,55 +186,96 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
             if (!payload.valid_from) payload.valid_from = `${payload.season_year}-01-01`;
 
             let resultId = eraId;
-            if (eraId) {
-                await teamsApi.updateTeamEra(eraId, payload);
-            } else {
-                const res = await teamsApi.createTeamEra(nodeId, payload);
-                resultId = res.era_id;
 
-                // Copy sponsors if pre-filled
-                if (prefilledSponsors.length > 0) {
-                    try {
-                        const uniqueBrands = new Set();
-                        // Filter duplicates just in case, though logically shouldn't be any
-                        const sponsorPayload = prefilledSponsors
-                            .filter(l => {
-                                const bid = l.brand?.brand_id || l.brand_id;
-                                if (uniqueBrands.has(bid)) return false;
-                                uniqueBrands.add(bid);
-                                return true;
-                            })
-                            .map(l => ({
-                                brand_id: l.brand?.brand_id || l.brand_id,
-                                rank_order: l.rank_order,
-                                prominence_percent: l.prominence_percent,
-                                hex_color_override: l.hex_color_override
-                            }));
-                        await sponsorsApi.replaceEraLinks(resultId, sponsorPayload);
-                    } catch (spErr) {
-                        console.error("Failed to copy sponsors", spErr);
-                    }
+            if (canDirectSave()) {
+                // Direct Save via Teams API
+                if (eraId) {
+                    await teamsApi.updateTeamEra(eraId, payload);
+                } else {
+                    const res = await teamsApi.createTeamEra(nodeId, payload);
+                    resultId = res.era_id;
+                    // Handle prefilled sponsors copy for direct create
+                    await copySponsors(resultId);
+                }
+                if (onSuccess) onSuccess(shouldClose ? undefined : resultId);
+            } else {
+                // Request Mode via Edits API
+                if (!payload.reason || payload.reason.length < 10) {
+                    throw new Error("A reason (min 10 chars) is required for edit requests.");
                 }
 
-                if (onSuccess) onSuccess(resultId);
+                if (eraId) {
+                    // Update Request (Generic Metadata for now, until specific EraRequest endpoint if needed, 
+                    // or usage of editMetadata with table 'team_eras')
+                    // Actually editsApi.editMetadata expects era_id in payload.
+                    const reqPayload = {
+                        era_id: eraId,
+                        registered_name: payload.registered_name,
+                        uci_code: payload.uci_code,
+                        country_code: payload.country_code,
+                        tier_level: payload.tier_level,
+                        valid_from: payload.valid_from,
+                        reason: payload.reason,
+                        // Include node fields? logic is mixed in CreateMetadataEdit.
+                        // Assuming editMetadata handles era fields now.
+                    };
+                    await editsApi.editMetadata(reqPayload);
+                    alert("Update request submitted for moderation.");
+                } else {
+                    // Create Request
+                    const reqPayload = {
+                        node_id: nodeId,
+                        season_year: payload.season_year,
+                        registered_name: payload.registered_name,
+                        uci_code: payload.uci_code,
+                        country_code: payload.country_code,
+                        tier_level: payload.tier_level,
+                        reason: payload.reason
+                    };
+                    await editsApi.createEraEdit(reqPayload);
+                    alert("Creation request submitted for moderation.");
+                }
+                if (onSuccess) onSuccess(); // Always close/back on request
             }
 
-            if (shouldClose) {
-                if (onSuccess) onSuccess(); // Navigate back
+            if (!canDirectSave() || shouldClose) {
+                // Done
             } else {
                 setSubmitting(false);
-                if (!eraId) {
-                    // Stay on page: ideally reload data or switch ID
-                    if (onSuccess) onSuccess(resultId);
-                }
             }
         } catch (err) {
-            setError(err.response?.data?.detail || "Failed to save era");
+            console.error(err);
+            setError(err.response?.data?.detail || err.message || "Failed to save era");
             setSubmitting(false);
         }
     };
 
+    const copySponsors = async (targetEraId) => {
+        if (prefilledSponsors.length > 0) {
+            try {
+                const uniqueBrands = new Set();
+                const sponsorPayload = prefilledSponsors
+                    .filter(l => {
+                        const bid = l.brand?.brand_id || l.brand_id;
+                        if (uniqueBrands.has(bid)) return false;
+                        uniqueBrands.add(bid);
+                        return true;
+                    })
+                    .map(l => ({
+                        brand_id: l.brand?.brand_id || l.brand_id,
+                        rank_order: l.rank_order,
+                        prominence_percent: l.prominence_percent,
+                        hex_color_override: l.hex_color_override
+                    }));
+                await sponsorsApi.replaceEraLinks(targetEraId, sponsorPayload);
+            } catch (spErr) {
+                console.error("Failed to copy sponsors", spErr);
+            }
+        }
+    };
+
     const handleDelete = async () => {
+        if (!canDelete()) return;
         if (!window.confirm("Delete this era?")) return;
         setSubmitting(true);
         try {
@@ -223,7 +306,25 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                             <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                         </svg>
                     </button>
+
                     <h2>{eraId ? `Edit Era (Season): ${formData.season_year}` : 'Add New Era (Season)'}</h2>
+                </div>
+                <div className="header-right">
+                    {canModifyProtection() && (
+                        <div className="protection-toggle">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.is_protected}
+                                    onChange={e => handleChange('is_protected', e.target.checked)}
+                                />
+                                Protected
+                            </label>
+                        </div>
+                    )}
+                    {isProtected && !canModifyProtection() && (
+                        <div className="badge protected-badge">Protected Record</div>
+                    )}
                 </div>
             </div>
 
@@ -245,6 +346,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                     value={formData.season_year}
                                     onChange={e => handleChange('season_year', parseInt(e.target.value))}
                                     required
+                                    readOnly={isProtected && !isModerator() && !isAdmin()}
                                 />
                             </div>
                             <div className="form-group" style={{ flex: 2 }}>
@@ -254,6 +356,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                     value={formData.registered_name}
                                     onChange={e => handleChange('registered_name', e.target.value)}
                                     required
+                                    readOnly={isProtected && !isModerator() && !isAdmin()}
                                 />
                             </div>
                             <div className="form-group" style={{ flex: '0 0 100px' }}>
@@ -263,6 +366,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                     value={formData.uci_code}
                                     onChange={e => handleChange('uci_code', e.target.value)}
                                     maxLength={3}
+                                    readOnly={isProtected && !isModerator() && !isAdmin()}
                                 />
                             </div>
                         </div>
@@ -273,6 +377,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                 <select
                                     value={formData.tier_level}
                                     onChange={e => handleChange('tier_level', parseInt(e.target.value))}
+                                    disabled={isProtected && !isModerator() && !isAdmin()}
                                 >
                                     <option value={1}>Tier 1 - {getTierName(1, formData.season_year)}</option>
                                     <option value={2}>Tier 2 - {getTierName(2, formData.season_year)}</option>
@@ -291,6 +396,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                     onFocus={() => setIsCountryOpen(true)}
                                     placeholder="ATH"
                                     maxLength={3}
+                                    readOnly={isProtected && !isModerator() && !isAdmin()}
                                 />
                                 {isCountryOpen && (
                                     <>
@@ -328,9 +434,28 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                     type="date"
                                     value={formData.valid_from}
                                     onChange={e => handleChange('valid_from', e.target.value)}
+                                    readOnly={isProtected && !isModerator() && !isAdmin()}
                                 />
                             </div>
                         </div>
+
+                        {/* REASON FIELD FOR REQUESTS */}
+                        {isRequestMode() && (
+                            <div className="form-row">
+                                <div className="form-group full-width">
+                                    <label>Reason for Change (Required) *</label>
+                                    <textarea
+                                        value={formData.reason}
+                                        onChange={e => handleChange('reason', e.target.value)}
+                                        placeholder="Please provide a source or reason for this change..."
+                                        rows={2}
+                                        required
+                                        style={{ width: '100%', resize: 'vertical' }}
+                                    />
+                                    <small style={{ color: '#666' }}>Min 10 characters.</small>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Sponsor Section */}
                         {(eraId || stats) && (
@@ -395,7 +520,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
             {/* FOOTER */}
             <div className="editor-footer">
                 <div className="footer-actions-left">
-                    {eraId && (
+                    {eraId && canDelete() && (
                         <button
                             type="button"
                             className="footer-btn"
@@ -418,19 +543,19 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 <div className="footer-actions-right">
                     <button
                         type="button"
-                        className="footer-btn save"
+                        className={`footer-btn ${isRequestMode() ? 'request' : 'save'}`}
                         onClick={() => handleSave(false)}
                         disabled={submitting}
                     >
-                        Save
+                        {isRequestMode() ? 'Request Update' : 'Save'}
                     </button>
                     <button
                         type="button"
-                        className="footer-btn save-close"
+                        className={`footer-btn ${isRequestMode() ? 'request' : 'save-close'}`}
                         onClick={() => handleSave(true)}
                         disabled={submitting}
                     >
-                        Save & Close
+                        {isRequestMode() ? 'Request & Close' : 'Save & Close'}
                     </button>
                 </div>
             </div>
@@ -442,6 +567,6 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 seasonYear={formData.season_year}
                 onUpdate={loadSponsorStats}
             />
-        </div>
+        </div >
     );
 }

@@ -9,6 +9,7 @@ import MyEditsPage from './pages/MyEditsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SponsorMaintenancePage from './pages/SponsorMaintenancePage';
 import TeamMaintenancePage from './pages/TeamMaintenancePage';
+import LineageMaintenancePage from './pages/LineageMaintenance';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
@@ -29,6 +30,7 @@ function App() {
             <Route path="admin" element={<AdminPanelPage />} />
             <Route path="maintenance/sponsors" element={<SponsorMaintenancePage />} />
             <Route path="maintenance/teams" element={<TeamMaintenancePage />} />
+            <Route path="maintenance/lineage" element={<LineageMaintenancePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

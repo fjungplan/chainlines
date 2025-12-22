@@ -8,6 +8,8 @@ from app.db.base import Base, utc_now
 from app.db.types import GUID
 from app.models.team import TeamNode
 from app.models.enums import LineageEventType
+# Ensure User is registered for relationship resolution
+from app.models.user import User
 
 class LineageEvent(Base):
     __tablename__ = "lineage_event"
@@ -28,6 +30,9 @@ class LineageEvent(Base):
 
     predecessor_node: Mapped["TeamNode"] = relationship("TeamNode", foreign_keys=[predecessor_node_id], back_populates="outgoing_events")
     successor_node: Mapped["TeamNode"] = relationship("TeamNode", foreign_keys=[successor_node_id], back_populates="incoming_events")
+    
+    created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    last_modified_by_user: Mapped["User"] = relationship("User", foreign_keys=[last_modified_by])
 
     __table_args__ = (
         CheckConstraint('predecessor_node_id != successor_node_id', name='check_not_circular'),
