@@ -2,12 +2,14 @@ from typing import Optional
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String
+from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String, Boolean
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base, utc_now
 from app.db.types import GUID
 from app.models.team import TeamNode
 from app.models.enums import LineageEventType
+# Ensure User is registered for relationship resolution
+from app.models.user import User
 
 class LineageEvent(Base):
     __tablename__ = "lineage_event"
@@ -18,6 +20,7 @@ class LineageEvent(Base):
     event_year: Mapped[int] = mapped_column(Integer, nullable=False)
     event_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     event_type: Mapped[LineageEventType] = mapped_column(Enum(LineageEventType, name="event_type_enum", native_enum=False), nullable=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     source_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -28,6 +31,9 @@ class LineageEvent(Base):
 
     predecessor_node: Mapped["TeamNode"] = relationship("TeamNode", foreign_keys=[predecessor_node_id], back_populates="outgoing_events")
     successor_node: Mapped["TeamNode"] = relationship("TeamNode", foreign_keys=[successor_node_id], back_populates="incoming_events")
+    
+    created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    last_modified_by_user: Mapped["User"] = relationship("User", foreign_keys=[last_modified_by])
 
     __table_args__ = (
         CheckConstraint('predecessor_node_id != successor_node_id', name='check_not_circular'),

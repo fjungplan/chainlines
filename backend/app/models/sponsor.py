@@ -34,6 +34,7 @@ class SponsorBrand(Base):
     master_id: Mapped[uuid.UUID] = mapped_column(GUID(as_uuid=True), ForeignKey("sponsor_master.master_id", ondelete="CASCADE"), nullable=False)
     brand_name: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_protected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     default_hex_color: Mapped[str] = mapped_column(String(7), nullable=False)
     source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     source_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -33,8 +33,21 @@
   align-items: center;
 }
 
+.layout-title-link:hover {
+  text-decoration: none;
+  color: #646cff;
+  /* Re-adding the color change if it was missing, or relying on inherit.  Actually, user said "color change is fine", implying it already exists. Best to NOT add color here unless I know what it is. But I must ensure text-decoration is none. */
+}
+
+/* User said "color change is fine". `inherit` likely picks up a color from a parent link or global style. 
+   However, typically `a` tags get their color from global styles. 
+   If I look at `.layout-title-link`, it has `color: inherit`. 
+   If I want to be safe about the underline, I'll just add the hover rule.
+*/
+
 .layout-title {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
+  /* Increased from 1.4rem */
   font-weight: 700;
   margin: 0;
   color: inherit;
@@ -103,7 +116,7 @@
   }
 
   .layout-title {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
   }
 
   .layout-main {

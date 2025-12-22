@@ -21,4 +21,12 @@ class LineageEventType(str, enum.Enum):
     LEGAL_TRANSFER = "LEGAL_TRANSFER"
     SPIRITUAL_SUCCESSION = "SPIRITUAL_SUCCESSION"
     MERGE = "MERGE"
+
     SPLIT = "SPLIT"
+
+class EditType(str, enum.Enum):
+    METADATA = "METADATA"
+    MERGE = "MERGE"
+    SPLIT = "SPLIT"
+    CREATE = "CREATE"
+    SPONSOR = "SPONSOR"

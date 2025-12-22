@@ -14,10 +14,8 @@ import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { OptimizedRenderer } from '../utils/optimizedRenderer';
-import EditMetadataWizard from './EditMetadataWizard';
-import MergeWizard from './MergeWizard';
-import SplitWizard from './SplitWizard';
-import CreateTeamWizard from './CreateTeamWizard';
+
+
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -52,10 +50,8 @@ export default function TimelineGraph({
 
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
-  const [showEditWizard, setShowEditWizard] = useState(false);
-  const [showMergeWizard, setShowMergeWizard] = useState(false);
-  const [showSplitWizard, setShowSplitWizard] = useState(false);
-  const [showCreateWizard, setShowCreateWizard] = useState(false);
+
+
   const [selectedNode, setSelectedNode] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [currentFilters, setCurrentFilters] = useState({
@@ -1063,16 +1059,8 @@ export default function TimelineGraph({
   }, []);
 
   const handleNodeClick = (node) => {
-    console.log('Clicked node:', node);
-
-    // Only allow edits if user can edit (authenticated with proper role)
-    if (canEdit()) {
-      setSelectedNode(node);
-      setShowEditWizard(true);
-    } else {
-      // Navigate to team detail page for non-editors
-      navigate(`/team/${node.id}`);
-    }
+    // Navigate to team detail page for all users (replacing old Edit wizard)
+    navigate(`/team/${node.id}`);
   };
 
   const showToast = (message, type = 'success', duration = 3000) => {
@@ -1176,48 +1164,7 @@ export default function TimelineGraph({
             initialTiers={initialTiers}
           />
 
-          {/* Action buttons for merge/split/create - only show if user can edit */}
-          {canEdit() && (
-            <div className="wizard-actions">
-              <button
-                className="wizard-action-btn wizard-create"
-                onClick={() => setShowCreateWizard(true)}
-                title="Create a new team from scratch"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="16" />
-                  <line x1="8" y1="12" x2="16" y2="12" />
-                </svg>
-                Create Team
-              </button>
-              <button
-                className="wizard-action-btn"
-                onClick={() => setShowMergeWizard(true)}
-                title="Create a merge event"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                  <path d="m8 6 4-4 4 4" />
-                  <path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22" />
-                  <path d="m20 22-5-5" />
-                </svg>
-                Merge Teams
-              </button>
-              <button
-                className="wizard-action-btn"
-                onClick={() => setShowSplitWizard(true)}
-                title="Create a split event"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-                  <path d="M16 3h5v5" />
-                  <path d="M8 3H3v5" />
-                  <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3" />
-                  <path d="m21 3-7.929 7.929A4 4 0 0 0 12 13.828V22" />
-                </svg>
-                Split Team
-              </button>
-            </div>
-          )}
+
         </div>
       </div>
 
@@ -1227,47 +1174,9 @@ export default function TimelineGraph({
         visible={tooltip.visible}
       />
 
-      {/* Wizard Modals */}
-      {showEditWizard && selectedNode && selectedNode.eras && selectedNode.eras.length > 0 && (
-        <EditMetadataWizard
-          node={selectedNode}
-          era={selectedNode.eras[selectedNode.eras.length - 1]}
-          onClose={() => {
-            setShowEditWizard(false);
-            setSelectedNode(null);
-          }}
-          onSuccess={handleWizardSuccess}
-        />
-      )}
 
-      {showMergeWizard && selectedNode && (
-        <MergeWizard
-          initialNode={selectedNode}
-          onClose={() => {
-            setShowMergeWizard(false);
-            setSelectedNode(null);
-          }}
-          onSuccess={handleWizardSuccess}
-        />
-      )}
 
-      {showSplitWizard && selectedNode && (
-        <SplitWizard
-          sourceNode={selectedNode}
-          onClose={() => {
-            setShowSplitWizard(false);
-            setSelectedNode(null);
-          }}
-          onSuccess={handleWizardSuccess}
-        />
-      )}
 
-      {showCreateWizard && (
-        <CreateTeamWizard
-          onClose={() => setShowCreateWizard(false)}
-          onSuccess={handleWizardSuccess}
-        />
-      )}
 
       {/* Toast Notification */}
       {toast.visible && (

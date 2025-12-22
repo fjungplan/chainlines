@@ -18,6 +18,9 @@ from app.schemas.edits import (
     MergeEventRequest,
     SplitEventRequest,
     CreateTeamRequest,
+    CreateTeamRequest,
+    UpdateNodeRequest,
+    LineageEditRequest,
 )
 
 
@@ -52,6 +55,12 @@ class EditService:
             changes['uci_code'] = request.uci_code
         if request.tier_level:
             changes['tier_level'] = request.tier_level
+        if request.uci_code:
+            changes['uci_code'] = request.uci_code
+        if request.country_code:
+            changes['country_code'] = request.country_code
+        if request.valid_from:
+            changes['valid_from'] = request.valid_from
         if request.founding_year is not None:
             changes['founding_year'] = request.founding_year
         if request.dissolution_year is not None:
@@ -66,7 +75,9 @@ class EditService:
                 "era_id": str(era.era_id),
                 "registered_name": era.registered_name,
                 "uci_code": era.uci_code,
+                "country_code": era.country_code,
                 "tier_level": era.tier_level,
+                "valid_from": era.valid_from.isoformat() if era.valid_from else None,
             },
             "node": {
                 "node_id": str(node.node_id),
@@ -122,6 +133,12 @@ class EditService:
                 snapshot_after['era']['uci_code'] = changes['uci_code']
             if 'tier_level' in changes:
                 snapshot_after['era']['tier_level'] = changes['tier_level']
+            if 'uci_code' in changes:
+                snapshot_after['era']['uci_code'] = changes['uci_code']
+            if 'country_code' in changes:
+                snapshot_after['era']['country_code'] = changes['country_code']
+            if 'valid_from' in changes:
+                snapshot_after['era']['valid_from'] = changes['valid_from'].isoformat()
             if 'founding_year' in changes:
                 snapshot_after['node']['founding_year'] = changes['founding_year']
             if 'dissolution_year' in changes:
@@ -148,7 +165,102 @@ class EditService:
             status=edit.status.value,
             message=message
         )
-    
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def create_era_edit(
+        session: AsyncSession,
+        user: User,
+        request: "CreateEraEditRequest" 
+    ) -> EditMetadataResponse:
+        """Create a new era edit (create era)"""
+        from app.services.team_service import TeamService 
+        from app.schemas.team import TeamEraCreate
+
+        # Validate node exists
+        try:
+            node_id = UUID(request.node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node_id format")
+
+        node = await TeamService.get_node_with_eras(session, node_id)
+        if not node:
+             raise ValueError("Team node not found")
+        
+        # Build TeamEraCreate data (we default valid_from to Jan 1 of season year for now)
+        era_create_data = TeamEraCreate(
+            season_year=request.season_year,
+            registered_name=request.registered_name,
+            valid_from=date(request.season_year, 1, 1),
+            uci_code=request.uci_code,
+            country_code=request.country_code,
+            tier_level=request.tier_level,
+            source_origin=f"user_{user.user_id}",
+            is_manual_override=True,
+            is_auto_filled=False
+        )
+
+        snapshot_before = None # Creation
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+             # Apply immediately
+             era = await TeamService.create_era(session, node_id, era_create_data, user.user_id)
+             
+             snapshot_after = {
+                 "era": {
+                     "era_id": str(era.era_id),
+                     "registered_name": era.registered_name,
+                     "season_year": era.season_year
+                 }
+             }
+
+             edit = EditHistory(
+                entity_type="team_era",
+                entity_id=era.era_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+             )
+             user.approved_edits_count += 1
+             message = "Era created successfully"
+        else:
+            # Pending
+            snapshot_after = {
+                "proposed_era": {
+                    **era_create_data.model_dump(mode='json'),
+                    "node_id": str(node.node_id)
+                }
+            }
+            edit = EditHistory(
+                entity_type="team_era",
+                entity_id=uuid.uuid4(), # Placeholder
+                user_id=user.user_id,
+                action=EditAction.CREATE, 
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Era creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
     @staticmethod
     async def _apply_metadata_changes(
         session: AsyncSession,
@@ -156,15 +268,19 @@ class EditService:
         node: TeamNode,
         changes: Dict,
         user: User
-    ):
+    ) -> None:
         """Apply metadata changes to an era and/or node"""
         # Apply era-level changes
         if 'registered_name' in changes:
             era.registered_name = changes['registered_name']
         if 'uci_code' in changes:
             era.uci_code = changes['uci_code']
+        if 'country_code' in changes:
+            era.country_code = changes['country_code']
         if 'tier_level' in changes:
             era.tier_level = changes['tier_level']
+        if 'valid_from' in changes:
+            era.valid_from = changes['valid_from']
         
         # Apply node-level changes
         if 'founding_year' in changes:
@@ -610,3 +726,680 @@ class EditService:
 
         await session.commit()
         return new_nodes
+
+    @staticmethod
+    async def create_node_edit(
+        session: AsyncSession,
+        user: User,
+        request: UpdateNodeRequest
+    ) -> EditMetadataResponse:
+        """Create a node edit (update)"""
+        try:
+            node_id = UUID(request.node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node_id format")
+
+        node = await session.get(TeamNode, node_id)
+        if not node:
+            raise ValueError("Team node not found")
+
+        # Protection Checks
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if node.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected record")
+        
+        if request.is_protected is not None and request.is_protected != node.is_protected:
+            if not is_mod:
+                raise ValueError("Only moderators can change protection status")
+
+        # Build changes
+        changes = {}
+        if request.legal_name is not None: changes['legal_name'] = request.legal_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.founding_year is not None: changes['founding_year'] = request.founding_year
+        if request.dissolution_year is not None: changes['dissolution_year'] = request.dissolution_year
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        if request.is_protected is not None: changes['is_protected'] = request.is_protected
+
+        if not changes:
+            raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "node": {
+                "node_id": str(node.node_id),
+                "legal_name": node.legal_name,
+                "display_name": node.display_name,
+                "founding_year": node.founding_year,
+                "dissolution_year": node.dissolution_year,
+                "is_protected": node.is_protected
+            }
+        }
+
+        # Auto-approve for trusted/admin/mod
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply immediately
+            for k, v in changes.items():
+                setattr(node, k, v)
+            
+            node.last_modified_by = user.user_id
+            node.updated_at = datetime.utcnow()
+            
+            snapshot_after = {
+                "node": {
+                    "node_id": str(node.node_id),
+                    "legal_name": node.legal_name,
+                    "display_name": node.display_name,
+                    "founding_year": node.founding_year,
+                    "dissolution_year": node.dissolution_year,
+                    "is_protected": node.is_protected
+                }
+            }
+
+            edit = EditHistory(
+                entity_type="team_node",
+                entity_id=node.node_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Team updated successfully"
+        else:
+            # Pending
+            snapshot_after = dict(snapshot_before)
+            for k, v in changes.items():
+                snapshot_after['node'][k] = v
+            
+            edit = EditHistory(
+                entity_type="team_node",
+                entity_id=node.node_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def create_lineage_edit(
+        session: AsyncSession,
+        user: User,
+        request: LineageEditRequest
+    ) -> EditMetadataResponse:
+        """Create a new lineage connection (event)"""
+        # Validate nodes
+        try:
+            pred_id = UUID(request.predecessor_node_id)
+            succ_id = UUID(request.successor_node_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid node ID format")
+
+        if pred_id == succ_id:
+            raise ValueError("Predecessor and Successor cannot be the same node")
+
+        pred_node = await session.get(TeamNode, pred_id)
+        succ_node = await session.get(TeamNode, succ_id)
+
+        if not pred_node:
+            raise ValueError(f"Predecessor node {pred_id} not found")
+        if not succ_node:
+            raise ValueError(f"Successor node {succ_id} not found")
+
+        # Protection Check
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if request.is_protected and not is_mod:
+            raise ValueError("Only moderators can create protected lineage events")
+
+        snapshot_before = None # Create
+        
+        # Prepare Create Data
+        create_data = {
+            "predecessor_node_id": str(pred_node.node_id),
+            "successor_node_id": str(succ_node.node_id),
+            "event_year": request.event_year,
+            "event_type": request.event_type.value,
+            "event_date": request.event_date.isoformat() if request.event_date else None,
+            "notes": request.notes,
+            "source_url": request.source_url,
+            "is_protected": request.is_protected or False
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply Immediately
+            event = LineageEvent(
+                predecessor_node_id=pred_node.node_id,
+                successor_node_id=succ_node.node_id,
+                event_year=request.event_year,
+                event_type=request.event_type,
+                event_date=request.event_date,
+                notes=request.notes,
+                source_url=request.source_url,
+                is_protected=request.is_protected or False,
+                created_by=user.user_id
+            )
+            session.add(event)
+            await session.flush()
+
+            snapshot_after = {"event": create_data, "event_id": str(event.event_id)}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Lineage event created successfully"
+        else:
+            # Pending
+            snapshot_after = {"proposed_event": create_data}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=uuid.uuid4(), # Placeholder
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Lineage event submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def update_lineage_edit(
+        session: AsyncSession,
+        user: User,
+        request: LineageEditRequest
+    ) -> EditMetadataResponse:
+        """Update an existing lineage event"""
+        if not request.event_id:
+            raise ValueError("Event ID required for update")
+        
+        try:
+            event_id = UUID(request.event_id)
+        except ValueError:
+            raise ValueError("Invalid Event ID")
+            
+        event = await session.get(LineageEvent, event_id)
+        if not event:
+            raise ValueError("Lineage event not found")
+            
+        # Protection Check
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if event.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected lineage event")
+            
+        if request.is_protected is not None and request.is_protected != event.is_protected:
+            if not is_mod:
+                raise ValueError("Only moderators can change protection status")
+                
+        # Validate Nodes (if changing)
+        pred_id = UUID(request.predecessor_node_id)
+        succ_id = UUID(request.successor_node_id)
+        
+        if pred_id == succ_id:
+             raise ValueError("Predecessor and Successor cannot be the same node")
+
+        # Snapshot Before
+        snapshot_before = {
+            "event": {
+                "event_id": str(event.event_id),
+                "predecessor_node_id": str(event.predecessor_node_id),
+                "successor_node_id": str(event.successor_node_id),
+                "event_year": event.event_year,
+                "event_type": event.event_type.value,
+                "event_date": event.event_date.isoformat() if event.event_date else None,
+                "notes": event.notes,
+                "is_protected": event.is_protected
+            }
+        }
+        
+        changes = {
+            "predecessor_node_id": str(pred_id),
+            "successor_node_id": str(succ_id),
+            "event_year": request.event_year,
+            "event_type": request.event_type.value,
+            "event_date": request.event_date.isoformat() if request.event_date else None,
+            "notes": request.notes,
+            "source_url": request.source_url,
+            "is_protected": request.is_protected if request.is_protected is not None else event.is_protected
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply Immediately
+            event.predecessor_node_id = pred_id
+            event.successor_node_id = succ_id
+            event.event_year = request.event_year
+            event.event_type = request.event_type
+            event.event_date = request.event_date
+            event.notes = request.notes
+            event.source_url = request.source_url
+            if request.is_protected is not None:
+                event.is_protected = request.is_protected
+            
+            event.last_modified_by = user.user_id
+            event.updated_at = datetime.utcnow()
+            
+            snapshot_after = {"event": changes}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Lineage event updated successfully"
+        else:
+            # Pending
+            snapshot_after = {"proposed_event": changes}
+            
+            edit = EditHistory(
+                entity_type="lineage_event",
+                entity_id=event.event_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+            
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
+    @staticmethod
+    async def create_sponsor_master_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorMasterEditRequest"
+    ) -> EditMetadataResponse:
+        """Create a new sponsor master."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorMasterCreate
+
+        snapshot_before = None
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorMasterCreate(
+                legal_name=request.legal_name,
+                display_name=request.display_name,
+                industry_sector=request.industry_sector,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
+                is_protected=request.is_protected or False
+            )
+            master = await SponsorService.create_master(session, data, user.user_id)
+            
+            snapshot_after = {
+                "master": {
+                    "master_id": str(master.master_id),
+                    "legal_name": master.legal_name
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Sponsor created successfully"
+        else:
+            snapshot_after = {
+                "proposed_sponsor": {
+                    "legal_name": request.legal_name,
+                    "display_name": request.display_name,
+                    "industry_sector": request.industry_sector,
+                    "source_url": request.source_url,
+                    "source_notes": request.source_notes
+                }
+            }
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=uuid.uuid4(), 
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Sponsor creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def update_sponsor_master_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorMasterEditRequest"
+    ) -> EditMetadataResponse:
+        """Update an existing sponsor master."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorMasterUpdate
+        
+        try:
+            master_id = UUID(request.master_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid master_id")
+
+        master = await SponsorService.get_master_by_id(session, master_id)
+        if not master:
+            raise ValueError("Sponsor master not found")
+
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if master.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected record")
+            
+        changes = {}
+        if request.legal_name: changes['legal_name'] = request.legal_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.industry_sector is not None: changes['industry_sector'] = request.industry_sector
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        
+        if request.is_protected is not None:
+             if not is_mod:
+                 raise ValueError("Only moderators can change protection status")
+             changes['is_protected'] = request.is_protected
+
+        if not changes:
+             raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "master": {
+                "master_id": str(master.master_id),
+                "legal_name": master.legal_name,
+                "display_name": master.display_name,
+                "industry_sector": master.industry_sector,
+                "is_protected": master.is_protected
+            }
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorMasterUpdate(**changes)
+            updated = await SponsorService.update_master(session, master_id, data, user.user_id)
+            
+            snapshot_after = {
+                "master": {
+                    "master_id": str(updated.master_id),
+                    "legal_name": updated.legal_name,
+                    "display_name": updated.display_name,
+                    "is_protected": updated.is_protected
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Sponsor updated successfully"
+        else:
+            snapshot_after = {
+                "master": snapshot_before["master"],
+                "proposed_changes": changes
+            }
+            edit = EditHistory(
+                entity_type="sponsor_master",
+                entity_id=master.master_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def create_sponsor_brand_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorBrandEditRequest"
+    ) -> EditMetadataResponse:
+        """Create a new sponsor brand."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorBrandCreate
+
+        try:
+            master_id = UUID(request.master_id)
+        except:
+             raise ValueError("Invalid master_id")
+
+        # Verify master exists
+        master = await SponsorService.get_master_by_id(session, master_id)
+        if not master:
+            raise ValueError("Sponsor master not found")
+
+        snapshot_before = None
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorBrandCreate(
+                brand_name=request.brand_name,
+                display_name=request.display_name,
+                default_hex_color=request.default_hex_color,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
+                is_protected=request.is_protected or False
+            )
+            brand = await SponsorService.add_brand(session, master_id, data, user.user_id)
+            
+            snapshot_after = {
+                "brand": {
+                    "brand_id": str(brand.brand_id),
+                    "brand_name": brand.brand_name,
+                    "master_id": str(brand.master_id)
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Brand created successfully"
+        else:
+            snapshot_after = {
+                "proposed_brand": {
+                    "master_id": str(master_id),
+                    "brand_name": request.brand_name,
+                    "default_hex_color": request.default_hex_color
+                }
+            }
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=uuid.uuid4(),
+                user_id=user.user_id,
+                action=EditAction.CREATE,
+                status=EditStatus.PENDING,
+                snapshot_before=None,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Brand creation submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def update_sponsor_brand_edit(
+        session: AsyncSession,
+        user: User,
+        request: "SponsorBrandEditRequest"
+    ) -> EditMetadataResponse:
+        """Update an existing sponsor brand."""
+        from app.services.sponsor_service import SponsorService
+        from app.schemas.sponsors import SponsorBrandUpdate
+
+        try:
+            brand_id = UUID(request.brand_id)
+        except:
+             raise ValueError("Invalid brand_id")
+
+        # Get existing brand (need a getter in service or query directly)
+        # SponsorService doesn't have get_brand_by_id helper easily public? update_brand selects it.
+        # I'll check update_brand or just use session.get(SponsorBrand)
+        brand = await session.get(SponsorBrand, brand_id)
+        if not brand:
+             raise ValueError("Brand not found")
+
+        is_mod = user.role in [UserRole.MODERATOR, UserRole.ADMIN]
+        if brand.is_protected and not is_mod:
+            raise ValueError("Cannot edit protected brand")
+
+        changes = {}
+        if request.brand_name: changes['brand_name'] = request.brand_name
+        if request.display_name is not None: changes['display_name'] = request.display_name
+        if request.default_hex_color: changes['default_hex_color'] = request.default_hex_color
+        if request.source_url is not None: changes['source_url'] = request.source_url
+        if request.source_notes is not None: changes['source_notes'] = request.source_notes
+        
+        if request.is_protected is not None:
+             if not is_mod:
+                 raise ValueError("Only moderators can change protection status")
+             changes['is_protected'] = request.is_protected
+
+        if not changes:
+             raise ValueError("No changes specified")
+
+        snapshot_before = {
+            "brand": {
+                 "brand_id": str(brand.brand_id),
+                 "brand_name": brand.brand_name,
+                 "default_hex_color": brand.default_hex_color,
+                 "is_protected": brand.is_protected
+            }
+        }
+
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            data = SponsorBrandUpdate(**changes)
+            updated = await SponsorService.update_brand(session, brand_id, data, user.user_id)
+            
+            snapshot_after = {
+                "brand": {
+                    "brand_id": str(updated.brand_id),
+                    "brand_name": updated.brand_name,
+                    "default_hex_color": updated.default_hex_color,
+                    "is_protected": updated.is_protected
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            user.approved_edits_count += 1
+            message = "Brand updated successfully"
+        else:
+             snapshot_after = {
+                 "brand": snapshot_before["brand"],
+                 "proposed_changes": changes
+             }
+             edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=brand.brand_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+             message = "Update submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)

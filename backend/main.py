@@ -11,6 +11,8 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.edits import router as edits_router
 from app.api.v1.sponsors import router as sponsors_router
+from app.api.v1.lineage import router as lineage_router
+from app.api.v1.moderation import router as moderation_router
 
 from app.core.exceptions import (
     NodeNotFoundException,
@@ -123,10 +125,8 @@ app.include_router(timeline_router)
 app.include_router(admin_router)
 app.include_router(edits_router)
 app.include_router(sponsors_router)
-
-# Moderation API - TEMPORARILY DISABLED (needs rewrite for EditHistory schema)
-# from app.api.v1 import moderation
-# app.include_router(moderation.router)
+app.include_router(lineage_router)
+app.include_router(moderation_router)
 
 
 

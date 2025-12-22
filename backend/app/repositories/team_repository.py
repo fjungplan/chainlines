@@ -47,9 +47,21 @@ class TeamRepository:
         limit: int = 50,
         active_in_year: Optional[int] = None,
         tier_level: Optional[int] = None,
+        search: Optional[str] = None,
     ) -> Tuple[List[TeamNode], int]:
+        from sqlalchemy import or_
+
         # Base selectable
         base_stmt = select(TeamNode)
+
+        if search:
+            search_query = f"%{search}%"
+            base_stmt = base_stmt.where(
+                or_(
+                    TeamNode.legal_name.ilike(search_query),
+                    TeamNode.display_name.ilike(search_query)
+                )
+            )
 
         if active_in_year is not None:
             # Filter nodes that have eras in the given year
@@ -60,15 +72,33 @@ class TeamRepository:
 
         if tier_level is not None:
             # Filter by tier_level via eras; a team is included if any era matches tier
+            # Join is needed only if not already joined (active_in_year handles it if present)
+            # Actually, if we search, we are on TeamNode.
+            # If active_in_year is NOT None, we joined TeamEra already.
+            # But wait, we need to join TeamEra correctly.
+            # The previous logic was: if active_in_year is None check joint.
+            # Let's clean up logic:
             if active_in_year is None:
-                base_stmt = base_stmt.join(TeamEra, TeamEra.node_id == TeamNode.node_id)
+                 base_stmt = base_stmt.join(TeamEra, TeamEra.node_id == TeamNode.node_id)
             base_stmt = base_stmt.where(TeamEra.tier_level == tier_level)
 
         # Total count (distinct nodes if joins present)
         count_stmt = select(func.count(distinct(TeamNode.node_id)))
+        
+        # Apply filters to count statement
+        # (Naive approach: reconstruct logic. Safer approach: use filtered subquery, but reconstruction is standard here)
+        count_stmt = count_stmt.select_from(TeamNode)
+        
+        if search:
+            search_query = f"%{search}%"
+            count_stmt = count_stmt.where(
+                or_(
+                    TeamNode.legal_name.ilike(search_query),
+                    TeamNode.display_name.ilike(search_query)
+                )
+            )
+
         if active_in_year is not None or tier_level is not None:
-            # replicate joins/filters for count
-            count_stmt = count_stmt.select_from(TeamNode)
             if active_in_year is not None or tier_level is not None:
                 count_stmt = count_stmt.join(TeamEra, TeamEra.node_id == TeamNode.node_id)
             if active_in_year is not None:

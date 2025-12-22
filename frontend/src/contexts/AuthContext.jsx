@@ -108,16 +108,24 @@ export function AuthProvider({ children }) {
     return user?.role === 'ADMIN';
   };
 
-  const canEdit = () => {
-    return user && ['NEW_USER', 'TRUSTED_USER', 'ADMIN'].includes(user.role);
+  const isModerator = () => {
+    return ['MODERATOR', 'ADMIN'].includes(user?.role);
   };
 
-  const needsModeration = () => {
-    return user?.role === 'NEW_USER';
+  const isTrusted = () => {
+    return ['TRUSTED_EDITOR', 'MODERATOR', 'ADMIN'].includes(user?.role);
   };
 
   const isEditor = () => {
-    return user && ['NEW_USER', 'TRUSTED_USER', 'ADMIN'].includes(user.role);
+    return user && ['EDITOR', 'TRUSTED_EDITOR', 'MODERATOR', 'ADMIN'].includes(user.role);
+  };
+
+  const canEdit = () => {
+    return isEditor();
+  };
+
+  const needsModeration = () => {
+    return user?.role === 'EDITOR';
   };
 
   return (
@@ -131,6 +139,8 @@ export function AuthProvider({ children }) {
       logout,
       isAuthenticated: !!user,
       isAdmin,
+      isModerator,
+      isTrusted,
       canEdit,
       isEditor,
       needsModeration

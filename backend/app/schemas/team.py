@@ -91,6 +91,7 @@ class TeamEraResponse(TeamEraBase):
     era_id: UUID
     node_id: UUID
     sponsors: List[SponsorLinkResponse] = Field(default_factory=list)
+    is_protected: bool = False
     created_at: datetime
     updated_at: datetime
 

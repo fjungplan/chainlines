@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { teamsApi } from '../../api/teams';
+import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
 import { useAuth } from '../../contexts/AuthContext';
 import './SponsorEditor.css'; // Reuse Sponsor Editor styles for consistency
 import TeamEraBubbles from './TeamEraBubbles';
 
 export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect }) {
-    const { isAdmin } = useAuth();
+    const { isAdmin, isModerator, isTrusted, canEdit } = useAuth();
     // For new teams, nodeId is null.
 
     // State
@@ -21,8 +22,14 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
         dissolution_year: '',
         is_protected: false,
         source_url: '',
-        source_notes: ''
+        source_notes: '',
+        reason: '' // For edit requests
     });
+
+    // Determine Rights
+    const canDirectEdit = isTrusted() || isAdmin() || isModerator();
+    const isProtected = !!nodeId && formData.is_protected && !isModerator();
+    const showReasonField = !isModerator() && !isAdmin();
 
     // Initial Load
     useEffect(() => {
@@ -42,7 +49,8 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                 dissolution_year: data.dissolution_year || '',
                 is_protected: data.is_protected,
                 source_url: data.source_url || '',
-                source_notes: data.source_notes || ''
+                source_notes: data.source_notes || '',
+                reason: ''
             });
         } catch (err) {
             console.error("Failed to load team:", err);
@@ -60,6 +68,11 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
         setSubmitting(true);
         setError(null);
         try {
+            // Validate Reason if field is shown
+            if (showReasonField && (!formData.reason || formData.reason.length < 10)) {
+                throw new Error("Please provide a reason for this change (at least 10 characters).");
+            }
+
             // Convert empty strings to null for optional numbers/dates
             const payload = { ...formData };
             if (payload.dissolution_year === '') payload.dissolution_year = null;
@@ -68,29 +81,54 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
             if (typeof payload.founding_year === 'string')
                 payload.founding_year = parseInt(payload.founding_year, 10);
 
-            let currentNodeId = nodeId;
+            let message = "";
 
             if (nodeId) {
-                await teamsApi.updateTeamNode(nodeId, payload);
+                // UPDATE - Always use Edits API to ensure audit log/reason is captured
+                const requestData = {
+                    node_id: nodeId,
+                    legal_name: payload.legal_name,
+                    display_name: payload.display_name,
+                    founding_year: payload.founding_year,
+                    dissolution_year: payload.dissolution_year,
+                    source_url: payload.source_url,
+                    source_notes: payload.source_notes,
+                    is_protected: payload.is_protected,
+                    reason: payload.reason
+                };
+                await editsApi.updateNode(requestData);
+                message = canDirectEdit ? "Team updated successfully" : "Update request submitted for moderation";
             } else {
-                const newTeam = await teamsApi.createTeamNode(payload);
-                currentNodeId = newTeam.node_id;
-                // Important: If we just created, we might need to tell parent the new ID
-                if (onSuccess) onSuccess(currentNodeId);
+                // CREATE - Use Edits API to ensure audit log
+                // Warning: We don't get the new ID back easily from Edits API in simplified mode.
+                const requestData = {
+                    legal_name: payload.legal_name,
+                    registered_name: payload.display_name || payload.legal_name,
+                    founding_year: payload.founding_year,
+                    uci_code: null,
+                    tier_level: 3,
+                    reason: payload.reason
+                };
+                await editsApi.createTeamEdit(requestData);
+                message = canDirectEdit ? "Team created (see list)" : "Team creation request submitted for moderation";
             }
 
             if (shouldClose) {
-                onClose(); // Back to List
-            } else if (!nodeId) {
-                // If created and staying, we should ideally switch to edit mode
-                // But simplified: just notify success. Parent handles state update.
-                if (onSuccess) onSuccess(currentNodeId);
+                onClose();
             } else {
+                // If we didn't close, we ideally want to switch to Edit mode, but we don't have the new ID.
+                // So we force close or reset.
                 setSubmitting(false);
+                if (!nodeId) {
+                    onClose(); // Force close on create
+                }
+                alert(message);
             }
+            // Trigger refresh
+            if (onSuccess) onSuccess();
         } catch (err) {
             console.error(err);
-            setError(err.response?.data?.detail || "Failed to save team");
+            setError(err.response?.data?.detail || err.message || "Failed to save team");
             setSubmitting(false);
         }
     };
@@ -108,6 +146,10 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
     };
 
     if (loading) return <div className="team-inner-container"><LoadingSpinner /></div>;
+
+    const saveBtnLabel = nodeId
+        ? (canDirectEdit ? "Save" : "Request Update")
+        : (canDirectEdit ? "Create Team" : "Request Creation");
 
     return (
         <div className="team-inner-container centered-editor-container">
@@ -129,7 +171,8 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                 <div className="editor-column details-column">
                     <div className="column-header">
                         <h3>Team Details</h3>
-                        {isAdmin() && (
+                        {/* Only Moderators/Admins can see/toggle Protection */}
+                        {isModerator() && (
                             <label className="protected-toggle">
                                 <input
                                     type="checkbox"
@@ -139,6 +182,8 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                 <span>Protected Record</span>
                             </label>
                         )}
+                        {/* If protected and not moderator, show badge */}
+                        {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
                     </div>
 
                     {error && <div className="error-banner">{error}</div>}
@@ -152,6 +197,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                     value={formData.legal_name}
                                     onChange={e => handleChange('legal_name', e.target.value)}
                                     required
+                                    readOnly={isProtected}
                                 />
                             </div>
 
@@ -162,6 +208,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                     value={formData.display_name}
                                     onChange={e => handleChange('display_name', e.target.value)}
                                     placeholder="Common name if different"
+                                    readOnly={isProtected}
                                 />
                             </div>
                         </div>
@@ -176,6 +223,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                     value={formData.founding_year}
                                     onChange={e => handleChange('founding_year', e.target.value)}
                                     required
+                                    readOnly={isProtected}
                                 />
                             </div>
                             <div className="form-group" style={{ flex: 1 }}>
@@ -187,6 +235,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                     value={formData.dissolution_year}
                                     onChange={e => handleChange('dissolution_year', e.target.value)}
                                     placeholder="Active"
+                                    readOnly={isProtected}
                                 />
                             </div>
                         </div>
@@ -197,6 +246,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                 type="url"
                                 value={formData.source_url}
                                 onChange={e => handleChange('source_url', e.target.value)}
+                                readOnly={isProtected}
                             />
                         </div>
 
@@ -207,8 +257,24 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                                 onChange={e => handleChange('source_notes', e.target.value)}
                                 rows={1}
                                 style={{ minHeight: 'var(--input-height)', height: 'var(--input-height)', padding: '10px 1rem' }}
+                                readOnly={isProtected}
                             />
                         </div>
+
+                        {/* REASON FIELD FOR REQUESTS */}
+                        {showReasonField && (
+                            <div className="form-group reason-group">
+                                <label>Reason for Request *</label>
+                                <textarea
+                                    value={formData.reason}
+                                    onChange={e => handleChange('reason', e.target.value)}
+                                    placeholder="Please explain why you are making this change..."
+                                    required
+                                    rows={2}
+                                    style={{ borderColor: '#fcd34d' }}
+                                />
+                            </div>
+                        )}
                     </form>
                 </div>
 
@@ -216,7 +282,12 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                 <div className="editor-column brands-column">
                     <div className="column-header">
                         <h3>Eras (Seasons)</h3>
-                        {nodeId && (
+                        {/* Only show Add Era if node exists. If protected, maybe block adding eras unless Mod? */}
+                        {/* Plan says "Only MODERATOR and ADMIN can edit records marked is_protected". 
+                            Adding an Era technically edits the lineage, but Era itself is a child.
+                            Usually Protection cascades. Let's block Add Era if isProtected on Node.
+                        */}
+                        {nodeId && !isProtected && (
                             <button className="secondary-btn small" onClick={() => onEraSelect(null)}>
                                 + Add Era
                             </button>
@@ -231,9 +302,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                         <TeamEraBubbles
                             nodeId={nodeId}
                             onEraSelect={onEraSelect}
-                            onCreateEra={() => onEraSelect(null)}
-                        // We might need to adjust styles in TeamEraBubbles to look good here
-                        // but for now, it should fit in the column.
+                            onCreateEra={!isProtected ? () => onEraSelect(null) : undefined}
                         />
                     )}
                 </div>
@@ -248,7 +317,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                             className="footer-btn"
                             style={{ borderColor: '#991b1b', color: '#fca5a5' }}
                             onClick={handleDelete}
-                            disabled={submitting}
+                            disabled={submitting || isProtected}
                         >
                             Delete Team
                         </button>
@@ -264,22 +333,26 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                 </div>
 
                 <div className="footer-actions-right">
-                    <button
-                        type="button"
-                        className="footer-btn save"
-                        onClick={() => handleSave(false)}
-                        disabled={submitting}
-                    >
-                        Save
-                    </button>
-                    <button
-                        type="button"
-                        className="footer-btn save-close"
-                        onClick={() => handleSave(true)}
-                        disabled={submitting}
-                    >
-                        Save & Close
-                    </button>
+                    {!isProtected && (
+                        <>
+                            <button
+                                type="button"
+                                className="footer-btn save"
+                                onClick={() => handleSave(false)}
+                                disabled={submitting}
+                            >
+                                {saveBtnLabel}
+                            </button>
+                            <button
+                                type="button"
+                                className="footer-btn save-close"
+                                onClick={() => handleSave(true)}
+                                disabled={submitting}
+                            >
+                                {canDirectEdit ? "Save & Close" : "Request & Close"}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

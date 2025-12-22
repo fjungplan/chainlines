@@ -55,6 +55,7 @@ class TeamService:
         limit: int = 50,
         active_in_year: Optional[int] = None,
         tier_level: Optional[int] = None,
+        search: Optional[str] = None,
     ) -> tuple[List[TeamNode], int]:
         # Use repository to handle filtering, pagination, and eager-loading
         nodes, total = await TeamRepository.get_all(
@@ -63,6 +64,7 @@ class TeamService:
             limit=limit,
             active_in_year=active_in_year,
             tier_level=tier_level,
+            search=search,
         )
         # Defensive: ensure eras are attached to each node to avoid async lazy-loads later
         # Also compute dynamic fields (latest_team_name, current_tier) for list view

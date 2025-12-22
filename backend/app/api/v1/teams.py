@@ -192,12 +192,14 @@ async def list_teams(
     limit: int = Query(default=50, ge=1, le=100),
     active_in_year: Optional[int] = Query(default=None, ge=1900, le=2100),
     tier_level: Optional[int] = Query(default=None, ge=1, le=3),
+    search: Optional[str] = Query(default=None, min_length=2),
     db: AsyncSession = Depends(get_db),
 ):
     """List teams with pagination and optional filters.
 
     - active_in_year: only teams with an era in that year
     - tier_level: only teams having any era with the given tier
+    - search: fuzzy match on legal_name or display_name
     """
     nodes, total = await TeamService.list_nodes(
         db,
@@ -205,6 +207,7 @@ async def list_teams(
         limit=limit,
         active_in_year=active_in_year,
         tier_level=tier_level,
+        search=search,
     )
     payload = {
         "items": nodes,
