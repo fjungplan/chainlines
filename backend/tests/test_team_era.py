@@ -7,8 +7,10 @@ from datetime import date
 from datetime import date
 from sqlalchemy.exc import IntegrityError
 
+from datetime import date
 from app.models.team import TeamNode, TeamEra
 from app.services.team_service import TeamService
+from app.schemas.team import TeamEraCreate
 from app.core.exceptions import DuplicateEraException, ValidationException, NodeNotFoundException
 
 
@@ -82,8 +84,11 @@ async def test_team_service_create_era_and_duplicate(isolated_session):
     era = await TeamService.create_era(
         isolated_session,
         node_id=node_id,
-        year=2022,
-        registered_name="Service Era",
+        data=TeamEraCreate(
+            season_year=2022,
+            valid_from=date(2022, 1, 1),
+            registered_name="Service Era"
+        )
     )
     assert era.season_year == 2022
     # Duplicate attempt
@@ -91,8 +96,11 @@ async def test_team_service_create_era_and_duplicate(isolated_session):
         await TeamService.create_era(
             isolated_session,
             node_id=node_id,
-            year=2022,
-            registered_name="Service Era Again",
+            data=TeamEraCreate(
+                season_year=2022,
+                valid_from=date(2022, 1, 1),
+                registered_name="Service Era Again"
+            )
         )
 
 
@@ -103,8 +111,11 @@ async def test_team_service_validation_errors(isolated_session):
         await TeamService.create_era(
             isolated_session,
             node_id=uuid.uuid4(),
-            year=2020,
-            registered_name="No Node",
+            data=TeamEraCreate(
+                season_year=2020,
+                valid_from=date(2020, 1, 1),
+                registered_name="No Node"
+            )
         )
     # Invalid tier level
     async with isolated_session.begin():
@@ -115,18 +126,24 @@ async def test_team_service_validation_errors(isolated_session):
         await TeamService.create_era(
             isolated_session,
             node_id=node.node_id,
-            year=2020,
-            registered_name="Bad Tier",
-            tier_level=4,
+            data=TeamEraCreate(
+                season_year=2020,
+                valid_from=date(2020, 1, 1),
+                registered_name="Bad Tier",
+                tier_level=4
+            )
         )
     # Invalid UCI code
     with pytest.raises(ValidationException):
         await TeamService.create_era(
             isolated_session,
             node_id=node.node_id,
-            year=2021,
-            registered_name="Bad UCI",
-            uci_code="AB",
+            data=TeamEraCreate(
+                season_year=2021,
+                valid_from=date(2021, 1, 1),
+                registered_name="Bad UCI",
+                uci_code="AB"
+            )
         )
 
 
