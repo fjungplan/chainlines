@@ -1,4 +1,5 @@
 # ChainLines
+
 ### The ChainLines Timeline
 
 An open-source visualization of the evolutionary history of professional cycling teams from 1900 to present.
@@ -8,6 +9,7 @@ An open-source visualization of the evolutionary history of professional cycling
 ChainLines is a non-commercial, open-source personal project that tracks the lineage of professional cycling teams through time, visualizing how teams evolve through rebrands, mergers, splits, and successions. The system uses a **Managerial Node** concept to represent the persistent legal entity that survives name changes.
 
 ### Key Features
+
 
 - **Interactive Timeline Visualization**: Desktop D3.js "river" chart showing team evolution from 1900 to present
 - **Mobile-Optimized List View**: Chronological team history optimized for mobile devices
@@ -176,6 +178,32 @@ The backend uses SQLAlchemy async sessions. **Critical**: Avoid lazy-loading rel
    - Frontend: http://localhost (or your configured domain)
    - Backend API: http://localhost/api
    - API Documentation: http://localhost/api/docs
+
+
+### Database Management
+
+If you need to reset your local database or populate it with fresh sample data (especially if the timeline looks uncolored or empty):
+
+**1. Apply Database Migrations (Reset Schema)**
+Ensure your database structure is up to date:
+```bash
+docker exec cycling_backend alembic upgrade head
+```
+
+**2. Seed with Fictional Timeline (Recommended for Dev)**
+This script populates the database with realistic cycling teams, eras, and sponsors (including colors):
+```bash
+docker exec cycling_backend python /app/app/scripts/seed_fictional_timeline.py
+```
+
+**3. Clear All Data**
+To start from a completely blank state (DANGEROUS):
+```bash
+docker exec cycling_backend python /app/app/scripts/clear_database.py
+```
+
+*Note: In local development, the Caddy container may show as "Exited" or "Started" but then stop. This is intentional as Caddy is disabled in the `docker-compose.override.yml` to simplify development.*
+
 
 ### Local Development
 

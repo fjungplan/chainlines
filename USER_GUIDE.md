@@ -110,3 +110,21 @@ For stable test runs on Windows, enable Python faulthandler:
 
 - Local: `python -X faulthandler -m pytest -q`
 - CI: GitHub Actions workflow uses `windows-latest` with faulthandler enabled for backend tests.
+
+## Troubleshooting
+
+### Timeline is empty or missing colors
+If the timeline loads but shows no colors or is completely empty:
+1. Ensure you have seeded the database with the **fictional timeline** script (not just the sample teams).
+2. Run: `docker exec cycling_backend python /app/app/scripts/seed_fictional_timeline.py`
+3. If issues persist, ensure migrations are up to date: `docker exec cycling_backend alembic upgrade head`
+
+### Caddy container is "Exited"
+In local development, the `chainlines-caddy-1` container is intentionally disabled via `docker-compose.override.yml`. You should access the app directly via:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+
+### Database connection error
+If the backend cannot connect to Postgres:
+1. Check if the `cycling_postgres` container is running and healthy.
+2. Verify that the `DATABASE_URL` in your `.env` matches the credentials used in `docker-compose.yml`.
