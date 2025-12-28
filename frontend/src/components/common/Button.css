@@ -215,3 +215,88 @@ button:focus-visible,
    cursor: not-allowed;
    pointer-events: none;
 }
+
+/* === HEADER LAYOUT HELPERS === */
+.header-left {
+   display: flex;
+   align-items: center;
+   gap: 1.5rem;
+}
+
+/* === BACK BUTTON === */
+.back-btn {
+   background: none;
+   border: none;
+   color: var(--color-text-secondary, #a0aec0);
+   cursor: pointer;
+   line-height: 1;
+   padding: 0.5rem;
+   border-radius: 50%;
+   transition: all 0.2s;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+}
+
+.back-btn svg {
+   width: 28px;
+   height: 28px;
+}
+
+.back-btn:hover {
+   color: var(--color-text-light, #fff);
+   background-color: var(--color-bg-tertiary, #444);
+}
+
+/* Back Link (for <Link> elements) */
+.back-link {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   color: var(--color-text-secondary, #a0aec0);
+   text-decoration: none;
+   padding: 0.5rem;
+   border-radius: 50%;
+   transition: all 0.2s;
+}
+
+.back-link svg {
+   width: 28px;
+   height: 28px;
+}
+
+.back-link:hover {
+   color: var(--color-text-light, #fff);
+   background-color: var(--color-bg-tertiary, #444);
+}
+
+/* === PROTECTED/STATUS TOGGLE === */
+.protected-toggle,
+.status-toggle {
+   display: flex;
+   align-items: center;
+   gap: 0.5rem;
+   color: var(--color-text-primary, #e2e8f0);
+   cursor: pointer;
+   font-size: 0.85rem;
+   background: var(--color-bg-primary, #2a2a2a);
+   padding: 2px 8px;
+   border-radius: 4px;
+   border: 1px solid var(--color-border-light, #444);
+}
+
+.protected-toggle:hover,
+.status-toggle:hover {
+   border-color: #666;
+}
+
+.protected-toggle input,
+.status-toggle input {
+   margin: 0;
+}
+
+.protected-toggle.disabled,
+.status-toggle.disabled {
+   opacity: 0.5;
+   cursor: not-allowed;
+}

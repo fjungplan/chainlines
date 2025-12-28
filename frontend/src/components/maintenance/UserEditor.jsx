@@ -1,102 +1,201 @@
 import React, { useState, useEffect } from 'react';
-import Button from '../common/Button';
+import { useAuth } from '../../contexts/AuthContext';
 import { updateUser } from '../../api/users';
-import './UserEditor.css'; // We'll create this or use shared styles
+import { formatDate, formatDateTime } from '../../utils/dateUtils';
+import Button from '../common/Button';
+import './SponsorEditor.css'; // Reuse SponsorEditor styles like TeamEraEditor does
+import './UserEditor.css';
 
 export default function UserEditor({ user, onClose, onSuccess }) {
-    const [formData, setFormData] = useState({
-        role: 'EDITOR',
-        is_banned: false,
-        banned_reason: ''
-    });
-    const [error, setError] = useState(null);
-    const [saving, setSaving] = useState(false);
+    const { isAdmin, user: currentUser } = useAuth();
 
-    // Load user data
+    // Prevent admins from accidentally banning/demoting themselves
+    const isSelf = currentUser && user && currentUser.user_id === user.user_id;
+
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState(null);
+
+    const [formData, setFormData] = useState({
+        role: user?.role || 'EDITOR',
+        is_banned: user?.is_banned || false,
+        banned_reason: user?.banned_reason || ''
+    });
+
+    // Update form when user prop changes
     useEffect(() => {
         if (user) {
             setFormData({
                 role: user.role,
-                is_banned: user.is_banned,
+                is_banned: user.is_banned || false,
                 banned_reason: user.banned_reason || ''
             });
         }
     }, [user]);
 
-    const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
+    if (!user) return <div className="team-inner-container">No user selected</div>;
+
+    const handleChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setSaving(true);
+    const handleSave = async (shouldClose) => {
+        setSubmitting(true);
         setError(null);
-
         try {
             await updateUser(user.user_id, formData);
-            onSuccess();
+            if (shouldClose && onSuccess) {
+                onSuccess();
+            } else {
+                setSubmitting(false);
+            }
         } catch (err) {
             console.error(err);
-            setError("Failed to update user.");
-        } finally {
-            setSaving(false);
+            setError(err.response?.data?.detail || err.message || "Failed to update user");
+            setSubmitting(false);
         }
     };
 
-    if (!user) return null;
-
     return (
-        <div className="modal-overlay">
-            <div className="modal-content user-editor-modal">
-                <h2>Edit User: {user.display_name}</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Role</label>
-                        <select name="role" value={formData.role} onChange={handleChange}>
-                            <option value="EDITOR">Editor</option>
-                            <option value="TRUSTED_EDITOR">Trusted Editor</option>
-                            <option value="MODERATOR">Moderator</option>
-                            <option value="ADMIN">Admin</option>
-                        </select>
-                    </div>
+        <div className="team-inner-container centered-editor-container">
+            <div className="editor-header">
+                <div className="header-left">
+                    <Button variant="ghost" className="back-btn" onClick={onClose} title="Back to Users">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
+                        </svg>
+                    </Button>
+                    <h2>Edit User: {user.display_name}</h2>
+                </div>
+            </div>
 
-                    <div className="form-group checkbox-group">
-                        <label>
+            <div className="editor-split-view">
+                {/* FORM */}
+                <div className="editor-column details-column">
+                    <div className="column-header">
+                        <h3>User Properties</h3>
+                        <label className={`status-toggle ${isSelf ? 'disabled' : ''}`} title={isSelf ? "Cannot ban yourself" : ""}>
                             <input
                                 type="checkbox"
-                                name="is_banned"
                                 checked={formData.is_banned}
-                                onChange={handleChange}
+                                onChange={e => handleChange('is_banned', e.target.checked)}
+                                disabled={isSelf}
                             />
-                            Banned
+                            <span>Banned</span>
                         </label>
                     </div>
 
-                    {formData.is_banned && (
-                        <div className="form-group">
-                            <label>Ban Reason</label>
-                            <textarea
-                                name="banned_reason"
-                                value={formData.banned_reason}
-                                onChange={handleChange}
-                                placeholder="Reason for ban..."
-                            />
+                    {error && <div className="error-banner">{error}</div>}
+
+                    <form onSubmit={(e) => { e.preventDefault(); }}>
+                        {/* Read-only Info */}
+                        <div className="form-row">
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Display Name</label>
+                                <input type="text" value={user.display_name} readOnly disabled />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Email</label>
+                                <input type="text" value={user.email} readOnly disabled />
+                            </div>
                         </div>
-                    )}
 
-                    {error && <div className="error-message">{error}</div>}
+                        <div className="form-row">
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Google ID</label>
+                                <input type="text" value={user.google_id || '-'} readOnly disabled />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Member Since</label>
+                                <input type="text" value={formatDate(user.created_at)} readOnly disabled />
+                            </div>
+                        </div>
 
-                    <div className="modal-actions">
-                        <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" variant="primary" disabled={saving}>
-                            {saving ? 'Saving...' : 'Save Changes'}
-                        </Button>
+                        {/* Editable Fields */}
+                        <div className="form-row">
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Role * {isSelf && <span style={{ color: '#666', fontSize: '0.8rem' }}>(cannot change own role)</span>}</label>
+                                <select
+                                    value={formData.role}
+                                    onChange={e => handleChange('role', e.target.value)}
+                                    disabled={isSelf}
+                                >
+                                    <option value="EDITOR">Editor</option>
+                                    <option value="TRUSTED_EDITOR">Trusted Editor</option>
+                                    <option value="MODERATOR">Moderator</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+
+
+
+                        {formData.is_banned && (
+                            <div className="form-row">
+                                <div className="form-group full-width">
+                                    <label>Ban Reason</label>
+                                    <textarea
+                                        value={formData.banned_reason}
+                                        onChange={e => handleChange('banned_reason', e.target.value)}
+                                        placeholder="Reason for ban..."
+                                        rows={3}
+                                        style={{ width: '100%', resize: 'vertical' }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </form>
+                </div>
+
+                {/* RIGHT: User Stats */}
+                <div className="editor-column brands-column">
+                    <div className="column-header">
+                        <h3>User Statistics</h3>
                     </div>
-                </form>
+                    <div className="stats-list">
+                        <div className="stat-item">
+                            <span className="stat-label">Approved Edits</span>
+                            <span className="stat-value">{user.approved_edits_count || 0}</span>
+                        </div>
+                        <div className="stat-item">
+                            <span className="stat-label">Last Login</span>
+                            <span className="stat-value">
+                                {formatDateTime(user.last_login_at, 'Never')}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* FOOTER */}
+            <div className="editor-footer">
+                <div className="footer-actions-left">
+                    <Button
+                        variant="secondary"
+                        className="footer-btn"
+                        onClick={onClose}
+                        disabled={submitting}
+                    >
+                        Back
+                    </Button>
+                </div>
+                <div className="footer-actions-right">
+                    <Button
+                        variant="primary"
+                        className="footer-btn save"
+                        onClick={() => handleSave(false)}
+                        disabled={submitting}
+                    >
+                        Save
+                    </Button>
+                    <Button
+                        variant="primary"
+                        className="footer-btn save-close"
+                        onClick={() => handleSave(true)}
+                        disabled={submitting}
+                    >
+                        Save & Close
+                    </Button>
+                </div>
             </div>
         </div>
     );
