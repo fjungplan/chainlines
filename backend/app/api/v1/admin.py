@@ -137,8 +137,8 @@ async def trigger_scraper(request: ScraperTriggerRequest) -> ScraperResultRespon
         Results from all scrapers
     """
     scheduler = create_scheduler()
-    try:
-        results = await scheduler.run_once(request.team_identifier)
-        return ScraperResultResponse(results=results)
-    finally:
-        await scheduler.close()
+from app.api.v1.admin_users import router as admin_users_router
+
+# Include the users router
+router.include_router(admin_users_router)
+

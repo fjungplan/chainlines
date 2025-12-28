@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import './ErrorDisplay.css';
 import { getErrorMessage, isNetworkError } from '../utils/errors';
 
@@ -6,7 +6,7 @@ export function ErrorDisplay({ error, onRetry }) {
   const errorMessage = getErrorMessage(error);
   const isNetwork = isNetworkError(error);
   const status = error?.response?.status;
-  
+
   let errorType = 'error';
   if (isNetwork) {
     errorType = 'network';
@@ -17,9 +17,9 @@ export function ErrorDisplay({ error, onRetry }) {
   } else if (status >= 400 && status < 500) {
     errorType = 'validation';
   }
-  
+
   const errorTypeClass = `error-type-${errorType}`;
-  
+
   return (
     <div className={`error-display ${errorTypeClass}`}>
       <div className="error-icon">

@@ -1,6 +1,8 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CenteredPageLayout from '../components/layout/CenteredPageLayout';
 import Card from '../components/common/Card';
+import '../components/common/Button.css';
 
 export default function AdminPanelPage() {
   const { isAdmin } = useAuth();
@@ -18,7 +20,31 @@ export default function AdminPanelPage() {
   return (
     <CenteredPageLayout>
       <Card title="Admin Panel">
-        <p>Admin utilities will go here.</p>
+        <div className="admin-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+          <Link to="/admin/users" className="btn btn-tile">
+            <span className="tile-icon"><i className="bi bi-people"></i></span>
+            <div className="tile-content">
+              <h3>User Maintenance</h3>
+              <p>Manage users, roles, and bans.</p>
+            </div>
+          </Link>
+
+          <div className="btn btn-tile disabled">
+            <span className="tile-icon"><i className="bi bi-arrow-repeat"></i></span>
+            <div className="tile-content">
+              <h3>Scraper Status</h3>
+              <p>Check scraper health (Coming soon).</p>
+            </div>
+          </div>
+
+          <div className="btn btn-tile disabled">
+            <span className="tile-icon"><i className="bi bi-heart-pulse"></i></span>
+            <div className="tile-content">
+              <h3>System Health</h3>
+              <p>Cache and logs (Coming soon).</p>
+            </div>
+          </div>
+        </div>
       </Card>
     </CenteredPageLayout>
   );

@@ -1,0 +1,39 @@
+.banned-badge {
+    color: red;
+    font-weight: bold;
+}
+
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.user-table th,
+.user-table td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color, #ccc);
+}
+
+.maintenance-page-container {
+    padding: 2rem;
+}
+
+.maintenance-content-card {
+    background: var(--bg-card, white);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.controls {
+    margin-bottom: 1rem;
+}
+
+.controls input {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    width: 300px;
+}
