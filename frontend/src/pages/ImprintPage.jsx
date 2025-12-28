@@ -1,11 +1,12 @@
+import CenteredPageLayout from '../components/layout/CenteredPageLayout';
+import Card from '../components/common/Card';
 import './ImprintPage.css';
 
 export default function ImprintPage() {
   return (
-    <div className="centered-page-container">
-      <div className="centered-content-card">
+    <CenteredPageLayout>
+      <Card title="Impressum">
         <section className="impressum-section">
-          <h1>Impressum</h1>
           <h2 id="m46">Diensteanbieter</h2>
           <p>Frédéric Jung</p>
           <p>Heerfleckenstr. 8</p>
@@ -131,7 +132,7 @@ export default function ImprintPage() {
           <p>Sicherung von Online-Verbindungen durch TLS-/SSL-Verschlüsselungstechnologie (HTTPS): Um die Daten der Nutzer, die über unsere Online-Dienste übertragen werden, vor unerlaubten Zugriffen zu schützen, setzen wir auf die TLS-/SSL-Verschlüsselungstechnologie. Secure Sockets Layer (SSL) und Transport Layer Security (TLS) sind die Eckpfeiler der sicheren Datenübertragung im Internet. Diese Technologien verschlüsseln die Informationen, die zwischen der Website oder App und dem Browser des Nutzers (oder zwischen zwei Servern) übertragen werden, wodurch die Daten vor unbefugtem Zugriff geschützt sind. TLS, als die weiterentwickelte und sicherere Version von SSL, gewährleistet, dass alle Datenübertragungen den höchsten Sicherheitsstandards entsprechen. Wenn eine Website durch ein SSL-/TLS-Zertifikat gesichert ist, wird dies durch die Anzeige von HTTPS in der URL signalisiert. Dies dient als ein Indikator für die Nutzer, dass ihre Daten sicher und verschlüsselt übertragen werden.</p>
 
           <h2 id="m25">Übermittlung von personenbezogenen Daten</h2>
-          <p style={{ backgroundColor: 'lightcyan' }}>Im Rahmen unserer Verarbeitung von personenbezogenen Daten kommt es vor, dass diese an andere Stellen, Projekte oder andere rechtliche Einheiten, Organisationseinheiten oder Personen übermittelt beziehungsweise ihnen gegenüber offengelegt werden. Zu den Empfängern dieser Daten können z.&nbsp;B. mit IT-Aufgaben beauftragte Dienstleister gehören oder Anbieter von Diensten und Inhalten, die in eine Website eingebunden sind. In solchen Fällen beachten wir die gesetzlichen Vorgaben und schließen insbesondere entsprechende Verträge bzw. Vereinbarungen, die dem Schutz Ihrer Daten dienen, mit den Empfängern Ihrer Daten ab. Da es sich um ein nicht-kommerzielles Projekt handelt, erfolgt eine Übermittlung von Daten grundsätzlich nur, wenn es für die Funktionalität des Projektes oder auf Basis gesetzlicher Verpflichtungen erforderlich ist.</p>
+          <p>Im Rahmen unserer Verarbeitung von personenbezogenen Daten kommt es vor, dass diese an andere Stellen, Projekte oder andere rechtliche Einheiten, Organisationseinheiten oder Personen übermittelt beziehungsweise ihnen gegenüber offengelegt werden. Zu den Empfängern dieser Daten können z.&nbsp;B. mit IT-Aufgaben beauftragte Dienstleister gehören oder Anbieter von Diensten und Inhalten, die in eine Website eingebunden sind. In solchen Fällen beachten wir die gesetzlichen Vorgaben und schließen insbesondere entsprechende Verträge bzw. Vereinbarungen, die dem Schutz Ihrer Daten dienen, mit den Empfängern Ihrer Daten ab. Da es sich um ein nicht-kommerzielles Projekt handelt, erfolgt eine Übermittlung von Daten grundsätzlich nur, wenn es für die Funktionalität des Projektes oder auf Basis gesetzlicher Verpflichtungen erforderlich ist.</p>
 
           <h2 id="m24">Internationale Datentransfers</h2>
           <p>Datenverarbeitung in Drittländern: Sofern wir Daten in ein Drittland (d. h. außerhalb der Europäischen Union (EU) oder des Europäischen Wirtschaftsraums (EWR)) übermitteln oder dies im Rahmen der Nutzung von Diensten Dritter oder der Offenlegung bzw. Übermittlung von Daten an andere Personen, Stellen oder Projekte geschieht (was erkennbar wird anhand der Postadresse des jeweiligen Anbieters oder wenn in der Datenschutzerklärung ausdrücklich auf den Datentransfer in Drittländer hingewiesen wird), erfolgt dies stets im Einklang mit den gesetzlichen Vorgaben.</p>
@@ -233,7 +234,7 @@ export default function ImprintPage() {
           </ul>
           <p className="seal"><a href="https://datenschutz-generator.de/" title="Rechtstext von Dr. Schwenke - für weitere Informationen bitte anklicken." target="_blank" rel="noopener noreferrer nofollow">Erstellt mit kostenlosem Datenschutz-Generator.de von Dr. Thomas Schwenke</a></p>
         </section>
-      </div>
-    </div>
+      </Card>
+    </CenteredPageLayout>
   );
 }

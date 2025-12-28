@@ -1,8 +1,8 @@
 import { Outlet, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import UserMenu from './UserMenu';
 import HamburgerMenu from './HamburgerMenu';
-import './Layout.css';
+import './MainLayout.css';
 
 function Layout() {
   const { isAuthenticated, loading } = useAuth();

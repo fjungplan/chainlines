@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { sponsorsApi } from '../api/sponsors';
-import { LoadingSpinner } from '../components/Loading';
-import { ErrorDisplay } from '../components/ErrorDisplay';
+import { useAuth } from '../../contexts/AuthContext';
+import { sponsorsApi } from '../../api/sponsors';
+import { LoadingSpinner } from '../../components/Loading';
+import { ErrorDisplay } from '../../components/ErrorDisplay';
 import './SponsorMaintenancePage.css';
-import SponsorMasterEditor from '../components/maintenance/SponsorMasterEditor';
+import SponsorMasterEditor from '../../components/maintenance/SponsorMasterEditor';
 
 export default function SponsorMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { lineageApi } from '../api/lineage';
-import { useAuth } from '../contexts/AuthContext';
-import { LoadingSpinner } from '../components/Loading';
+import { lineageApi } from '../../api/lineage';
+import { useAuth } from '../../contexts/AuthContext';
+import { LoadingSpinner } from '../../components/Loading';
 import LineageEventEditor from './LineageEventEditorPage';
-import './LineageMaintenance.css';
+import './LineageMaintenancePage.css';
 import './TeamMaintenancePage.css';
 
 const EventTypeChip = ({ type }) => {

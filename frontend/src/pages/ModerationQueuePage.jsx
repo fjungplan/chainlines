@@ -3,6 +3,8 @@ import { moderationApi } from '../api/moderation';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './ModerationQueuePage.css';
+import CenteredPageLayout from '../components/layout/CenteredPageLayout';
+import Card from '../components/common/Card';
 
 function LoadingSpinner() {
   return <div className="loading-spinner">Loading...</div>;
@@ -74,73 +76,76 @@ export default function ModerationQueuePage() {
   };
 
   return (
-    <div className="moderation-page">
-      <Toast message={toast} onClose={() => setToast("")} />
-      {loading && <LoadingSpinner />}
-      {error && <div className="error-display">{error}</div>}
-      <div className="moderation-header">
-        <h1>Moderation Queue</h1>
-        {stats && (
-          <div className="stats-bar">
-            <div className="stat">
-              <span className="stat-label">Pending</span>
-              <span className="stat-value">{stats.pending_count}</span>
+    <CenteredPageLayout>
+      <Card title="Moderation Queue">
+        <div className="moderation-page-content">
+          <Toast message={toast} onClose={() => setToast("")} />
+          {loading && <LoadingSpinner />}
+          {error && <div className="error-display">{error}</div>}
+
+          {stats && (
+            <div className="stats-bar">
+              <div className="stat">
+                <span className="stat-label">Pending</span>
+                <span className="stat-value">{stats.pending_count}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Approved Today</span>
+                <span className="stat-value approved">{stats.approved_today}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Rejected Today</span>
+                <span className="stat-value rejected">{stats.rejected_today}</span>
+              </div>
             </div>
-            <div className="stat">
-              <span className="stat-label">Approved Today</span>
-              <span className="stat-value approved">{stats.approved_today}</span>
-            </div>
-            <div className="stat">
-              <span className="stat-label">Rejected Today</span>
-              <span className="stat-value rejected">{stats.rejected_today}</span>
-            </div>
+          )}
+
+          <div className="filter-bar">
+            <button className={filter === 'ALL' ? 'active' : ''} onClick={() => setFilter('ALL')}>
+              All ({stats?.pending_count || 0})
+            </button>
+            <button className={filter === 'METADATA' ? 'active' : ''} onClick={() => setFilter('METADATA')}>
+              Metadata ({stats?.pending_by_type?.METADATA || 0})
+            </button>
+            <button className={filter === 'SPONSOR' ? 'active' : ''} onClick={() => setFilter('SPONSOR')}>
+              Sponsors ({stats?.pending_by_type?.SPONSOR || 0})
+            </button>
+            <button className={filter === 'MERGE' ? 'active' : ''} onClick={() => setFilter('MERGE')}>
+              Lineage ({((stats?.pending_by_type?.MERGE || 0) + (stats?.pending_by_type?.SPLIT || 0))})
+            </button>
           </div>
-        )}
-      </div>
-      <div className="filter-bar">
-        <button className={filter === 'ALL' ? 'active' : ''} onClick={() => setFilter('ALL')}>
-          All ({stats?.pending_count || 0})
-        </button>
-        <button className={filter === 'METADATA' ? 'active' : ''} onClick={() => setFilter('METADATA')}>
-          Metadata ({stats?.pending_by_type?.METADATA || 0})
-        </button>
-        <button className={filter === 'SPONSOR' ? 'active' : ''} onClick={() => setFilter('SPONSOR')}>
-          Sponsors ({stats?.pending_by_type?.SPONSOR || 0})
-        </button>
-        <button className={filter === 'MERGE' ? 'active' : ''} onClick={() => setFilter('MERGE')}>
-          Lineage ({((stats?.pending_by_type?.MERGE || 0) + (stats?.pending_by_type?.SPLIT || 0))})
-        </button>
-      </div>
-      <div className="edits-list">
-        {edits.length === 0 && !loading ? (
-          <div className="empty-state">
-            <p>🎉 No pending edits! Queue is clear.</p>
+          <div className="edits-list">
+            {edits.length === 0 && !loading ? (
+              <div className="empty-state">
+                <p>🎉 No pending edits! Queue is clear.</p>
+              </div>
+            ) : (
+              edits.map(edit => (
+                <div key={edit.edit_id} className="edit-card" onClick={() => setSelectedEdit(edit)} tabIndex={0} role="button" aria-pressed="false" onKeyDown={e => { if (e.key === 'Enter') { setSelectedEdit(edit); } }}>
+                  <div className="edit-header">
+                    <span className="edit-type">{edit.edit_type}</span>
+                    <span className="edit-date">{new Date(edit.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="edit-user">By: {edit.user_display_name || edit.user_email}</div>
+                  <div className="edit-target">
+                    {edit.target_info.team_name && (
+                      <span>{edit.target_info.team_name} ({edit.target_info.year})</span>
+                    )}
+                  </div>
+                  <div className="edit-reason">
+                    {edit.reason.substring(0, 100)}
+                    {edit.reason.length > 100 && '...'}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        ) : (
-          edits.map(edit => (
-            <div key={edit.edit_id} className="edit-card" onClick={() => setSelectedEdit(edit)} tabIndex={0} role="button" aria-pressed="false" onKeyDown={e => { if (e.key === 'Enter') { setSelectedEdit(edit); } }}>
-              <div className="edit-header">
-                <span className="edit-type">{edit.edit_type}</span>
-                <span className="edit-date">{new Date(edit.created_at).toLocaleDateString()}</span>
-              </div>
-              <div className="edit-user">By: {edit.user_display_name || edit.user_email}</div>
-              <div className="edit-target">
-                {edit.target_info.team_name && (
-                  <span>{edit.target_info.team_name} ({edit.target_info.year})</span>
-                )}
-              </div>
-              <div className="edit-reason">
-                {edit.reason.substring(0, 100)}
-                {edit.reason.length > 100 && '...'}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      {selectedEdit && (
-        <EditReviewModal edit={selectedEdit} onClose={() => setSelectedEdit(null)} onReview={handleReview} />
-      )}
-    </div>
+          {selectedEdit && (
+            <EditReviewModal edit={selectedEdit} onClose={() => setSelectedEdit(null)} onReview={handleReview} />
+          )}
+        </div>
+      </Card>
+    </CenteredPageLayout>
   );
 }
 

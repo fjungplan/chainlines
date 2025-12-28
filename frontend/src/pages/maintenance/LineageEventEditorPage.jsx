@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { lineageApi } from '../api/lineage';
-import TeamSearch from '../components/common/TeamSearch';
-import { LoadingSpinner } from '../components/Loading';
-import '../components/maintenance/SponsorEditor.css';
+import { useAuth } from '../../contexts/AuthContext';
+import { lineageApi } from '../../api/lineage';
+import TeamSearch from '../../components/common/TeamSearch';
+import { LoadingSpinner } from '../../components/Loading';
+import '../../components/maintenance/SponsorEditor.css';
 
 const EVENT_TYPES = [
     { value: 'MERGE', label: 'Merge' },

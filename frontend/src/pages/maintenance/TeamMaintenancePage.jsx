@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { teamsApi } from '../api/teams';
-import { LoadingSpinner } from '../components/Loading';
-import { ErrorDisplay } from '../components/ErrorDisplay';
+import { useAuth } from '../../contexts/AuthContext';
+import { teamsApi } from '../../api/teams';
+import { LoadingSpinner } from '../../components/Loading';
+import { ErrorDisplay } from '../../components/ErrorDisplay';
 import './TeamMaintenancePage.css'; // Global Team Page styles (List grid etc)
 // Note: Editor styles are handled within TeamNodeEditor/TeamEraEditor via imported SponsorEditor.css
 
-import TeamNodeEditor from '../components/maintenance/TeamNodeEditor';
-import TeamEraEditor from '../components/maintenance/TeamEraEditor';
+import TeamNodeEditor from '../../components/maintenance/TeamNodeEditor';
+import TeamEraEditor from '../../components/maintenance/TeamEraEditor';
 
 export default function TeamMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
