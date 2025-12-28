@@ -7,6 +7,7 @@ import ImprintPage from '../../src/pages/ImprintPage';
 describe('ImprintPage', () => {
     it('renders correctly', () => {
         render(<ImprintPage />);
-        expect(screen.getByText(/Impressum/i)).toBeInTheDocument();
+        // Use getByRole to find the page title Card (expected single match)
+        expect(screen.getByRole('heading', { name: /Datenschutzerklärung/i })).toBeInTheDocument();
     });
 });

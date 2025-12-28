@@ -321,6 +321,12 @@ async def test_user_new(new_user) -> User:
 
 
 @pytest_asyncio.fixture
+async def test_user(new_user) -> User:
+    """Alias for new_user - for compatibility with existing tests."""
+    return new_user
+
+
+@pytest_asyncio.fixture
 async def test_user_trusted(trusted_user) -> User:
     """Alias for trusted_user."""
     return trusted_user

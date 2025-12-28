@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import React from 'react';
 import '@testing-library/jest-dom';
-import CenteredPageLayout from '../../src/layouts/CenteredPageLayout';
+import CenteredPageLayout from '../../src/components/layout/CenteredPageLayout';
 
 describe('CenteredPageLayout', () => {
     it('renders children correctly', () => {
