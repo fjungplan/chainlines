@@ -34,6 +34,9 @@ class LineageSummary(BaseModel):
 class TeamHistoryResponse(BaseModel):
     """Mobile-optimized chronological history for a team node."""
     node_id: str = Field(..., description="UUID of the team node")
+    current_name: Optional[str] = Field(None, description="Most recent known team name")
+    legal_name: str = Field(..., description="Official legal name of the team entity")
+    display_name: Optional[str] = Field(None, description="Common or abbreviated display name")
     founding_year: int = Field(..., description="Year the team was founded")
     dissolution_year: Optional[int] = Field(None, description="Year dissolved, if applicable")
     timeline: list[TeamHistoryEra] = Field(..., description="Chronological list of eras")
