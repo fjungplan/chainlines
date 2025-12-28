@@ -3,8 +3,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
 import { editsApi } from '../../api/edits';
 import { sponsorsApi } from '../../api/sponsors';
+
 import { LoadingSpinner } from '../Loading';
 import SponsorManagerModal from './SponsorManagerModal';
+import Button from '../common/Button';
 import './SponsorEditor.css'; // Reuse Sponsor style
 import TeamEraBubbles from './TeamEraBubbles';
 import { IOC_CODES } from '../../utils/iocCodes';
@@ -311,11 +313,11 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
         <div className="team-inner-container centered-editor-container">
             <div className="editor-header">
                 <div className="header-left">
-                    <button className="back-btn" onClick={() => onSuccess && onSuccess()} title="Back to Team">
+                    <Button variant="ghost" className="back-btn" onClick={() => onSuccess && onSuccess()} title="Back to Team">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                         </svg>
-                    </button>
+                    </Button>
 
                     <h2>{eraId ? `Edit Era (Season): ${formData.season_year}` : 'Add New Era (Season)'}</h2>
                 </div>
@@ -470,13 +472,13 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                                 <div className="section-header">
                                     <label>Era Sponsors</label>
                                     {eraId ? (
-                                        <button
-                                            className="secondary-btn small"
-                                            type="button"
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
                                             onClick={() => setIsSponsorModalOpen(true)}
                                         >
                                             Manage Sponsors
-                                        </button>
+                                        </Button>
                                     ) : (
                                         <span style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>
                                             (Sponsors copied from previous era. Save to edit.)
@@ -512,9 +514,9 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 <div className="editor-column brands-column">
                     <div className="column-header">
                         <h3>Team Timeline</h3>
-                        <button className="secondary-btn small" onClick={() => handleEraSwitch('NEW')}>
+                        <Button variant="secondary" size="sm" onClick={() => handleEraSwitch('NEW')}>
                             + New Era
-                        </button>
+                        </Button>
                     </div>
                     <TeamEraBubbles
                         nodeId={nodeId}
@@ -528,42 +530,42 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
             <div className="editor-footer">
                 <div className="footer-actions-left">
                     {eraId && canDelete() && (
-                        <button
-                            type="button"
+                        <Button
+                            variant="outline"
                             className="footer-btn"
                             style={{ borderColor: '#991b1b', color: '#fca5a5' }}
                             onClick={handleDelete}
                             disabled={submitting}
                         >
                             Delete Era
-                        </button>
+                        </Button>
                     )}
-                    <button
-                        type="button"
+                    <Button
+                        variant="secondary"
                         className="footer-btn"
                         onClick={() => onSuccess && onSuccess()}
                         disabled={submitting}
                     >
                         {eraId ? 'Back' : 'Cancel'}
-                    </button>
+                    </Button>
                 </div>
                 <div className="footer-actions-right">
-                    <button
-                        type="button"
+                    <Button
+                        variant={isRequestMode() ? 'primary' : 'primary'} // Original: .save (primary) or .request (primary-ish)
                         className={`footer-btn ${isRequestMode() ? 'request' : 'save'}`}
                         onClick={() => handleSave(false)}
                         disabled={submitting}
                     >
                         {isRequestMode() ? 'Request Update' : 'Save'}
-                    </button>
-                    <button
-                        type="button"
+                    </Button>
+                    <Button
+                        variant={isRequestMode() ? 'primary' : 'primary'}
                         className={`footer-btn ${isRequestMode() ? 'request' : 'save-close'}`}
                         onClick={() => handleSave(true)}
                         disabled={submitting}
                     >
                         {isRequestMode() ? 'Request & Close' : 'Save & Close'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

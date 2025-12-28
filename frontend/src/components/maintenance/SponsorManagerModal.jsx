@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { sponsorsApi } from '../../api/sponsors';
 import { LoadingSpinner } from '../Loading';
 import './SponsorManagerModal.css';
+import Button from '../common/Button';
 
 export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, seasonYear }) {
     if (!isOpen) return null;
@@ -205,11 +206,11 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                         But we should probably encourage the bottom button. 
                         Let's keep X for emergency exit. 
                     */}
-                    <button className="close-btn" onClick={handleClose} title="Close">
+                    <Button variant="ghost" className="close-btn" onClick={handleClose} title="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
                         </svg>
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="modal-body">
@@ -249,15 +250,16 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                                 </td>
                                                 <td>{link.prominence_percent}%</td>
                                                 <td>
-                                                    <button
-                                                        className="icon-btn delete"
+                                                    <Button
+                                                        variant="icon"
+                                                        className="delete"
                                                         onClick={(e) => { e.stopPropagation(); handleRemoveLink(link.link_id); }}
                                                         title="Remove Sponsor"
                                                     >
                                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
                                                         </svg>
-                                                    </button>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -274,9 +276,9 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                             <div className="form-header-row">
                                 <h4>{editingLink ? 'Edit Sponsor' : 'Add Sponsor'}</h4>
                                 {editingLink && (
-                                    <button className="text-btn small" onClick={handleAddClick}>
+                                    <Button variant="ghost" size="sm" onClick={handleAddClick}>
                                         + New
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                             <div className="add-sponsor-form">
@@ -344,7 +346,8 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                     </div>
                                 </div>
                                 <div className="form-actions" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #444' }}>
-                                    <button
+                                    <Button
+                                        variant="secondary"
                                         className="footer-btn"
                                         onClick={() => {
                                             setSelectedBrand(null);
@@ -353,29 +356,32 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                         }}
                                     >
                                         Cancel
-                                    </button>
-                                    <button
-                                        className="footer-btn save"
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        // className="footer-btn save" // Redundant if using variant primary
+                                        className="footer-btn"
                                         onClick={handleSaveLink}
                                         disabled={!selectedBrand}
                                         title={!selectedBrand ? "Select a brand first" : (editingLink ? "Update Link" : "Add Link")}
                                     >
                                         {editingLink ? 'Update' : 'Add'}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         </div>
 
                         {/* New Footer for Modal Exit */}
                         <div className="modal-footer-action">
-                            <button
+                            <Button
+                                variant="primary"
                                 className={`save-close-btn ${canClose ? 'active' : 'disabled'}`}
                                 onClick={handleSaveAndClose}
                                 disabled={!canClose || submitting}
                                 title={canClose ? "Save & Close" : "Total prominence must be 100%"}
                             >
                                 {submitting ? 'Saving...' : 'Save & Close'}
-                            </button>
+                            </Button>
                             {!canClose && <div className="prominence-warning">Total must be 100%</div>}
                         </div>
                     </div>

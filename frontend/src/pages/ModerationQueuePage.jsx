@@ -3,8 +3,10 @@ import { moderationApi } from '../api/moderation';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './ModerationQueuePage.css';
+
 import CenteredPageLayout from '../components/layout/CenteredPageLayout';
 import Card from '../components/common/Card';
+import Button from '../components/common/Button';
 
 function LoadingSpinner() {
   return <div className="loading-spinner">Loading...</div>;
@@ -21,7 +23,7 @@ function Toast({ message, onClose }) {
   return (
     <div className="toast">
       {message}
-      <button onClick={onClose} aria-label="Close">×</button>
+      <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close" style={{ padding: '0 8px' }}>×</Button>
     </div>
   );
 }
@@ -101,18 +103,18 @@ export default function ModerationQueuePage() {
           )}
 
           <div className="filter-bar">
-            <button className={filter === 'ALL' ? 'active' : ''} onClick={() => setFilter('ALL')}>
+            <Button variant="secondary" active={filter === 'ALL'} onClick={() => setFilter('ALL')}>
               All ({stats?.pending_count || 0})
-            </button>
-            <button className={filter === 'METADATA' ? 'active' : ''} onClick={() => setFilter('METADATA')}>
+            </Button>
+            <Button variant="secondary" active={filter === 'METADATA'} onClick={() => setFilter('METADATA')}>
               Metadata ({stats?.pending_by_type?.METADATA || 0})
-            </button>
-            <button className={filter === 'SPONSOR' ? 'active' : ''} onClick={() => setFilter('SPONSOR')}>
+            </Button>
+            <Button variant="secondary" active={filter === 'SPONSOR'} onClick={() => setFilter('SPONSOR')}>
               Sponsors ({stats?.pending_by_type?.SPONSOR || 0})
-            </button>
-            <button className={filter === 'MERGE' ? 'active' : ''} onClick={() => setFilter('MERGE')}>
+            </Button>
+            <Button variant="secondary" active={filter === 'MERGE'} onClick={() => setFilter('MERGE')}>
               Lineage ({((stats?.pending_by_type?.MERGE || 0) + (stats?.pending_by_type?.SPLIT || 0))})
-            </button>
+            </Button>
           </div>
           <div className="edits-list">
             {edits.length === 0 && !loading ? (
@@ -195,7 +197,7 @@ function EditReviewModal({ edit, onClose, onReview }) {
       >
         <div className="modal-header">
           <h2>Review Edit</h2>
-          <button onClick={onClose} aria-label="Close">×</button>
+          <Button variant="ghost" onClick={onClose} aria-label="Close">×</Button>
         </div>
         <div className="modal-body">
           <div className="review-section">
@@ -231,8 +233,8 @@ function EditReviewModal({ edit, onClose, onReview }) {
           </div>
         </div>
         <div className="modal-footer">
-          <button onClick={handleReject} disabled={reviewing || !notes} className="reject-button">Reject</button>
-          <button onClick={handleApprove} disabled={reviewing} className="approve-button">Approve & Apply</button>
+          <Button variant="danger" onClick={handleReject} disabled={reviewing || !notes} className="reject-button">Reject</Button>
+          <Button variant="success" onClick={handleApprove} disabled={reviewing} className="approve-button">Approve & Apply</Button>
         </div>
       </div>
     </div>

@@ -1,3 +1,140 @@
-/* Button styles are currently handled globally in index.css 
-   This file exists to allow for component-specific overrides in the future.
-*/
+/* ===== BUTTONS ===== */
+/* Button Base - "Boring" Dark Grey / Anthracite for ALL buttons */
+button,
+.btn {
+   font-family: inherit;
+   height: var(--input-height);
+   padding: 0 1.2rem;
+   font-size: 0.95rem;
+   font-weight: 600;
+   border-radius: var(--radius-md);
+   cursor: pointer;
+   transition: var(--transition-normal);
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   white-space: nowrap;
+
+   /* Default / Base Style */
+   background-color: var(--color-bg-primary);
+   /* #2a2a2a */
+   border: 1px solid var(--color-border-light);
+   /* #555 */
+   color: var(--color-text-primary);
+   /* #e0e0e0 */
+}
+
+button:hover,
+.btn:hover {
+   background-color: var(--color-bg-tertiary);
+   /* #444 */
+   border-color: #666;
+   color: var(--color-text-light);
+   /* #fff */
+}
+
+button:disabled,
+.btn:disabled {
+   opacity: 0.5;
+   cursor: not-allowed;
+   pointer-events: none;
+}
+
+button:focus-visible,
+.btn:focus-visible {
+   outline: 2px solid var(--color-border-focus);
+   outline-offset: 2px;
+}
+
+/* === VARIANTS === */
+
+/* Primary, Secondary, Success, Danger - currently sharing 'Default' look effectively, 
+   but we explicitly define them to ensure consistency if base changes. 
+   Per user request/previous css: they were overrides to kill specific colors. */
+
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger {
+   background-color: var(--color-bg-primary);
+   border: 1px solid var(--color-border-light);
+   color: var(--color-text-primary);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-success:hover,
+.btn-danger:hover {
+   background-color: var(--color-bg-tertiary);
+   border-color: #666;
+   color: var(--color-text-light);
+}
+
+/* Outline (similar to default but maybe explicit transparent bg?) */
+.btn-outline {
+   background-color: transparent;
+   border: 1px solid var(--color-border-light);
+   color: var(--color-text-primary);
+}
+
+.btn-outline:hover {
+   background-color: rgba(255, 255, 255, 0.05);
+   border-color: var(--color-text-light);
+   color: var(--color-text-light);
+}
+
+/* Ghost / Text Button (No border, transparent bg) */
+.btn-ghost {
+   background-color: transparent;
+   border: 1px solid transparent;
+   color: var(--color-text-primary);
+}
+
+.btn-ghost:hover {
+   background-color: rgba(255, 255, 255, 0.05);
+   color: var(--color-text-light);
+}
+
+/* Icon Button (Square, centered) */
+.btn-icon {
+   padding: 0;
+   width: var(--input-height);
+   /* Square */
+   background-color: transparent;
+   border: none;
+   color: var(--color-text-secondary);
+}
+
+.btn-icon:hover {
+   background-color: rgba(255, 255, 255, 0.1);
+   color: var(--color-text-light);
+}
+
+/* === SIZES === */
+
+/* Small */
+.btn-sm {
+   height: 32px;
+   padding: 0 0.8rem;
+   font-size: 0.85rem;
+}
+
+.btn-sm.btn-icon {
+   width: 32px;
+}
+
+/* Large */
+.btn-lg {
+   height: 48px;
+   padding: 0 1.5rem;
+   font-size: 1.1rem;
+}
+
+/* === STATES === */
+
+.btn.active,
+.btn:active {
+   background-color: var(--color-primary);
+   border-color: var(--color-primary);
+   color: white;
+}

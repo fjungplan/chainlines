@@ -281,7 +281,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         <div className="sponsor-inner-container centered-editor-container">
             <div className="editor-header">
                 <div className="header-left">
-                    <Button variant="outline" className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
+                    <Button variant="ghost" className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                         </svg>
@@ -495,7 +495,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                     <div className="column-header">
                         <h3>Brand Identities</h3>
                         {masterId && (
-                            <Button variant="secondary" className="small" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
+                            <Button variant="secondary" size="sm" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
                                 + Add
                             </Button>
                         )}
@@ -538,7 +538,8 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
             <div className="editor-footer">
                 <Button
                     variant="secondary"
-                    className="footer-btn cancel"
+                    className="footer-btn" // Keep class for specific layout margin if needed, or remove? Editor footer layout relies on flex gap.
+                    // Actually footer-btn styles are redundant with variant="secondary" mostly.
                     onClick={handleBack}
                     disabled={submitting}
                 >
@@ -549,7 +550,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                         <>
                             <Button
                                 variant="primary"
-                                className="footer-btn save"
+                                className="footer-btn"
                                 onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
                                 disabled={submitting}
                             >
@@ -557,7 +558,7 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                             </Button>
                             <Button
                                 variant="primary"
-                                className="footer-btn save-close"
+                                className="footer-btn"
                                 onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
                                 disabled={submitting}
                             >

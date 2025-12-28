@@ -18,11 +18,27 @@ describe('Button Component', () => {
     });
 
     it('applies variant classes correctly', () => {
-        const { rerender } = render(<Button variant="primary">Primary</Button>);
-        expect(screen.getByText('Primary')).toHaveClass('btn-primary');
+        const variants = ['primary', 'secondary', 'danger', 'success', 'outline', 'ghost', 'icon'];
 
-        rerender(<Button variant="danger">Danger</Button>);
-        expect(screen.getByText('Danger')).toHaveClass('btn-danger');
+        variants.forEach(variant => {
+            const { unmount } = render(<Button variant={variant}>Test</Button>);
+            const btn = screen.getByText('Test');
+            expect(btn).toHaveClass(`btn-${variant}`);
+            unmount();
+        });
+    });
+
+    it('applies size classes correctly', () => {
+        const { rerender } = render(<Button size="sm">Small</Button>);
+        expect(screen.getByText('Small')).toHaveClass('btn-sm');
+
+        rerender(<Button size="lg">Large</Button>);
+        expect(screen.getByText('Large')).toHaveClass('btn-lg');
+    });
+
+    it('applies active class when active prop is true', () => {
+        render(<Button active>Active</Button>);
+        expect(screen.getByText('Active')).toHaveClass('active');
     });
 
     it('disables the button when disabled prop is set', () => {
