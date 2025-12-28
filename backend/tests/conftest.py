@@ -17,6 +17,20 @@ from app.core.security import create_access_token
 import uuid
 import app.db.database as database_module
 
+
+@pytest.fixture(autouse=True)
+def clear_dependency_overrides():
+    """Clear FastAPI dependency overrides before and after each test.
+    
+    This ensures test isolation - no stale overrides leak between tests.
+    """
+    # Clear before test
+    app.dependency_overrides.clear()
+    yield
+    # Clear after test
+    app.dependency_overrides.clear()
+
+
 @pytest_asyncio.fixture
 async def test_engine():
     """Create a test engine for each test session using SQLite."""
@@ -317,6 +331,12 @@ async def async_session(isolated_session) -> AsyncSession:
 @pytest_asyncio.fixture
 async def test_user_new(new_user) -> User:
     """Alias for new_user."""
+    return new_user
+
+
+@pytest_asyncio.fixture
+async def test_user(new_user) -> User:
+    """Alias for new_user - for compatibility with existing tests."""
     return new_user
 
 

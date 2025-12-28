@@ -1,8 +1,9 @@
+import React from 'react';
 import './Loading.css';
 
 export function LoadingSpinner({ size = 'md', message }) {
   const sizeClass = `spinner-${size}`;
-  
+
   return (
     <div className="loading-container">
       <div className={`spinner ${sizeClass}`}>
@@ -15,7 +16,7 @@ export function LoadingSpinner({ size = 'md', message }) {
 
 export function LoadingSkeleton({ type = 'card' }) {
   const skeletonClass = `skeleton-${type}`;
-  
+
   return (
     <div className={`skeleton-container ${skeletonClass}`}>
       {type === 'list' && (
@@ -34,14 +35,14 @@ export function LoadingSkeleton({ type = 'card' }) {
           </div>
         </>
       )}
-      
+
       {type === 'graph' && (
         <div className="skeleton-graph">
           <div className="skeleton-graph-header skeleton-pulse"></div>
           <div className="skeleton-graph-body skeleton-pulse"></div>
         </div>
       )}
-      
+
       {type === 'card' && (
         <div className="skeleton-card">
           <div className="skeleton-line skeleton-line-full skeleton-pulse"></div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { moderationApi } from '../api/moderation';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { formatDate, formatDateTime } from '../utils/dateUtils';
 import './ModerationQueuePage.css';
 
 import CenteredPageLayout from '../components/layout/CenteredPageLayout';
@@ -126,7 +127,7 @@ export default function ModerationQueuePage() {
                 <div key={edit.edit_id} className="edit-card" onClick={() => setSelectedEdit(edit)} tabIndex={0} role="button" aria-pressed="false" onKeyDown={e => { if (e.key === 'Enter') { setSelectedEdit(edit); } }}>
                   <div className="edit-header">
                     <span className="edit-type">{edit.edit_type}</span>
-                    <span className="edit-date">{new Date(edit.created_at).toLocaleDateString()}</span>
+                    <span className="edit-date">{formatDate(edit.created_at)}</span>
                   </div>
                   <div className="edit-user">By: {edit.user_display_name || edit.user_email}</div>
                   <div className="edit-target">
@@ -207,7 +208,7 @@ function EditReviewModal({ edit, onClose, onReview }) {
           <div className="review-section">
             <h3>Submitted By</h3>
             <p>{edit.user_display_name || edit.user_email}</p>
-            <p className="date">{new Date(edit.created_at).toLocaleString()}</p>
+            <p className="date">{formatDateTime(edit.created_at)}</p>
           </div>
           <div className="review-section">
             <h3>Target</h3>

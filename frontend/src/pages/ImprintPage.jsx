@@ -1,3 +1,4 @@
+import React from 'react';
 import CenteredPageLayout from '../components/layout/CenteredPageLayout';
 import Card from '../components/common/Card';
 import './ImprintPage.css';

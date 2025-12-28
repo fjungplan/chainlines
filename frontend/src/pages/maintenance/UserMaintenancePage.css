@@ -1,0 +1,158 @@
+/* User Maintenance Page Styles */
+/* Reuses patterns from TeamMaintenancePage.css */
+
+/* Header Styling */
+.user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 3px solid var(--color-primary);
+    padding-bottom: 15px;
+}
+
+.user-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-header h1 {
+    margin: 0;
+    font-size: 32px;
+    color: var(--color-text-light);
+}
+
+/* Controls */
+.user-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+/* Table Container */
+.user-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-bg-primary);
+}
+
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.user-table th {
+    position: sticky;
+    top: 0;
+    background-color: var(--color-bg-secondary);
+    z-index: 10;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    border-bottom: 2px solid var(--color-bg-secondary);
+}
+
+.user-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.user-table th.sortable:hover {
+    color: var(--color-text-light);
+}
+
+.user-table td {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-bg-code);
+    vertical-align: middle;
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
+}
+
+.user-table tr:hover {
+    background-color: var(--color-bg-tertiary);
+    cursor: pointer;
+}
+
+/* User Name */
+.user-name {
+    font-weight: 500;
+    color: var(--color-text-light);
+}
+
+/* Role Badges */
+.role-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.role-badge.role-admin {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.role-badge.role-moderator {
+    background-color: rgba(168, 85, 247, 0.2);
+    color: #d8b4fe;
+    border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.role-badge.role-trusted_editor {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.role-badge.role-editor {
+    background-color: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.4);
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-badge.status-active {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.status-badge.status-banned {
+    background-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    font-weight: 600;
+}
+
+/* Empty State */
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+    color: var(--color-text-secondary);
+}
+
+/* Actions Column */
+.actions-col {
+    text-align: right;
+    width: 100px;
+}

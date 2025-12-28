@@ -256,50 +256,5 @@ class TestAuthDependencies:
         assert test_user.can_edit() is True
 
 
-# Fixtures
-@pytest.fixture
-async def test_user(db_session):
-    """Create a test user"""
-    user = User(
-        google_id='test_google_id_123',
-        email='testuser@example.com',
-        display_name='Test User',
-        avatar_url='https://example.com/avatar.jpg',
-        role=UserRole.EDITOR
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
-
-
-@pytest.fixture
-async def admin_user(db_session):
-    """Create an admin user"""
-    user = User(
-        google_id='admin_google_id_456',
-        email='admin@example.com',
-        display_name='Admin User',
-        role=UserRole.ADMIN
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
-
-
-@pytest.fixture
-async def banned_user(db_session):
-    """Create a banned user"""
-    user = User(
-        google_id='banned_google_id_789',
-        email='banned@example.com',
-        display_name='Banned User',
-        role=UserRole.EDITOR,
-        is_banned=True,
-        banned_reason='Violation of terms of service'
-    )
-    db_session.add(user)
-    await db_session.commit()
-    await db_session.refresh(user)
-    return user
+# Note: Fixtures (test_user, admin_user, banned_user) are now defined in conftest.py
+# as new_user, admin_user, and banned_user respectively.
