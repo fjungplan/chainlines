@@ -93,240 +93,190 @@
 }
 
 /* Timeline Sidebar Scrollbar */
-  .timeline-sidebar::-webkit-scrollbar {
-    width: 6px;
-  }
+.timeline-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
 
-  .timeline-sidebar::-webkit-scrollbar-track {
-    background: transparent;
-  }
+.timeline-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  .timeline-sidebar::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 3px;
-  }
+.timeline-sidebar::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
 
-  .timeline-sidebar::-webkit-scrollbar-thumb:hover {
-    background: #999;
-  }
+.timeline-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
 
-  .timeline-graph-container svg {
-    display: block;
-    cursor: grab;
-  }
+.timeline-graph-container svg {
+  display: block;
+  cursor: grab;
+}
 
-  .timeline-graph-container svg:active {
-    cursor: grabbing;
-  }
+.timeline-graph-container svg:active {
+  cursor: grabbing;
+}
 
-  .timeline-ruler {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 22px;
-    pointer-events: none;
-    color: #ccc;
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1;
-    z-index: 2;
-  }
+.timeline-ruler {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 22px;
+  pointer-events: none;
+  color: #ccc;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  z-index: 2;
+}
 
-  .timeline-ruler.top {
-    top: 0;
-  }
+.timeline-ruler.top {
+  top: 0;
+}
 
-  .timeline-ruler.bottom {
-    bottom: 0;
-  }
+.timeline-ruler.bottom {
+  bottom: 0;
+}
 
-  .timeline-copyright {
-    position: absolute;
-    bottom: 26px;
-    left: 12px;
-    font-size: 11px;
-    color: #888;
-    background: rgba(42, 42, 42, 0.9);
-    padding: 2px 6px;
-    border-radius: 3px;
-    border: 1px solid #555;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    pointer-events: none;
-    z-index: 2;
-  }
+.timeline-copyright {
+  position: absolute;
+  bottom: 26px;
+  left: 12px;
+  font-size: 11px;
+  color: #888;
+  background: rgba(42, 42, 42, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #555;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 2;
+}
 
-  .timeline-ruler-label {
-    position: absolute;
-    transform: translateX(-50%);
-    white-space: nowrap;
-    background: rgba(42, 42, 42, 0.9);
-    padding: 2px 4px;
-    border-radius: 3px;
-    border: 1px solid #555;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  }
+.timeline-ruler-label {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(42, 42, 42, 0.9);
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: 1px solid #555;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
 
 
 
-  /* Era segment styling for detail view */
-  .era-segment {
-    pointer-events: auto;
-  }
+/* Era segment styling for detail view */
+.era-segment {
+  pointer-events: auto;
+}
 
-  .node rect {
-    pointer-events: auto;
-  }
+.node rect {
+  pointer-events: auto;
+}
 
-  /* Wizard action buttons */
-  .wizard-actions {
-    display: flex;
+
+
+@media (max-width: 768px) {
+  .timeline-layout {
     flex-direction: column;
-    gap: 10px;
+    margin-top: 0;
+    min-height: auto;
+  }
+
+  .timeline-graph-container {
+    height: auto;
+    min-height: 60vh;
+  }
+
+  .timeline-sidebar {
     width: 100%;
-    flex-shrink: 0;
+    min-width: 100%;
+    border-left: none;
+    border-top: 1px solid #ddd;
+  }
+}
+
+/* Toast Notification */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  animation: slideIn 0.3s ease-out forwards;
+  max-width: 400px;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
   }
 
-  .wizard-action-btn {
-    background: #3a3a3a;
-    color: #cccccc;
-    border: 1px solid #555;
-    padding: 12px 16px;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
   }
 
-  .wizard-action-btn svg {
-    flex-shrink: 0;
-    margin-right: 8px;
+  to {
+    transform: translateX(400px);
+    opacity: 0;
   }
+}
 
-  .wizard-action-btn.wizard-create {
-    background: #3a3a3a;
-    color: #cccccc;
-  }
+.toast.toast-success {
+  background-color: #10b981;
+  color: white;
+  border-left: 4px solid #059669;
+}
 
-  .wizard-action-btn:hover {
-    background: #444;
-    color: #ffffff;
-    border-color: #666;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  }
+.toast.toast-info {
+  background-color: #3b82f6;
+  color: white;
+  border-left: 4px solid #1d4ed8;
+}
 
-  .wizard-action-btn.wizard-create:hover {
-    background: #444;
-    color: #ffffff;
-  }
+.toast.toast-error {
+  background-color: #ef4444;
+  color: white;
+  border-left: 4px solid #dc2626;
+}
 
-  .wizard-action-btn:active {
-    transform: translateY(0);
-  }
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
 
-  @media (max-width: 768px) {
-    .timeline-layout {
-      flex-direction: column;
-      margin-top: 0;
-      min-height: auto;
-    }
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: bold;
+}
 
-    .timeline-graph-container {
-      height: auto;
-      min-height: 60vh;
-    }
+.toast-message {
+  flex: 1;
+}
 
-    .timeline-sidebar {
-      width: 100%;
-      min-width: 100%;
-      border-left: none;
-      border-top: 1px solid #ddd;
-    }
-  }
-
-  /* Toast Notification */
+@media (max-width: 640px) {
   .toast {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 12px 20px;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 10000;
-    animation: slideIn 0.3s ease-out forwards;
-    max-width: 400px;
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
   }
-
-  @keyframes slideIn {
-    from {
-      transform: translateX(400px);
-      opacity: 0;
-    }
-
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-
-  @keyframes slideOut {
-    from {
-      transform: translateX(0);
-      opacity: 1;
-    }
-
-    to {
-      transform: translateX(400px);
-      opacity: 0;
-    }
-  }
-
-  .toast.toast-success {
-    background-color: #10b981;
-    color: white;
-    border-left: 4px solid #059669;
-  }
-
-  .toast.toast-info {
-    background-color: #3b82f6;
-    color: white;
-    border-left: 4px solid #1d4ed8;
-  }
-
-  .toast.toast-error {
-    background-color: #ef4444;
-    color: white;
-    border-left: 4px solid #dc2626;
-  }
-
-  .toast-content {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 14px;
-    font-weight: 500;
-  }
-
-  .toast-icon {
-    flex-shrink: 0;
-    font-size: 16px;
-    font-weight: bold;
-  }
-
-  .toast-message {
-    flex: 1;
-  }
-
-  @media (max-width: 640px) {
-    .toast {
-      top: 10px;
-      right: 10px;
-      left: 10px;
-      max-width: none;
-    }
-  }
+}

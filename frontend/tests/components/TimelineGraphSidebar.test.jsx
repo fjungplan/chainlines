@@ -65,10 +65,7 @@ vi.mock('../../src/components/ControlPanel', () => ({
   default: () => <div data-testid="control-panel">Control Panel Content</div>
 }));
 
-vi.mock('../../src/components/EditMetadataWizard', () => ({ default: () => null }));
-vi.mock('../../src/components/MergeWizard', () => ({ default: () => null }));
-vi.mock('../../src/components/SplitWizard', () => ({ default: () => null }));
-vi.mock('../../src/components/CreateTeamWizard', () => ({ default: () => null }));
+
 vi.mock('../../src/utils/layoutCalculator', () => ({
   LayoutCalculator: class {
     calculateLayout() { return { nodes: [], links: [], xScale: () => 0, yearRange: { min: 2000, max: 2001 } }; }

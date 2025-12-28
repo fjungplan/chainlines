@@ -52,7 +52,7 @@ export default function TimelineGraph({
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
 
 
-  const [selectedNode, setSelectedNode] = useState(null);
+
   const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [currentFilters, setCurrentFilters] = useState({
     startYear: currentStartYear || initialStartYear,
@@ -1070,25 +1070,7 @@ export default function TimelineGraph({
     }, duration);
   };
 
-  const handleWizardSuccess = (result) => {
-    console.log('Edit submitted successfully:', result);
-    setShowEditWizard(false);
-    setShowMergeWizard(false);
-    setShowSplitWizard(false);
-    setShowCreateWizard(false);
-    setSelectedNode(null);
 
-    // Show toast notification (no browser dialog)
-    if (result.status === 'APPROVED') {
-      showToast('Edit applied successfully!', 'success');
-      // Refetch data to show changes immediately
-      if (onEditSuccess) {
-        onEditSuccess();
-      }
-    } else {
-      showToast('Edit submitted for moderation', 'info');
-    }
-  };
 
   const handleNodeHover = (event, node) => {
     // Context-aware tooltip:
