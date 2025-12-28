@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { teamsApi } from '../api/teams';
-import { LoadingSpinner } from '../components/Loading';
-import { ErrorDisplay } from '../components/ErrorDisplay';
+import { useAuth } from '../../contexts/AuthContext';
+import { teamsApi } from '../../api/teams';
+import { LoadingSpinner } from '../../components/Loading';
+import { ErrorDisplay } from '../../components/ErrorDisplay';
 import './TeamMaintenancePage.css'; // Global Team Page styles (List grid etc)
 // Note: Editor styles are handled within TeamNodeEditor/TeamEraEditor via imported SponsorEditor.css
 
-import TeamNodeEditor from '../components/maintenance/TeamNodeEditor';
-import TeamEraEditor from '../components/maintenance/TeamEraEditor';
+import TeamNodeEditor from '../../components/maintenance/TeamNodeEditor';
+import TeamEraEditor from '../../components/maintenance/TeamEraEditor';
+import Button from '../../components/common/Button';
 
 export default function TeamMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
@@ -177,9 +178,9 @@ export default function TeamMaintenancePage() {
                             disabled
                         />
                         {(isEditor() || isAdmin()) && (
-                            <button className="btn btn-primary" onClick={handleCreateTeam}>
+                            <Button variant="primary" onClick={handleCreateTeam}>
                                 + Create New Team
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -225,13 +226,14 @@ export default function TeamMaintenancePage() {
                                                 <td>{team.dissolution_year || '-'}</td>
                                                 <td>{team.is_active ? 'Yes' : 'No'}</td>
                                                 <td className="actions-col">
-                                                    <button
-                                                        className="edit-button"
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
                                                         onClick={() => handleEditTeam(team.node_id)}
                                                         disabled={!isEditor() && !isAdmin()}
                                                     >
                                                         Edit
-                                                    </button>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         ))}

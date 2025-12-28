@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { lineageApi } from '../api/lineage';
-import { useAuth } from '../contexts/AuthContext';
-import { LoadingSpinner } from '../components/Loading';
+import { lineageApi } from '../../api/lineage';
+import { useAuth } from '../../contexts/AuthContext';
+import { LoadingSpinner } from '../../components/Loading';
 import LineageEventEditor from './LineageEventEditorPage';
-import './LineageMaintenance.css';
+import './LineageMaintenancePage.css';
 import './TeamMaintenancePage.css';
+import Button from '../../components/common/Button';
 
 const EventTypeChip = ({ type }) => {
     let className = 'event-chip';
@@ -113,12 +114,9 @@ const LineageMaintenance = () => {
                             style={{ flex: 1, marginRight: '1rem' }}
                         />
                         {canEdit() && (
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleAddClick}
-                            >
+                            <Button variant="primary" onClick={handleAddClick}>
                                 + Create New Event
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -160,12 +158,13 @@ const LineageMaintenance = () => {
                                                 </td>
                                                 <td className="actions-col">
                                                     {canEditEvent && (
-                                                        <button
-                                                            className="edit-button"
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
                                                             onClick={() => handleEditClick(event.event_id)}
                                                         >
                                                             Edit
-                                                        </button>
+                                                        </Button>
                                                     )}
                                                 </td>
                                             </tr>

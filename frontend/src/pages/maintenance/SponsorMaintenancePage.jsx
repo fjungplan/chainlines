@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { sponsorsApi } from '../api/sponsors';
-import { LoadingSpinner } from '../components/Loading';
-import { ErrorDisplay } from '../components/ErrorDisplay';
+import { useAuth } from '../../contexts/AuthContext';
+import { sponsorsApi } from '../../api/sponsors';
+import { LoadingSpinner } from '../../components/Loading';
+import { ErrorDisplay } from '../../components/ErrorDisplay';
 import './SponsorMaintenancePage.css';
-import SponsorMasterEditor from '../components/maintenance/SponsorMasterEditor';
+import SponsorMasterEditor from '../../components/maintenance/SponsorMasterEditor';
+import Button from '../../components/common/Button';
 
 export default function SponsorMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
@@ -91,9 +92,9 @@ export default function SponsorMaintenancePage() {
                         // className="search-input" 
                         />
                         {(isEditor() || isAdmin()) && (
-                            <button className="btn btn-primary" onClick={handleCreate}>
+                            <Button variant="primary" onClick={handleCreate}>
                                 + Create New Sponsor
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -125,13 +126,14 @@ export default function SponsorMaintenancePage() {
                                                 <td>{master.industry_sector || '-'}</td>
                                                 <td>{master.brand_count}</td>
                                                 <td className="actions-col">
-                                                    <button
-                                                        className="edit-button"
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
                                                         onClick={() => handleEdit(master.master_id)}
                                                         disabled={!isEditor() && !isAdmin()}
                                                     >
                                                         Edit
-                                                    </button>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         ))}

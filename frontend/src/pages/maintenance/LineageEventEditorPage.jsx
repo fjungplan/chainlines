@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { lineageApi } from '../api/lineage';
-import TeamSearch from '../components/common/TeamSearch';
-import { LoadingSpinner } from '../components/Loading';
-import '../components/maintenance/SponsorEditor.css';
+import { useAuth } from '../../contexts/AuthContext';
+import { lineageApi } from '../../api/lineage';
+import TeamSearch from '../../components/common/TeamSearch';
+import { LoadingSpinner } from '../../components/Loading';
+import '../../components/maintenance/SponsorEditor.css';
+import Button from '../../components/common/Button';
 
 const EVENT_TYPES = [
     { value: 'MERGE', label: 'Merge' },
@@ -185,11 +186,11 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
             {/* HEADER */}
             <div className="editor-header">
                 <div className="header-left">
-                    <button className="back-btn" onClick={onClose} title="Back to List">
+                    <Button variant="ghost" className="back-btn" onClick={onClose} title="Back to List">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                         </svg>
-                    </button>
+                    </Button>
                     <h2>{isEditMode ? 'Edit Lineage Event' : 'New Lineage Event'}</h2>
                 </div>
             </div>
@@ -335,31 +336,31 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
 
             {/* FOOTER */}
             <div className="editor-footer">
-                <button
-                    type="button"
-                    className="footer-btn cancel"
+                <Button
+                    variant="secondary"
+                    className="footer-btn"
                     onClick={onClose}
                     disabled={submitting}
                 >
                     Cancel
-                </button>
+                </Button>
                 <div className="footer-actions-right">
-                    <button
-                        type="button"
-                        className="footer-btn save"
+                    <Button
+                        variant="primary"
+                        className="footer-btn"
                         onClick={() => handleSave(false)}
                         disabled={submitting}
                     >
                         {saveBtnLabel}
-                    </button>
-                    <button
-                        type="button"
-                        className="footer-btn save-close"
+                    </Button>
+                    <Button
+                        variant="primary"
+                        className="footer-btn"
                         onClick={() => handleSave(true)}
                         disabled={submitting}
                     >
                         {submitting ? 'Saving...' : 'Save & Close'}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

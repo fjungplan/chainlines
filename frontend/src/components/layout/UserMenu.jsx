@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import './UserMenu.css';
+import { useAuth } from '../../contexts/AuthContext';
+import '../UserMenu.css';
 
 export default function UserMenu() {
   const { user, logout, isAdmin, canEdit, needsModeration } = useAuth();

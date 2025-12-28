@@ -1,6 +1,9 @@
+import React from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import CenteredPageLayout from '../../components/layout/CenteredPageLayout';
+import Card from '../../components/common/Card';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -23,11 +26,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <h1>ChainLines</h1>
-        <p>Sign in to contribute to the timeline</p>
-
+    <CenteredPageLayout>
+      <Card title="ChainLines" subtitle="Sign in to contribute to the timeline">
         <div className="login-button-wrapper">
           <GoogleLogin
             onSuccess={onSuccess}
@@ -44,7 +44,7 @@ export default function LoginPage() {
             <li>Contribute to cycling history</li>
           </ul>
         </div>
-      </div>
-    </div>
+      </Card>
+    </CenteredPageLayout>
   );
 }

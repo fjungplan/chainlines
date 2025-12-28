@@ -96,6 +96,9 @@ class TeamDetailService:
 
         return TeamHistoryResponse(
             node_id=str(team.node_id),
+            current_name=team.latest_team_name,
+            legal_name=team.legal_name,
+            display_name=team.display_name,
             founding_year=team.founding_year,
             dissolution_year=team.dissolution_year,
             timeline=timeline,

@@ -1,15 +1,15 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
+import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import TeamDetailPage from './pages/TeamDetailPage';
-import LoginPage from './pages/LoginPage';
+import LoginPage from './pages/auth/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ModerationQueuePage from './pages/ModerationQueuePage';
 import MyEditsPage from './pages/MyEditsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
-import SponsorMaintenancePage from './pages/SponsorMaintenancePage';
-import TeamMaintenancePage from './pages/TeamMaintenancePage';
-import LineageMaintenancePage from './pages/LineageMaintenance';
+import SponsorMaintenancePage from './pages/maintenance/SponsorMaintenancePage';
+import TeamMaintenancePage from './pages/maintenance/TeamMaintenancePage';
+import LineageMaintenancePage from './pages/maintenance/LineageMaintenancePage';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
@@ -19,7 +19,7 @@ function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Layout />}>
+          <Route path="/" element={<MainLayout />}>
             <Route index element={<HomePage />} />
             <Route path="team/:nodeId" element={<TeamDetailPage />} />
             <Route path="login" element={<LoginPage />} />

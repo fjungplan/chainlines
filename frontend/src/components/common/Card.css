@@ -1,0 +1,53 @@
+.common-card {
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    border-bottom: 3px solid var(--color-primary);
+    padding-bottom: 15px;
+}
+
+/* Remove bottom border if no content follows immediately? No, standard card usually has separation */
+.card-header:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.card-titles h3 {
+    margin: 0;
+    font-size: 2rem;
+    color: var(--color-text-light);
+}
+
+.card-subtitle {
+    margin: 5px 0 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.card-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.card-content {
+    flex: 1;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .common-card {
+        padding: 20px;
+    }
+}

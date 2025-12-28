@@ -8,11 +8,11 @@
 }
 
 .layout-header {
-  background-color: #2a2a2a;
-  color: #ffffff;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-light);
   padding: 0.6rem 1rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  border-bottom: 1px solid #444;
+  box-shadow: var(--shadow-md);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -35,15 +35,8 @@
 
 .layout-title-link:hover {
   text-decoration: none;
-  color: #646cff;
-  /* Re-adding the color change if it was missing, or relying on inherit.  Actually, user said "color change is fine", implying it already exists. Best to NOT add color here unless I know what it is. But I must ensure text-decoration is none. */
+  color: var(--color-primary);
 }
-
-/* User said "color change is fine". `inherit` likely picks up a color from a parent link or global style. 
-   However, typically `a` tags get their color from global styles. 
-   If I look at `.layout-title-link`, it has `color: inherit`. 
-   If I want to be safe about the underline, I'll just add the hover rule.
-*/
 
 .layout-title {
   font-size: 1.5rem;
@@ -63,7 +56,7 @@
 }
 
 .nav-link {
-  color: #cccccc;
+  color: var(--color-text-primary);
   text-decoration: none;
   padding: 0.5rem 1rem;
   border-radius: 4px;
@@ -71,20 +64,20 @@
 }
 
 .nav-link:hover {
-  background-color: #444;
-  color: #ffffff;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-light);
 }
 
 .nav-link.login-link {
-  background-color: #3a3a3a;
-  color: #ffffff;
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-light);
   font-weight: 600;
-  border: 1px solid #555;
+  border: 1px solid var(--color-border-light);
 }
 
 .nav-link.login-link:hover {
-  background-color: #444;
-  border-color: #666;
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-text-muted);
 }
 
 .loading-screen {
@@ -93,7 +86,7 @@
   align-items: center;
   min-height: 100vh;
   font-size: 18px;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 .layout-main {

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './HamburgerMenu.css';
+import '../HamburgerMenu.css';
 
 export default function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false);

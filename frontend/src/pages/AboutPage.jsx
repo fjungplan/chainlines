@@ -1,10 +1,12 @@
+import React from 'react';
+import CenteredPageLayout from '../components/layout/CenteredPageLayout';
+import Card from '../components/common/Card';
 import './AboutPage.css';
 
 export default function AboutPage() {
   return (
-    <div className="centered-page-container">
-      <div className="centered-content-card">
-        <h1>About ChainLines</h1>
+    <CenteredPageLayout>
+      <Card title="About ChainLines">
 
         <section>
           <h2>What is ChainLines?</h2>
@@ -132,7 +134,7 @@ export default function AboutPage() {
             <strong>Year:</strong> 2025
           </p>
         </section>
-      </div>
-    </div>
+      </Card>
+    </CenteredPageLayout>
   );
 }

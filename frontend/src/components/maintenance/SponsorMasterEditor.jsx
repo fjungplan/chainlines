@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { sponsorsApi } from '../../api/sponsors';
 import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
+import Input from '../common/Input';
+import Button from '../common/Button';
 import './SponsorEditor.css';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -279,11 +281,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         <div className="sponsor-inner-container centered-editor-container">
             <div className="editor-header">
                 <div className="header-left">
-                    <button className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
+                    <Button variant="ghost" className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
                         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                         </svg>
-                    </button>
+                    </Button>
                     <h2>{headerTitle}</h2>
                 </div>
             </div>
@@ -331,9 +333,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                         <form onSubmit={(e) => { e.preventDefault(); }}>
                             <div className="form-row">
                                 <div className="form-group" style={{ flex: 1.5 }}>
-                                    <label>Legal Name *</label>
-                                    <input
-                                        type="text"
+                                    <Input
+                                        label="Legal Name *"
+                                        name="legal_name"
                                         value={masterForm.legal_name}
                                         onChange={e => handleMasterChange('legal_name', e.target.value)}
                                         required
@@ -369,8 +371,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                             </div>
 
                             <div className="form-group">
-                                <label>Source URL</label>
-                                <input
+                                <Input
+                                    label="Source URL"
+                                    name="source_url"
                                     type="url"
                                     value={masterForm.source_url}
                                     onChange={e => handleMasterChange('source_url', e.target.value)}
@@ -379,8 +382,10 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                             </div>
 
                             <div className="form-group">
-                                <label>Internal Notes</label>
-                                <textarea
+                                <Input
+                                    label="Internal Notes"
+                                    name="source_notes"
+                                    type="textarea"
                                     value={masterForm.source_notes}
                                     onChange={e => handleMasterChange('source_notes', e.target.value)}
                                     rows={3}
@@ -395,9 +400,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
 
                             <div className="form-row">
                                 <div className="form-group" style={{ flex: 1.5 }}>
-                                    <label>Brand Name * (e.g. Visma)</label>
-                                    <input
-                                        type="text"
+                                    <Input
+                                        label="Brand Name * (e.g. Visma)"
+                                        name="brand_name"
                                         value={brandForm.brand_name}
                                         onChange={e => handleBrandChange('brand_name', e.target.value)}
                                         placeholder="e.g. Visma"
@@ -407,9 +412,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                 </div>
 
                                 <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Display Name</label>
-                                    <input
-                                        type="text"
+                                    <Input
+                                        label="Display Name"
+                                        name="display_name"
                                         value={brandForm.display_name}
                                         onChange={e => handleBrandChange('display_name', e.target.value)}
                                         placeholder="if different"
@@ -420,8 +425,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
 
                             <div className="form-row">
                                 <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Source URL</label>
-                                    <input
+                                    <Input
+                                        label="Source URL"
+                                        name="source_url"
                                         type="url"
                                         value={brandForm.source_url}
                                         onChange={e => handleBrandChange('source_url', e.target.value)}
@@ -455,8 +461,10 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                             </div>
 
                             <div className="form-group">
-                                <label>Internal Notes</label>
-                                <textarea
+                                <Input
+                                    label="Internal Notes"
+                                    name="source_notes"
+                                    type="textarea"
                                     value={brandForm.source_notes}
                                     onChange={e => handleBrandChange('source_notes', e.target.value)}
                                     rows={3}
@@ -487,9 +495,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                     <div className="column-header">
                         <h3>Brand Identities</h3>
                         {masterId && (
-                            <button className="secondary-btn small" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
+                            <Button variant="secondary" size="sm" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
                                 + Add
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -528,33 +536,34 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
 
             {/* === FOOTER (CONTEXT AWARE) === */}
             <div className="editor-footer">
-                <button
-                    type="button"
-                    className="footer-btn cancel"
+                <Button
+                    variant="secondary"
+                    className="footer-btn" // Keep class for specific layout margin if needed, or remove? Editor footer layout relies on flex gap.
+                    // Actually footer-btn styles are redundant with variant="secondary" mostly.
                     onClick={handleBack}
                     disabled={submitting}
                 >
                     Cancel
-                </button>
+                </Button>
                 <div className="footer-actions-right">
                     {!isProtected && (
                         <>
-                            <button
-                                type="button"
-                                className="footer-btn save"
+                            <Button
+                                variant="primary"
+                                className="footer-btn"
                                 onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
                                 disabled={submitting}
                             >
                                 {saveBtnLabel}
-                            </button>
-                            <button
-                                type="button"
-                                className="footer-btn save-close"
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="footer-btn"
                                 onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
                                 disabled={submitting}
                             >
                                 {saveCloseBtnLabel}
-                            </button>
+                            </Button>
                         </>
                     )}
                 </div>

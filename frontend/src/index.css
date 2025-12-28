@@ -384,88 +384,8 @@ a:focus-visible {
 }
 
 /* ===== BUTTONS ===== */
-/* Button Base - "Boring" Dark Grey / Anthracite for ALL buttons */
-button,
-.btn {
-  font-family: inherit;
-  height: var(--input-height);
-  padding: 0 1.2rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition-normal);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
+/* Moved to src/components/common/Button.css */
 
-  /* The "Boring" Style from SponsorEditor.css .footer-btn */
-  background-color: var(--color-bg-primary);
-  /* #2a2a2a */
-  border: 1px solid var(--color-border-light);
-  /* #555 */
-  color: var(--color-text-primary);
-  /* #e0e0e0 */
-}
-
-button:hover,
-.btn:hover {
-  background-color: var(--color-bg-tertiary);
-  /* #444 */
-  border-color: #666;
-  color: var(--color-text-light);
-  /* #fff */
-}
-
-button:disabled,
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-button:focus-visible,
-.btn:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
-}
-
-/* Overrides to kill specific colors */
-.btn-primary,
-.primary-button,
-.btn-secondary,
-.secondary-btn,
-.btn-danger,
-.btn-success,
-.save-button,
-.edit-button {
-  background-color: var(--color-bg-primary) !important;
-  border: 1px solid var(--color-border-light) !important;
-  color: var(--color-text-primary) !important;
-}
-
-.btn-primary:hover,
-.primary-button:hover,
-.btn-secondary:hover,
-.secondary-btn:hover,
-.btn-danger:hover,
-.btn-success:hover,
-.save-button:hover,
-.edit-button:hover {
-  background-color: var(--color-bg-tertiary) !important;
-  /* #444 */
-  border-color: #666 !important;
-  color: var(--color-text-light) !important;
-}
-
-/* Tiny override for 'small' buttons if needed (keep size but kill color) */
-.btn-sm,
-.small {
-  height: 32px;
-  padding: 0 0.8rem;
-  font-size: 0.85rem;
-}
 
 /* ===== FORMS & INPUTS ===== */
 input[type="text"],
