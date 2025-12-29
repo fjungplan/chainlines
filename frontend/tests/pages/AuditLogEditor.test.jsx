@@ -147,6 +147,41 @@ describe('AuditLogEditor', () => {
         });
     });
 
+    it('handles interaction - reapply', async () => {
+        // Mock rejected state for reapply
+        auditLogApi.getDetail
+            .mockResolvedValueOnce({
+                data: {
+                    ...mockEdit,
+                    status: 'REJECTED',
+                    can_approve: false,
+                    can_revert: false,
+                    // Typically reapply is available for rejected/reverted
+                }
+            })
+            .mockResolvedValueOnce({ data: { ...mockEdit, status: 'APPROVED' } }); // Reload
+
+        renderPage('edit-rejected');
+
+        await waitFor(() => expect(screen.getByText('Re-apply Edit')).toBeInTheDocument());
+
+        // Confirm dialog
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+        fireEvent.click(screen.getByText('Re-apply Edit'));
+
+        await waitFor(() => {
+            expect(auditLogApi.reapply).toHaveBeenCalledWith('edit-rejected', expect.objectContaining({ notes: expect.any(String) }));
+        });
+
+        // Should reload
+        await waitFor(() => {
+            expect(auditLogApi.getDetail).toHaveBeenCalledTimes(2);
+        });
+
+        confirmSpy.mockRestore();
+    });
+
     it('displays error state', async () => {
         auditLogApi.getDetail.mockReset();
         auditLogApi.getDetail.mockRejectedValue(new Error('Not found'));
