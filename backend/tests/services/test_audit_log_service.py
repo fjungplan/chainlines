@@ -684,3 +684,255 @@ class TestRevertEdit:
         
         with pytest.raises(ValueError, match="not approved"):
             await AuditLogService.revert_edit(async_session, pending_edit, admin_user)
+
+
+class TestReapplyEdit:
+    """Test reapply_edit() functionality."""
+    
+    @pytest.fixture
+    async def admin_user(self, async_session):
+        """Create an admin user."""
+        user = User(
+            user_id=uuid4(),
+            email="reapply_admin@example.com",
+            google_id="reapply_admin_id",
+            display_name="Reapply Admin",
+            role=UserRole.ADMIN
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def moderator_user(self, async_session):
+        """Create a moderator user."""
+        user = User(
+            user_id=uuid4(),
+            email="reapply_mod@example.com",
+            google_id="reapply_mod_id",
+            display_name="Reapply Mod",
+            role=UserRole.MODERATOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def editor_user(self, async_session):
+        """Create an editor user."""
+        user = User(
+            user_id=uuid4(),
+            email="reapply_editor@example.com",
+            google_id="reapply_editor_id",
+            display_name="Reapply Editor",
+            role=UserRole.EDITOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def test_team_node(self, async_session, editor_user):
+        """Create a team node for testing."""
+        node = TeamNode(
+            legal_name="Reapply Test Team",
+            display_name="Reapply Team",
+            founding_year=2020,
+            created_by=editor_user.user_id
+        )
+        async_session.add(node)
+        await async_session.flush()
+        return node
+    
+    @pytest.fixture
+    async def reverted_edit(self, async_session, editor_user, test_team_node, admin_user):
+        """Create a reverted edit that can be re-applied."""
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.REVERTED,
+            snapshot_before={"legal_name": "Old Name"},
+            snapshot_after={"legal_name": "Reapply Test Team"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow(),
+            reverted_by=admin_user.user_id,
+            reverted_at=datetime.utcnow()
+        )
+        async_session.add(edit)
+        await async_session.commit()
+        return edit
+    
+    @pytest.fixture
+    async def rejected_edit(self, async_session, editor_user, test_team_node, admin_user):
+        """Create a rejected edit that can be re-applied."""
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.REJECTED,
+            snapshot_before={"legal_name": "Old Name"},
+            snapshot_after={"legal_name": "Rejected Change"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow(),
+            review_notes="Rejected for testing"
+        )
+        async_session.add(edit)
+        await async_session.commit()
+        return edit
+    
+    @pytest.mark.asyncio
+    async def test_reapply_reverted_edit_success(self, async_session, reverted_edit, admin_user):
+        """Successfully re-apply a reverted edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.enums import EditStatus
+        
+        result = await AuditLogService.reapply_edit(
+            async_session, reverted_edit, admin_user, notes="Re-applying after review"
+        )
+        
+        assert result.status == "APPROVED"
+        assert result.message == "Edit re-applied successfully"
+        
+        # Check edit status was updated
+        await async_session.refresh(reverted_edit)
+        assert reverted_edit.status == EditStatus.APPROVED
+    
+    @pytest.mark.asyncio
+    async def test_reapply_rejected_edit_success(self, async_session, rejected_edit, admin_user):
+        """Successfully re-apply a rejected edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.enums import EditStatus
+        
+        result = await AuditLogService.reapply_edit(
+            async_session, rejected_edit, admin_user, notes="Reconsidered, now approved"
+        )
+        
+        assert result.status == "APPROVED"
+        
+        await async_session.refresh(rejected_edit)
+        assert rejected_edit.status == EditStatus.APPROVED
+    
+    @pytest.mark.asyncio
+    async def test_reapply_fails_if_newer_approved_exists(self, async_session, editor_user, admin_user, test_team_node):
+        """Re-apply should fail if a newer approved edit exists for same entity."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        from datetime import timedelta
+        
+        # Create older reverted edit
+        older_reverted = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.REVERTED,
+            snapshot_before={"legal_name": "V1"},
+            snapshot_after={"legal_name": "V2"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow() - timedelta(hours=2),
+            reverted_at=datetime.utcnow() - timedelta(hours=1)
+        )
+        async_session.add(older_reverted)
+        await async_session.flush()
+        
+        # Create newer approved edit
+        newer_approved = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "V2"},
+            snapshot_after={"legal_name": "V3"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(newer_approved)
+        await async_session.commit()
+        
+        # Try to re-apply the older reverted edit - should fail
+        with pytest.raises(ValueError, match="newer approved edit"):
+            await AuditLogService.reapply_edit(async_session, older_reverted, admin_user)
+    
+    @pytest.mark.asyncio
+    async def test_moderator_cannot_reapply_admin_edit(self, async_session, admin_user, moderator_user, test_team_node):
+        """Moderator cannot re-apply an edit submitted by an admin."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        # Create a reverted edit submitted by admin
+        admin_reverted = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=admin_user.user_id,  # Admin submitted this
+            action=EditAction.UPDATE,
+            status=EditStatus.REVERTED,
+            snapshot_before={"legal_name": "Old"},
+            snapshot_after={"legal_name": "New"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow(),
+            reverted_at=datetime.utcnow()
+        )
+        async_session.add(admin_reverted)
+        await async_session.commit()
+        
+        # Moderator tries to re-apply - should fail
+        with pytest.raises(PermissionError, match="permission"):
+            await AuditLogService.reapply_edit(async_session, admin_reverted, moderator_user)
+    
+    @pytest.mark.asyncio
+    async def test_reapply_pending_edit_fails(self, async_session, editor_user, admin_user, test_team_node):
+        """Cannot re-apply a pending edit (use approve instead)."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        pending_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.PENDING,
+            snapshot_before={"legal_name": "Old"},
+            snapshot_after={"legal_name": "New"}
+        )
+        async_session.add(pending_edit)
+        await async_session.commit()
+        
+        with pytest.raises(ValueError, match="not reverted or rejected"):
+            await AuditLogService.reapply_edit(async_session, pending_edit, admin_user)
+    
+    @pytest.mark.asyncio
+    async def test_reapply_already_approved_fails(self, async_session, editor_user, admin_user, test_team_node):
+        """Cannot re-apply an already approved edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        approved_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "Old"},
+            snapshot_after={"legal_name": "New"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(approved_edit)
+        await async_session.commit()
+        
+        with pytest.raises(ValueError, match="not reverted or rejected"):
+            await AuditLogService.reapply_edit(async_session, approved_edit, admin_user)

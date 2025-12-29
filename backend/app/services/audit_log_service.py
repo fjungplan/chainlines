@@ -289,3 +289,99 @@ class AuditLogService:
             status="REVERTED",
             message="Edit reverted successfully"
         )
+    
+    @staticmethod
+    async def reapply_edit(
+        session: AsyncSession,
+        edit: "EditHistory",
+        approver: User,
+        notes: Optional[str] = None
+    ) -> "ReviewEditResponse":
+        """
+        Re-apply a reverted or rejected edit.
+        
+        Requirements:
+        - Edit must be REVERTED or REJECTED status
+        - No newer approved edits for the same entity can exist
+        - Approver must have permission to moderate edits from the submitter
+        
+        Args:
+            session: Database session
+            edit: The edit to re-apply
+            approver: The user performing the re-apply
+            notes: Optional notes explaining the re-apply
+            
+        Returns:
+            ReviewEditResponse with status and message
+            
+        Raises:
+            ValueError: If edit status is not reverted/rejected or newer approved exists
+            PermissionError: If approver lacks permission
+        """
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus
+        from app.schemas.audit_log import ReviewEditResponse
+        
+        # Validate edit is reverted or rejected
+        if edit.status not in (EditStatus.REVERTED, EditStatus.REJECTED):
+            raise ValueError("Cannot re-apply: edit is not reverted or rejected")
+        
+        # Check for newer approved edits for the same entity
+        has_newer_approved = await AuditLogService._has_newer_approved_edit(
+            session, edit
+        )
+        if has_newer_approved:
+            raise ValueError("Cannot re-apply: a newer approved edit exists for this entity")
+        
+        # Get the edit submitter for permission check
+        submitter = await session.get(User, edit.user_id)
+        if submitter and not AuditLogService.can_moderate_edit(approver, submitter):
+            raise PermissionError("You do not have permission to re-apply this edit")
+        
+        # Perform the re-apply - update edit status to approved
+        edit.status = EditStatus.APPROVED
+        edit.reviewed_by = approver.user_id
+        edit.reviewed_at = datetime.utcnow()
+        
+        if notes:
+            # Append re-apply notes to existing review notes
+            if edit.review_notes:
+                edit.review_notes = f"{edit.review_notes}\n\nRe-applied: {notes}"
+            else:
+                edit.review_notes = f"Re-applied: {notes}"
+        
+        await session.commit()
+        
+        return ReviewEditResponse(
+            edit_id=str(edit.edit_id),
+            status="APPROVED",
+            message="Edit re-applied successfully"
+        )
+    
+    @staticmethod
+    async def _has_newer_approved_edit(
+        session: AsyncSession,
+        edit: "EditHistory"
+    ) -> bool:
+        """
+        Check if there are newer approved edits for the same entity.
+        
+        Used to determine if a re-apply is safe - we can't re-apply if
+        another edit has been approved since this one was reverted/rejected.
+        """
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus
+        
+        # Find any approved edits for the same entity that are newer
+        # Uses created_at for comparison since reviewed_at might be null for rejected edits
+        stmt = select(EditHistory).where(
+            EditHistory.entity_type == edit.entity_type,
+            EditHistory.entity_id == edit.entity_id,
+            EditHistory.status == EditStatus.APPROVED,
+            EditHistory.created_at > edit.created_at,
+            EditHistory.edit_id != edit.edit_id
+        )
+        result = await session.execute(stmt)
+        newer_approved = result.scalars().first()
+        
+        return newer_approved is not None
