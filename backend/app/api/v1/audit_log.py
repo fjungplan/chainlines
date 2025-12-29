@@ -28,6 +28,8 @@ async def list_audit_log(
     status: Optional[List[str]] = Query(None, description="Filter by status(es)"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     user_id: Optional[str] = Query(None, description="Filter by submitter user ID"),
+    start_date: Optional[datetime] = Query(None, description="Filter by start date (ISO 8601)"),
+    end_date: Optional[datetime] = Query(None, description="Filter by end date (ISO 8601)"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_moderator)
 ):
@@ -54,7 +56,13 @@ async def list_audit_log(
     # User filter
     if user_id:
         stmt = stmt.where(EditHistory.user_id == user_id)
-    
+
+    # Date range filter
+    if start_date:
+        stmt = stmt.where(EditHistory.created_at >= start_date)
+    if end_date:
+        stmt = stmt.where(EditHistory.created_at <= end_date)
+
     # Sort: newest first
     stmt = stmt.order_by(EditHistory.created_at.desc()).offset(skip).limit(limit)
     

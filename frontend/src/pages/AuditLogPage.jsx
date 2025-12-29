@@ -6,7 +6,7 @@
  * 
  * Uses maintenance-style layout consistent with other admin pages.
  */
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auditLogApi } from '../api/auditLog';
@@ -24,6 +24,16 @@ const STATUS_OPTIONS = [
     { value: 'REVERTED', label: 'Reverted', color: 'status-reverted' },
 ];
 
+// Entity type options
+const ENTITY_TYPE_OPTIONS = [
+    { value: 'ALL', label: 'All Types' },
+    { value: 'team_node', label: 'Team' },
+    { value: 'team_era', label: 'Team Era' },
+    { value: 'sponsor_master', label: 'Sponsor' },
+    { value: 'sponsor_link', label: 'Sponsor Link' },
+    { value: 'lineage_event', label: 'Lineage Event' },
+];
+
 export default function AuditLogPage() {
     const { isAdmin, isModerator } = useAuth();
 
@@ -35,6 +45,9 @@ export default function AuditLogPage() {
 
     // Filters
     const [statusFilters, setStatusFilters] = useState(['PENDING']); // Default to pending
+    const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'submitted_at', direction: 'desc' });
 
     // Selected edit for detail view
@@ -56,6 +69,18 @@ export default function AuditLogPage() {
             if (statusFilters.length > 0) {
                 params.status = statusFilters;
             }
+            if (entityTypeFilter !== 'ALL') {
+                params.entity_type = entityTypeFilter;
+            }
+            if (startDate) {
+                params.start_date = new Date(startDate).toISOString();
+            }
+            if (endDate) {
+                // Set to end of day
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                params.end_date = end.toISOString();
+            }
 
             const [editsResponse, countResponse] = await Promise.all([
                 auditLogApi.getList(params),
@@ -70,7 +95,7 @@ export default function AuditLogPage() {
         } finally {
             setLoading(false);
         }
-    }, [canAccess, statusFilters]);
+    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate]);
 
     // Initial load
     useEffect(() => {
@@ -158,20 +183,58 @@ export default function AuditLogPage() {
                     </div>
                 </div>
 
-                {/* Status Filter Bar */}
+                {/* Filter Bar */}
                 <div className="filter-bar">
-                    <span className="filter-label">Status:</span>
-                    {STATUS_OPTIONS.map(option => (
-                        <Button
-                            key={option.value}
-                            variant={statusFilters.includes(option.value) ? 'primary' : 'ghost'}
-                            size="sm"
-                            onClick={() => toggleStatusFilter(option.value)}
-                            className={`filter-btn ${option.color}`}
+                    <div className="filter-group">
+                        <span className="filter-label">Status:</span>
+                        {STATUS_OPTIONS.map(option => (
+                            <Button
+                                key={option.value}
+                                variant={statusFilters.includes(option.value) ? 'primary' : 'ghost'}
+                                size="sm"
+                                onClick={() => toggleStatusFilter(option.value)}
+                                className={`filter-btn ${option.color}`}
+                            >
+                                {option.label}
+                            </Button>
+                        ))}
+                    </div>
+
+                    <div className="filter-divider"></div>
+
+                    <div className="filter-group">
+                        <span className="filter-label">Type:</span>
+                        <select
+                            value={entityTypeFilter}
+                            onChange={(e) => setEntityTypeFilter(e.target.value)}
+                            className="filter-select"
                         >
-                            {option.label}
-                        </Button>
-                    ))}
+                            {ENTITY_TYPE_OPTIONS.map(option => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="filter-divider"></div>
+
+                    <div className="filter-group">
+                        <span className="filter-label">Date:</span>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="filter-input"
+                        />
+                        <span className="filter-separator">-</span>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="filter-input"
+                        />
+                    </div>
                 </div>
 
                 {/* Content */}

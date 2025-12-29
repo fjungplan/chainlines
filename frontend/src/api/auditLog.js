@@ -13,6 +13,8 @@ export const auditLogApi = {
      * @param {string[]} params.status - Filter by status(es): PENDING, APPROVED, REJECTED, REVERTED
      * @param {string} params.entity_type - Filter by entity type
      * @param {string} params.user_id - Filter by submitter user ID
+     * @param {string} params.start_date - Filter by start date (ISO 8601)
+     * @param {string} params.end_date - Filter by end date (ISO 8601)
      * @param {number} params.skip - Pagination offset
      * @param {number} params.limit - Pagination limit
      */
