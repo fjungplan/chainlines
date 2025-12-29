@@ -28,9 +28,9 @@ vi.mock('../../src/components/ErrorDisplay', () => ({
     ErrorDisplay: ({ error }) => <div data-testid="error-display">{typeof error === 'string' ? error : error.message}</div>
 }));
 vi.mock('../../src/components/moderation/ReviewModal', () => ({
-    default: ({ onReview }) => (
+    default: ({ onConfirm }) => (
         <div data-testid="review-modal">
-            <button onClick={() => onReview('edit-123', true, 'LGTM')}>Confirm Review</button>
+            <button onClick={() => onConfirm('LGTM')}>Confirm Review</button>
         </div>
     )
 }));
