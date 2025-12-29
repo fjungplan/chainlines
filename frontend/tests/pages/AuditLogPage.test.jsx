@@ -163,7 +163,7 @@ describe('AuditLogPage', () => {
     });
 
     it('handles pagination', async () => {
-        // Mock with total items > pageSize (50)
+        // Mock with total items > pageSize (25)
         auditLogApi.getList.mockResolvedValue({
             data: {
                 items: [],
@@ -180,11 +180,11 @@ describe('AuditLogPage', () => {
         fireEvent.click(nextBtn);
 
         await waitFor(() => {
-            // Page 2: skip=50
+            // Page 2: skip=25 (default pageSize is 25)
             expect(auditLogApi.getList).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    skip: 50,
-                    limit: 50
+                    skip: 25,
+                    limit: 25
                 })
             );
         });
