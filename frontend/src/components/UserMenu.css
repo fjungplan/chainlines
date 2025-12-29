@@ -11,7 +11,7 @@
   border: 2px solid #444;
   background: #3a3a3a;
   cursor: pointer;
-  overflow: hidden;
+  /* overflow: hidden; removed to allow badge overlap */
   padding: 0;
   transition: border-color 0.2s, box-shadow 0.2s;
   display: flex;
@@ -29,11 +29,15 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 50%;
+  /* maintain circle shape */
 }
 
 .avatar-placeholder {
   width: 100%;
   height: 100%;
+  border-radius: 50%;
+  /* maintain circle shape */
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   display: flex;
@@ -140,8 +144,25 @@
 
 .menu-item.with-badge {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+/* Override badge to be inline for the menu item */
+.menu-item.with-badge .notification-badge {
+  position: static;
+  margin-left: 0;
+  /* Gap handles spacing */
+  transform: none;
+  bottom: auto;
+  right: auto;
+}
+
+/* Ensure the span inside is treated as inline for centering */
+.menu-item.with-badge span {
+  flex: 0 0 auto;
 }
 
 .menu-item.logout {
