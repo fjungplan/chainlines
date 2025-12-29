@@ -15,7 +15,8 @@ vi.mock('../../src/api/auditLog', () => ({
     auditLogApi: {
         getDetail: vi.fn(),
         revert: vi.fn(),
-        reapply: vi.fn()
+        reapply: vi.fn(),
+        review: vi.fn()
     }
 }));
 
@@ -25,6 +26,13 @@ vi.mock('../../src/components/audit-log/DiffTable', () => ({
 }));
 vi.mock('../../src/components/ErrorDisplay', () => ({
     ErrorDisplay: ({ error }) => <div data-testid="error-display">{typeof error === 'string' ? error : error.message}</div>
+}));
+vi.mock('../../src/components/moderation/ReviewModal', () => ({
+    default: ({ onReview }) => (
+        <div data-testid="review-modal">
+            <button onClick={() => onReview('edit-123', true, 'LGTM')}>Confirm Review</button>
+        </div>
+    )
 }));
 
 describe('AuditLogEditor', () => {
@@ -51,6 +59,8 @@ describe('AuditLogEditor', () => {
         // Setup API
         auditLogApi.getDetail.mockResolvedValue({ data: { ...mockEdit } });
         auditLogApi.revert.mockResolvedValue({ data: { status: 'REVERTED' } });
+        auditLogApi.reapply.mockResolvedValue({ data: { status: 'PENDING' } });
+        auditLogApi.review.mockResolvedValue({});
     });
 
     const renderPage = (editId = 'edit-123') => {
@@ -80,6 +90,39 @@ describe('AuditLogEditor', () => {
         expect(screen.getByText('Revert Edit')).toBeInTheDocument();
     });
 
+    it('handles interaction - review', async () => {
+        // Mock pending state
+        auditLogApi.getDetail.mockResolvedValue({
+            data: {
+                ...mockEdit,
+                status: 'PENDING',
+                can_approve: true,
+                can_reject: true,
+                can_revert: false
+            }
+        });
+
+        renderPage('edit-pending');
+
+        await waitFor(() => expect(screen.getByText('Review Edit')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Review Edit'));
+
+        await waitFor(() => expect(screen.getByTestId('review-modal')).toBeInTheDocument());
+
+        // Simulate review in modal
+        fireEvent.click(screen.getByText('Confirm Review'));
+
+        await waitFor(() => {
+            expect(auditLogApi.review).toHaveBeenCalledWith('edit-123', { approved: true, notes: 'LGTM' });
+        });
+
+        // Should reload
+        await waitFor(() => {
+            expect(auditLogApi.getDetail).toHaveBeenCalledTimes(2);
+        });
+    });
+
     it('handles interaction - revert', async () => {
         renderPage();
         await waitFor(() => expect(screen.getByText('Revert Edit')).toBeInTheDocument());
@@ -98,7 +141,7 @@ describe('AuditLogEditor', () => {
             expect(auditLogApi.revert).toHaveBeenCalledWith('edit-123', expect.objectContaining({ notes: expect.any(String) }));
         });
 
-        // Should trigger reload
+        // Should reload
         await waitFor(() => {
             expect(auditLogApi.getDetail).toHaveBeenCalledTimes(2);
         });

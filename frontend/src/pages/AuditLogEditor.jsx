@@ -5,8 +5,10 @@ import DiffTable from '../components/audit-log/DiffTable';
 import { LoadingSpinner } from '../components/Loading';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import Button from '../components/common/Button';
+import ReviewModal from '../components/moderation/ReviewModal';
+import { formatDateTime } from '../utils/dateUtils';
+import { getErrorMessage } from '../utils/errors';
 import './AuditLogEditor.css';
-import { formatDateTime } from '../utils/dateUtils'; // Assuming util exists or helper
 
 const STATUS_COLORS = {
     PENDING: 'status-pending',
@@ -21,6 +23,7 @@ export default function AuditLogEditor() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
+    const [showReviewModal, setShowReviewModal] = useState(false);
 
     useEffect(() => {
         loadEdit();
@@ -49,7 +52,7 @@ export default function AuditLogEditor() {
             await loadEdit(); // Reload to update status
         } catch (err) {
             console.error('Revert failed:', err);
-            alert('Failed to revert edit: ' + (err.response?.data?.detail || err.message));
+            alert('Failed to revert edit: ' + getErrorMessage(err));
         } finally {
             setActionLoading(false);
         }
@@ -64,19 +67,27 @@ export default function AuditLogEditor() {
             await loadEdit();
         } catch (err) {
             console.error('Reapply failed:', err);
-            alert('Failed to re-apply edit: ' + (err.response?.data?.detail || err.message));
+            alert('Failed to re-apply edit: ' + getErrorMessage(err));
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleReview = async (editId, approved, notes) => {
+        setActionLoading(true);
+        try {
+            await auditLogApi.review(editId, { approved, notes });
+            await loadEdit(); // Reload to see new status
+            setShowReviewModal(false);
+        } catch (err) {
+            console.error('Failed to review edit:', err);
+            setError(getErrorMessage(err));
         } finally {
             setActionLoading(false);
         }
     };
 
     if (loading) return <LoadingSpinner />;
-
-    // Formatting helper if not imported
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '-';
-        return new Date(dateStr).toLocaleString();
-    };
 
     return (
         <div className="audit-log-editor">
@@ -125,7 +136,7 @@ export default function AuditLogEditor() {
                                     </div>
                                     <div className="metadata-item">
                                         <label>Submitted At</label>
-                                        <span>{formatDate(edit.submitted_at)}</span>
+                                        <span>{formatDateTime(edit.submitted_at)}</span>
                                     </div>
 
                                     {/* Review Info */}
@@ -135,7 +146,7 @@ export default function AuditLogEditor() {
                                     </div>
                                     <div className="metadata-item">
                                         <label>Reviewed At</label>
-                                        <span>{formatDate(edit.reviewed_at)}</span>
+                                        <span>{formatDateTime(edit.reviewed_at)}</span>
                                     </div>
                                 </div>
 
@@ -161,6 +172,19 @@ export default function AuditLogEditor() {
                             {/* Actions Footer */}
                             <div className="editor-footer">
                                 <div className="footer-actions">
+                                    {/* Moderation Actions */}
+                                    {(edit.can_approve || edit.can_reject) && (
+                                        <Button
+                                            variant="primary"
+                                            onClick={() => setShowReviewModal(true)}
+                                            className="action-btn review-btn"
+                                            disabled={actionLoading}
+                                        >
+                                            Review Edit
+                                        </Button>
+                                    )}
+
+                                    {/* Revert Action */}
                                     {edit.can_revert && (
                                         <Button
                                             variant="danger"
@@ -171,7 +195,7 @@ export default function AuditLogEditor() {
                                         </Button>
                                     )}
 
-                                    {/* Reapply logic: If REVERTED or REJECTED? API supports it. */}
+                                    {/* Reapply logic */}
                                     {(edit.status === 'REVERTED' || edit.status === 'REJECTED') && (
                                         <Button
                                             variant="secondary"
@@ -187,6 +211,14 @@ export default function AuditLogEditor() {
                     )
                 )}
             </div>
+
+            {showReviewModal && (
+                <ReviewModal
+                    edit={edit}
+                    onClose={() => setShowReviewModal(false)}
+                    onReview={handleReview}
+                />
+            )}
         </div>
     );
 }
