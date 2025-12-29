@@ -51,17 +51,19 @@ class AuditLogService:
                 return str(entity_id)
         
         try:
-            if entity_type == "team_node":
+            etype = entity_type.lower()
+            
+            if etype in ("team", "team_node"):
                 return await AuditLogService._resolve_team_node(session, entity_id)
-            elif entity_type == "team_era":
+            elif etype in ("era", "team_era"):
                 return await AuditLogService._resolve_team_era(session, entity_id)
-            elif entity_type == "sponsor_master":
+            elif etype in ("sponsor", "sponsor_master"):
                 return await AuditLogService._resolve_sponsor_master(session, entity_id)
-            elif entity_type == "sponsor_brand":
+            elif etype in ("brand", "sponsor_brand"):
                 return await AuditLogService._resolve_sponsor_brand(session, entity_id)
-            elif entity_type == "team_sponsor_link":
+            elif etype in ("link", "team_sponsor_link"):
                 return await AuditLogService._resolve_sponsor_link(session, entity_id)
-            elif entity_type == "lineage_event":
+            elif etype in ("lineage", "lineage_event"):
                 return await AuditLogService._resolve_lineage_event(session, entity_id)
             else:
                 # Unknown entity type - return ID as string

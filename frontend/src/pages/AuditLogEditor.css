@@ -1,45 +1,33 @@
-.audit-log-editor {
-    min-height: 100vh;
-    background: var(--color-bg-primary, #0f0f0f);
-    padding: 2rem;
+/* Specific overrides for Audit Log functionality */
+
+/* Specific overrides for Audit Log functionality */
+/* Standard width maintained as per user request */
+
+/* Adjust split view ratios for this page */
+/* Adjust split view ratios for this page */
+.audit-log-editor-page .details-column {
+    flex: 0 0 33.33%;
+    /* 1/3 width as requested */
+    max-width: 33.33%;
+    border-right: 1px solid var(--color-border);
 }
 
-.metadata-card {
-    background: var(--color-bg-secondary, #1a1a1a);
-    border: 1px solid var(--color-border, #333);
-    border-radius: 0.5rem;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+.audit-log-editor-page .brands-column {
+    flex: 1;
+    background: var(--color-bg-primary);
+    padding: 1.5rem 2rem;
+    /* Restore standard padding */
+    overflow-y: auto;
 }
 
-.metadata-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.metadata-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.metadata-item label {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-secondary, #888);
-}
-
-.metadata-item span {
-    font-size: 0.9375rem;
-    color: var(--color-text-primary, #fff);
-}
-
-.metadata-sub {
-    color: var(--color-text-muted, #666);
-    font-size: 0.8125rem;
+.audit-log-editor-page .diff-wrapper {
+    margin: 0;
+    /* Container padding handles spacing */
+    margin-top: 1rem;
+    background: var(--color-bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    overflow: hidden;
 }
 
 .entity-name-highlight {
@@ -47,44 +35,92 @@
     color: var(--color-primary, #3b82f6);
 }
 
-.metadata-notes {
-    border-top: 1px solid var(--color-border, #333);
-    padding-top: 1rem;
+@media (max-width: 1024px) {
+    .audit-log-editor-page .editor-split-view {
+        flex-direction: column;
+    }
+
+    .audit-log-editor-page .details-column {
+        flex: none;
+        max-width: 100%;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--color-border);
+    }
 }
 
-.notes-content {
-    margin-top: 0.5rem;
-    font-style: italic;
-    color: var(--color-text-secondary);
-    white-space: pre-wrap;
-}
+/* =========================================
+   Metadata Display Styles
+   ========================================= */
 
-.diff-section h2 {
-    margin-bottom: 1rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-}
-
-.editor-footer {
-    margin-top: 2rem;
+.audit-metadata-display {
     display: flex;
-    justify-content: flex-end;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border, #333);
+    flex-direction: column;
+    gap: 1.25rem;
 }
 
-.footer-actions {
+.metadata-section {
     display: flex;
+    flex-direction: column;
     gap: 1rem;
 }
 
-@media (max-width: 768px) {
-    .audit-log-editor {
-        padding: 1rem;
-    }
+.metadata-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
 
-    .metadata-grid {
-        grid-template-columns: 1fr;
-    }
+.metadata-row label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+.metadata-value {
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.metadata-value.notes-block {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    font-style: italic;
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+}
+
+.sub-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.sub-text.email {
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.entity-type-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    background: var(--color-bg-tertiary);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    margin-right: 0.5rem;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.metadata-divider {
+    height: 1px;
+    background: var(--color-border);
+    opacity: 0.5;
+    margin: 0.25rem 0;
 }

@@ -9,6 +9,14 @@ const TEAM_FIELDS = [
     'is_protected'
 ];
 
+const TEAM_LABELS = {
+    legal_name: 'Legal Name',
+    display_name: 'Display Name',
+    founding_year: 'Founding Year',
+    dissolution_year: 'Dissolution Year',
+    is_protected: 'Protected'
+};
+
 export default function TeamDiff({ before, after }) {
     const filterData = (data) => {
         if (!data) return null;
@@ -24,6 +32,7 @@ export default function TeamDiff({ before, after }) {
         <DiffTable
             before={filterData(before)}
             after={filterData(after)}
+            labels={TEAM_LABELS}
         />
     );
 }
