@@ -1,0 +1,75 @@
+.diff-table-container {
+    overflow-x: auto;
+    border: 1px solid var(--color-border, #333);
+    border-radius: 0.5rem;
+    background: var(--color-bg-secondary, #1a1a1a);
+}
+
+.diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.diff-table th,
+.diff-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border, #333);
+}
+
+.diff-table th {
+    background: var(--color-bg-tertiary, #252525);
+    font-weight: 600;
+    color: var(--color-text-secondary, #a3a3a3);
+    white-space: nowrap;
+}
+
+.diff-header-field {
+    width: 20%;
+}
+
+.diff-header-val {
+    width: 40%;
+}
+
+/* Changed rows */
+.diff-row-changed {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Specific cell highlights */
+.diff-row-changed .diff-cell-old {
+    background: rgba(239, 68, 68, 0.1);
+    /* Red tint */
+    color: var(--color-text-muted, #888);
+}
+
+.diff-row-changed .diff-cell-new {
+    background: rgba(34, 197, 94, 0.1);
+    /* Green tint */
+    color: var(--color-text-primary, #fff);
+}
+
+/* Values */
+.diff-null {
+    color: var(--color-text-muted, #666);
+    font-style: italic;
+}
+
+.diff-json {
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.diff-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--color-text-muted);
+}

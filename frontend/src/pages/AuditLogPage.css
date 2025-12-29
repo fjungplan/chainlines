@@ -1,0 +1,316 @@
+/**
+ * Audit Log Page Styles
+ * 
+ * Follows maintenance-style layout consistent with UserMaintenancePage
+ * and TeamMaintenancePage. Uses CSS variables for theming.
+ */
+
+.audit-log-page {
+    min-height: 100vh;
+    background: var(--color-bg-primary, #0a0a0a);
+    padding: 2rem;
+}
+
+.maintenance-page-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Header */
+.maintenance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.back-link {
+    color: var(--color-text-muted, #888);
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.2s;
+}
+
+.back-link:hover {
+    color: var(--color-primary, #646cff);
+}
+
+.maintenance-header h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--color-text-primary, #fff);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pending-badge {
+    background: var(--color-warning, #f59e0b);
+    color: #000;
+    padding: 0.375rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Filter Bar */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: var(--color-bg-secondary, #1a1a1a);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--color-border, #333);
+}
+
+.filter-select {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--color-bg-tertiary, #252525);
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text-primary, #fff);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+    cursor: pointer;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+    border-color: var(--color-primary, #646cff);
+}
+
+.filter-input {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    background: var(--color-bg-tertiary, #252525);
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text-primary, #fff);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.filter-separator {
+    color: var(--color-text-muted, #888);
+    font-size: 0.875rem;
+}
+
+.filter-label {
+    color: var(--color-text-muted, #888);
+    font-size: 0.875rem;
+    margin-right: 0.5rem;
+}
+
+.filter-btn.status-pending {
+    --btn-active-bg: var(--color-warning, #f59e0b);
+}
+
+.filter-btn.status-approved {
+    --btn-active-bg: var(--color-success, #22c55e);
+}
+
+.filter-btn.status-rejected {
+    --btn-active-bg: var(--color-danger, #ef4444);
+}
+
+.filter-btn.status-reverted {
+    --btn-active-bg: var(--color-info, #8b5cf6);
+}
+
+/* Table Container */
+.audit-log-table-container {
+    background: var(--color-bg-secondary, #1a1a1a);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.audit-log-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.audit-log-table th,
+.audit-log-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border, #333);
+}
+
+.audit-log-table th {
+    background: var(--color-bg-tertiary, #252525);
+    color: var(--color-text-muted, #888);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.audit-log-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.audit-log-table th.sortable:hover {
+    color: var(--color-text-primary, #fff);
+}
+
+
+
+.audit-log-table tbody tr.clickable-row {
+    cursor: pointer;
+}
+
+.audit-log-table tbody tr.clickable-row:hover {
+    background: var(--color-bg-tertiary, #252525);
+}
+
+.audit-log-table td {
+    color: var(--color-text-primary, #fff);
+    font-size: 0.875rem;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+}
+
+.status-badge.status-approved {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.status-badge.status-rejected {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.status-badge.status-reverted {
+    background: rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+}
+
+/* Entity Cell */
+.entity-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.entity-type {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    color: var(--color-text-muted, #888);
+    letter-spacing: 0.05em;
+}
+
+.entity-name {
+    font-weight: 500;
+}
+
+/* Summary Cell */
+.summary-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted, #888);
+}
+
+/* Empty State */
+.empty-message {
+    text-align: center;
+    color: var(--color-text-muted, #888);
+    padding: 3rem 1rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .audit-log-page {
+        padding: 1rem;
+    }
+
+    .audit-log-table th,
+    .audit-log-table td {
+        padding: 0.5rem;
+    }
+
+    .summary-cell {
+        max-width: 150px;
+    }
+}
+
+/* Pagination */
+.pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--color-bg-secondary, #1a1a1a);
+    border-radius: 0.5rem;
+    color: var(--color-text-secondary, #a3a3a3);
+    font-size: 0.875rem;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pagination-select {
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--color-border, #404040);
+    background: var(--color-bg-tertiary, #252525);
+    color: var(--color-text-primary, #fff);
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.pagination-select:focus {
+    outline: none;
+    border-color: var(--color-primary, #3b82f6);
+}
+
+.page-number {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary, #fff);
+}

@@ -17,6 +17,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .user-avatar:hover {
@@ -135,6 +136,12 @@
 
 .menu-item:last-of-type {
   border-bottom: none;
+}
+
+.menu-item.with-badge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .menu-item.logout {
