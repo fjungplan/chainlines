@@ -15,6 +15,8 @@ export const auditLogApi = {
      * @param {string} params.user_id - Filter by submitter user ID
      * @param {string} params.start_date - Filter by start date (ISO 8601)
      * @param {string} params.end_date - Filter by end date (ISO 8601)
+     * @param {string} params.sort_by - Field to sort by (created_at, status, action, entity_type)
+     * @param {string} params.sort_order - Sort order (asc, desc)
      * @param {number} params.skip - Pagination offset
      * @param {number} params.limit - Pagination limit
      */

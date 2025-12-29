@@ -30,6 +30,8 @@ async def list_audit_log(
     user_id: Optional[str] = Query(None, description="Filter by submitter user ID"),
     start_date: Optional[datetime] = Query(None, description="Filter by start date (ISO 8601)"),
     end_date: Optional[datetime] = Query(None, description="Filter by end date (ISO 8601)"),
+    sort_by: str = Query("created_at", description="Field to sort by (created_at, status, ...)", pattern="^(created_at|status|action|entity_type)$"),
+    sort_order: str = Query("desc", description="Sort order (asc, desc)", pattern="^(asc|desc)$"),
     session: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_moderator)
 ):
@@ -63,8 +65,19 @@ async def list_audit_log(
     if end_date:
         stmt = stmt.where(EditHistory.created_at <= end_date)
 
-    # Sort: newest first
-    stmt = stmt.order_by(EditHistory.created_at.desc()).offset(skip).limit(limit)
+
+
+    # Sort
+    sort_column = getattr(EditHistory, sort_by)
+    if sort_order == "desc":
+        stmt = stmt.order_by(sort_column.desc())
+    else:
+        stmt = stmt.order_by(sort_column.asc())
+    
+    # Secondary sort by ID for stability
+    stmt = stmt.order_by(EditHistory.edit_id)
+    
+    stmt = stmt.offset(skip).limit(limit)
     
     result = await session.execute(stmt)
     edits = result.scalars().all()

@@ -48,7 +48,7 @@ export default function AuditLogPage() {
     const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'submitted_at', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
 
     // Selected edit for detail view
     const [selectedEdit, setSelectedEdit] = useState(null);
@@ -82,6 +82,10 @@ export default function AuditLogPage() {
                 params.end_date = end.toISOString();
             }
 
+            // Sorting
+            params.sort_by = sortConfig.key;
+            params.sort_order = sortConfig.direction;
+
             const [editsResponse, countResponse] = await Promise.all([
                 auditLogApi.getList(params),
                 auditLogApi.getPendingCount()
@@ -95,7 +99,7 @@ export default function AuditLogPage() {
         } finally {
             setLoading(false);
         }
-    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate]);
+    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate, sortConfig]);
 
     // Initial load
     useEffect(() => {
@@ -120,21 +124,6 @@ export default function AuditLogPage() {
             direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
         }));
     };
-
-    const sortedEdits = [...edits].sort((a, b) => {
-        const { key, direction } = sortConfig;
-        let valA = a[key];
-        let valB = b[key];
-
-        if (typeof valA === 'string') valA = valA.toLowerCase();
-        if (typeof valB === 'string') valB = valB.toLowerCase();
-        if (valA === null || valA === undefined) valA = '';
-        if (valB === null || valB === undefined) valB = '';
-
-        if (valA < valB) return direction === 'asc' ? -1 : 1;
-        if (valA > valB) return direction === 'asc' ? 1 : -1;
-        return 0;
-    });
 
     // View edit detail
     const handleViewEdit = async (edit) => {
@@ -249,30 +238,35 @@ export default function AuditLogPage() {
                                     <th onClick={() => handleSort('status')} className="sortable">
                                         Status{getSortIndicator('status')}
                                     </th>
-                                    <th onClick={() => handleSort('entity_name')} className="sortable">
-                                        Entity{getSortIndicator('entity_name')}
+                                    <th onClick={() => handleSort('entity_type')} className="sortable">
+                                        Entity{getSortIndicator('entity_type')}
                                     </th>
                                     <th onClick={() => handleSort('action')} className="sortable">
                                         Action{getSortIndicator('action')}
                                     </th>
                                     <th>Submitter</th>
-                                    <th onClick={() => handleSort('submitted_at')} className="sortable">
-                                        Submitted{getSortIndicator('submitted_at')}
+                                    <th onClick={() => handleSort('created_at')} className="sortable">
+                                        Submitted{getSortIndicator('created_at')}
                                     </th>
+                                    <th>Reviewed By</th>
                                     <th>Summary</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {sortedEdits.length === 0 ? (
+                                {edits.length === 0 ? (
                                     <tr>
-                                        <td colSpan="7" className="empty-message">
+                                        <td colSpan="8" className="empty-message">
                                             No edits found matching the current filters.
                                         </td>
                                     </tr>
                                 ) : (
-                                    sortedEdits.map(edit => (
-                                        <tr key={edit.edit_id}>
+                                    edits.map(edit => (
+                                        <tr
+                                            key={edit.edit_id}
+                                            onClick={() => handleViewEdit(edit)}
+                                            className="clickable-row"
+                                        >
                                             <td>
                                                 <span className={`status-badge status-${edit.status.toLowerCase()}`}>
                                                     {edit.status}
@@ -285,6 +279,7 @@ export default function AuditLogPage() {
                                             <td>{edit.action}</td>
                                             <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>
                                             <td>{formatDateTime(edit.submitted_at)}</td>
+                                            <td>{edit.reviewed_by ? (edit.reviewed_by.display_name || edit.reviewed_by.email) : '-'}</td>
                                             <td className="summary-cell">{edit.summary}</td>
                                             <td>
                                                 <Button

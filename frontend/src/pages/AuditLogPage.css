@@ -181,7 +181,13 @@
     color: var(--color-text-primary, #fff);
 }
 
-.audit-log-table tbody tr:hover {
+
+
+.audit-log-table tbody tr.clickable-row {
+    cursor: pointer;
+}
+
+.audit-log-table tbody tr.clickable-row:hover {
     background: var(--color-bg-tertiary, #252525);
 }
 

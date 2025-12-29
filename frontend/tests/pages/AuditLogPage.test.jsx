@@ -123,4 +123,37 @@ describe('AuditLogPage', () => {
             );
         });
     });
+
+    it('sorts by columns', async () => {
+        renderPage();
+        await waitFor(() => expect(auditLogApi.getList).toHaveBeenCalled());
+
+        // Default sort is created_at desc.
+        // Sort by Action
+        // Use exact match to avoid matching "Actions" column
+        const actionHeader = screen.getByText('Action');
+        fireEvent.click(actionHeader);
+
+        await waitFor(() => {
+            expect(auditLogApi.getList).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sort_by: 'action',
+                    sort_order: 'desc'
+                })
+            );
+        });
+
+        // Click again -> asc. Text should now include down arrow "Action ↓"
+        const actionHeaderDesc = screen.getByText('Action ↓');
+        fireEvent.click(actionHeaderDesc);
+
+        await waitFor(() => {
+            expect(auditLogApi.getList).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sort_by: 'action',
+                    sort_order: 'asc'
+                })
+            );
+        });
+    });
 });
