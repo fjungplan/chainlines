@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAuditLog } from '../../contexts/AuditLogContext';
+import NotificationBadge from '../common/NotificationBadge';
 import '../UserMenu.css';
 
 export default function UserMenu() {
@@ -8,6 +10,10 @@ export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
+
+  // Use real pending count from context (with fallback for tests)
+  const auditLogContext = useAuditLog();
+  const pendingCount = auditLogContext?.pendingCount ?? 0;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -50,6 +56,7 @@ export default function UserMenu() {
             {user.display_name?.[0] || user.email[0]}
           </div>
         )}
+        <NotificationBadge count={pendingCount} />
       </button>
 
       {isOpen && (
@@ -93,8 +100,9 @@ export default function UserMenu() {
 
           {(isAdmin() || isMod) && (
             <>
-              <button className="menu-item" onClick={() => handleMenuItemClick('/audit-log')}>
-                Audit Log
+              <button className="menu-item with-badge" onClick={() => handleMenuItemClick('/audit-log')}>
+                <span>Audit Log</span>
+                <NotificationBadge count={pendingCount} />
               </button>
               <div className="menu-divider" />
             </>
