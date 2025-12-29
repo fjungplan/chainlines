@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { auditLogApi } from '../api/auditLog';
 import DiffTable from '../components/audit-log/DiffTable';
+import TeamDiff from '../components/audit-log/diffs/TeamDiff';
+import EraDiff from '../components/audit-log/diffs/EraDiff';
+import SponsorDiff from '../components/audit-log/diffs/SponsorDiff';
+import BrandDiff from '../components/audit-log/diffs/BrandDiff';
+import SponsorLinkDiff from '../components/audit-log/diffs/SponsorLinkDiff';
+import LineageDiff from '../components/audit-log/diffs/LineageDiff';
 import { LoadingSpinner } from '../components/Loading';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import Button from '../components/common/Button';
@@ -15,6 +21,15 @@ const STATUS_COLORS = {
     APPROVED: 'status-approved',
     REJECTED: 'status-rejected',
     REVERTED: 'status-reverted'
+};
+
+const DIFF_COMPONENTS = {
+    TEAM: TeamDiff,
+    ERA: EraDiff,
+    SPONSOR: SponsorDiff,
+    BRAND: BrandDiff,
+    SPONSOR_LINK: SponsorLinkDiff,
+    LINEAGE: LineageDiff
 };
 
 export default function AuditLogEditor() {
@@ -88,6 +103,9 @@ export default function AuditLogEditor() {
     };
 
     if (loading) return <LoadingSpinner />;
+
+    // Helper to get the correct diff component
+    const DiffComponent = edit ? (DIFF_COMPONENTS[edit.entity_type] || DiffTable) : DiffTable;
 
     return (
         <div className="audit-log-editor">
@@ -163,7 +181,7 @@ export default function AuditLogEditor() {
                             {/* Diff Section */}
                             <div className="diff-section">
                                 <h2>Changes</h2>
-                                <DiffTable
+                                <DiffComponent
                                     before={edit.snapshot_before}
                                     after={edit.snapshot_after}
                                 />

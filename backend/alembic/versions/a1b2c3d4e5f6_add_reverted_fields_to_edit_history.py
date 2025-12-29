@@ -24,7 +24,7 @@ def upgrade() -> None:
     # Add reverted_by column with FK to users
     op.add_column('edit_history', sa.Column(
         'reverted_by',
-        sa.String(36),  # UUID as string for SQLite compatibility
+        sa.UUID(),
         sa.ForeignKey('users.user_id', ondelete='SET NULL'),
         nullable=True
     ))
