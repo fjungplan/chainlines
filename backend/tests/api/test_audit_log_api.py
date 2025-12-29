@@ -152,8 +152,9 @@ class TestAuditLogListEndpoint:
         
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1  # Only the pending edit
-        assert data[0]["status"] == "PENDING"
+        assert data["total"] == 1
+        assert len(data["items"]) == 1  # Only the pending edit
+        assert data["items"][0]["status"] == "PENDING"
     
     @pytest.mark.asyncio
     async def test_list_filter_by_status(self, client, isolated_session, admin_user, sample_edits):
@@ -168,8 +169,9 @@ class TestAuditLogListEndpoint:
         
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
-        statuses = {item["status"] for item in data}
+        assert data["total"] == 2
+        assert len(data["items"]) == 2
+        statuses = {item["status"] for item in data["items"]}
         assert statuses == {"APPROVED", "REJECTED"}
     
     @pytest.mark.asyncio
@@ -185,9 +187,10 @@ class TestAuditLogListEndpoint:
         
         assert response.status_code == 200
         data = response.json()
+        items = data["items"]
         # Verify descending order by submitted_at
-        for i in range(len(data) - 1):
-            assert data[i]["submitted_at"] >= data[i + 1]["submitted_at"]
+        for i in range(len(items) - 1):
+            assert items[i]["submitted_at"] >= items[i + 1]["submitted_at"]
     
     @pytest.mark.asyncio
     async def test_moderator_can_access(self, client, isolated_session, moderator_user, sample_edits):

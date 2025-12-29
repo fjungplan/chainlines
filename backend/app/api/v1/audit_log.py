@@ -15,13 +15,13 @@ from app.api.dependencies import require_moderator
 from app.models.user import User
 from app.models.edit import EditHistory
 from app.models.enums import EditStatus
-from app.schemas.audit_log import AuditLogEntryResponse, AuditLogDetailResponse, UserSummary
+from app.schemas.audit_log import AuditLogEntryResponse, AuditLogDetailResponse, UserSummary, AuditLogListResponse
 from app.services.audit_log_service import AuditLogService
 
 router = APIRouter(prefix="/api/v1/audit-log", tags=["audit-log"])
 
 
-@router.get("", response_model=List[AuditLogEntryResponse])
+@router.get("", response_model=AuditLogListResponse)
 async def list_audit_log(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -65,7 +65,9 @@ async def list_audit_log(
     if end_date:
         stmt = stmt.where(EditHistory.created_at <= end_date)
 
-
+    # Get total count
+    total_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await session.execute(total_stmt)).scalar_one()
 
     # Sort
     sort_column = getattr(EditHistory, sort_by)
@@ -121,8 +123,8 @@ async def list_audit_log(
             reviewed_at=edit.reviewed_at,
             summary=_generate_edit_summary(edit)
         ))
-    
-    return entries
+        
+    return AuditLogListResponse(items=entries, total=total)
 
 
 @router.get("/pending-count")

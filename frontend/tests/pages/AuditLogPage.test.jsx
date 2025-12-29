@@ -37,7 +37,12 @@ describe('AuditLogPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         // Default mocks
-        auditLogApi.getList.mockResolvedValue({ data: [] });
+        auditLogApi.getList.mockResolvedValue({
+            data: {
+                items: [],
+                total: 0
+            }
+        });
         auditLogApi.getPendingCount.mockResolvedValue({ data: { count: 5 } });
     });
 
@@ -152,6 +157,48 @@ describe('AuditLogPage', () => {
                 expect.objectContaining({
                     sort_by: 'action',
                     sort_order: 'asc'
+                })
+            );
+        });
+    });
+
+    it('handles pagination', async () => {
+        // Mock with total items > pageSize (50)
+        auditLogApi.getList.mockResolvedValue({
+            data: {
+                items: [],
+                total: 100
+            }
+        });
+
+        renderPage();
+        await waitFor(() => expect(auditLogApi.getList).toHaveBeenCalled());
+
+        const nextBtn = screen.getByRole('button', { name: 'Next' });
+        expect(nextBtn).not.toBeDisabled();
+
+        fireEvent.click(nextBtn);
+
+        await waitFor(() => {
+            // Page 2: skip=50
+            expect(auditLogApi.getList).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    skip: 50,
+                    limit: 50
+                })
+            );
+        });
+
+        // Change page size to 25
+        const sizeSelect = screen.getByRole('combobox', { name: 'Items per page' });
+        fireEvent.change(sizeSelect, { target: { value: '25' } });
+
+        await waitFor(() => {
+            // Reset to page 1, with limit 25
+            expect(auditLogApi.getList).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    skip: 0,
+                    limit: 25
                 })
             );
         });

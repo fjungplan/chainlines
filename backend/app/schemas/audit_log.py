@@ -39,6 +39,12 @@ class AuditLogEntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuditLogListResponse(BaseModel):
+    items: List[AuditLogEntryResponse]
+    total: int
+
+
+
 class AuditLogDetailResponse(BaseModel):
     """
     Full details of an edit for the detail/diff view.

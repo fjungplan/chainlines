@@ -50,6 +50,11 @@ export default function AuditLogPage() {
     const [endDate, setEndDate] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+    const [totalItems, setTotalItems] = useState(0);
+
     // Selected edit for detail view
     const [selectedEdit, setSelectedEdit] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
@@ -86,12 +91,26 @@ export default function AuditLogPage() {
             params.sort_by = sortConfig.key;
             params.sort_order = sortConfig.direction;
 
+            // Pagination
+            params.skip = (currentPage - 1) * pageSize;
+            params.limit = pageSize;
+
             const [editsResponse, countResponse] = await Promise.all([
                 auditLogApi.getList(params),
                 auditLogApi.getPendingCount()
             ]);
 
-            setEdits(editsResponse.data);
+            // Handle new response format { items, total }
+            if (editsResponse.data.items) {
+                setEdits(editsResponse.data.items);
+                setTotalItems(editsResponse.data.total);
+            } else {
+                // Fallback for older API if needed (though backend is updated)
+                setEdits(editsResponse.data);
+                // If it was array, total is length? No, assume array
+                setTotalItems(editsResponse.data.length || 0);
+            }
+
             setPendingCount(countResponse.data.count);
         } catch (err) {
             console.error('Failed to fetch audit log:', err);
@@ -99,15 +118,15 @@ export default function AuditLogPage() {
         } finally {
             setLoading(false);
         }
-    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate, sortConfig]);
+    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate, sortConfig, currentPage, pageSize]);
 
     // Initial load
     useEffect(() => {
         fetchEdits();
     }, [fetchEdits]);
 
-    // Toggle status filter
-    const toggleStatusFilter = (status) => {
+    // Handle filters change - reset page
+    const handleStatusFilter = (status) => {
         setStatusFilters(prev => {
             if (prev.includes(status)) {
                 return prev.filter(s => s !== status);
@@ -115,6 +134,18 @@ export default function AuditLogPage() {
                 return [...prev, status];
             }
         });
+        setCurrentPage(1);
+    };
+
+    const handleTypeFilter = (val) => {
+        setEntityTypeFilter(val);
+        setCurrentPage(1);
+    };
+
+    const handleDateChange = (start, end) => {
+        if (start !== undefined) setStartDate(start);
+        if (end !== undefined) setEndDate(end);
+        setCurrentPage(1);
     };
 
     // Sorting
@@ -123,6 +154,8 @@ export default function AuditLogPage() {
             key,
             direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
         }));
+        // Optional: Reset page on sort? Usually yes.
+        setCurrentPage(1);
     };
 
     // View edit detail
@@ -144,6 +177,11 @@ export default function AuditLogPage() {
         if (sortConfig.key !== key) return '';
         return sortConfig.direction === 'asc' ? ' ↑' : ' ↓';
     };
+
+    // Pagination handlers
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const startEntry = (currentPage - 1) * pageSize + 1;
+    const endEntry = Math.min(currentPage * pageSize, totalItems);
 
     // Permission check
     if (!canAccess) {
@@ -181,7 +219,7 @@ export default function AuditLogPage() {
                                 key={option.value}
                                 variant={statusFilters.includes(option.value) ? 'primary' : 'ghost'}
                                 size="sm"
-                                onClick={() => toggleStatusFilter(option.value)}
+                                onClick={() => handleStatusFilter(option.value)}
                                 className={`filter-btn ${option.color}`}
                             >
                                 {option.label}
@@ -195,7 +233,7 @@ export default function AuditLogPage() {
                         <span className="filter-label">Type:</span>
                         <select
                             value={entityTypeFilter}
-                            onChange={(e) => setEntityTypeFilter(e.target.value)}
+                            onChange={(e) => handleTypeFilter(e.target.value)}
                             className="filter-select"
                         >
                             {ENTITY_TYPE_OPTIONS.map(option => (
@@ -213,14 +251,14 @@ export default function AuditLogPage() {
                         <input
                             type="date"
                             value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
+                            onChange={(e) => handleDateChange(e.target.value, undefined)}
                             className="filter-input"
                         />
                         <span className="filter-separator">-</span>
                         <input
                             type="date"
                             value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
+                            onChange={(e) => handleDateChange(undefined, e.target.value)}
                             className="filter-input"
                         />
                     </div>
@@ -231,71 +269,114 @@ export default function AuditLogPage() {
                 {error && <ErrorDisplay message={error} />}
 
                 {!loading && !error && (
-                    <div className="audit-log-table-container">
-                        <table className="audit-log-table">
-                            <thead>
-                                <tr>
-                                    <th onClick={() => handleSort('status')} className="sortable">
-                                        Status{getSortIndicator('status')}
-                                    </th>
-                                    <th onClick={() => handleSort('entity_type')} className="sortable">
-                                        Entity{getSortIndicator('entity_type')}
-                                    </th>
-                                    <th onClick={() => handleSort('action')} className="sortable">
-                                        Action{getSortIndicator('action')}
-                                    </th>
-                                    <th>Submitter</th>
-                                    <th onClick={() => handleSort('created_at')} className="sortable">
-                                        Submitted{getSortIndicator('created_at')}
-                                    </th>
-                                    <th>Reviewed By</th>
-                                    <th>Summary</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {edits.length === 0 ? (
+                    <>
+                        <div className="audit-log-table-container">
+                            <table className="audit-log-table">
+                                <thead>
                                     <tr>
-                                        <td colSpan="8" className="empty-message">
-                                            No edits found matching the current filters.
-                                        </td>
+                                        <th onClick={() => handleSort('status')} className="sortable">
+                                            Status{getSortIndicator('status')}
+                                        </th>
+                                        <th onClick={() => handleSort('entity_type')} className="sortable">
+                                            Entity{getSortIndicator('entity_type')}
+                                        </th>
+                                        <th onClick={() => handleSort('action')} className="sortable">
+                                            Action{getSortIndicator('action')}
+                                        </th>
+                                        <th>Submitter</th>
+                                        <th onClick={() => handleSort('created_at')} className="sortable">
+                                            Submitted{getSortIndicator('created_at')}
+                                        </th>
+                                        <th>Reviewed By</th>
+                                        <th>Summary</th>
+                                        <th>Actions</th>
                                     </tr>
-                                ) : (
-                                    edits.map(edit => (
-                                        <tr
-                                            key={edit.edit_id}
-                                            onClick={() => handleViewEdit(edit)}
-                                            className="clickable-row"
-                                        >
-                                            <td>
-                                                <span className={`status-badge status-${edit.status.toLowerCase()}`}>
-                                                    {edit.status}
-                                                </span>
-                                            </td>
-                                            <td className="entity-cell">
-                                                <span className="entity-type">{edit.entity_type}</span>
-                                                <span className="entity-name">{edit.entity_name}</span>
-                                            </td>
-                                            <td>{edit.action}</td>
-                                            <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>
-                                            <td>{formatDateTime(edit.submitted_at)}</td>
-                                            <td>{edit.reviewed_by ? (edit.reviewed_by.display_name || edit.reviewed_by.email) : '-'}</td>
-                                            <td className="summary-cell">{edit.summary}</td>
-                                            <td>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleViewEdit(edit)}
-                                                >
-                                                    View
-                                                </Button>
+                                </thead>
+                                <tbody>
+                                    {edits.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="8" className="empty-message">
+                                                No edits found matching the current filters.
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    ) : (
+                                        edits.map(edit => (
+                                            <tr
+                                                key={edit.edit_id}
+                                                onClick={() => handleViewEdit(edit)}
+                                                className="clickable-row"
+                                            >
+                                                <td>
+                                                    <span className={`status-badge status-${edit.status.toLowerCase()}`}>
+                                                        {edit.status}
+                                                    </span>
+                                                </td>
+                                                <td className="entity-cell">
+                                                    <span className="entity-type">{edit.entity_type}</span>
+                                                    <span className="entity-name">{edit.entity_name}</span>
+                                                </td>
+                                                <td>{edit.action}</td>
+                                                <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>
+                                                <td>{formatDateTime(edit.submitted_at)}</td>
+                                                <td>{edit.reviewed_by ? (edit.reviewed_by.display_name || edit.reviewed_by.email) : '-'}</td>
+                                                <td className="summary-cell">{edit.summary}</td>
+                                                <td>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewEdit(edit);
+                                                        }}
+                                                    >
+                                                        View
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="pagination-bar">
+                            <div className="pagination-info">
+                                Showing {totalItems > 0 ? startEntry : 0} to {endEntry} of {totalItems} entries
+                            </div>
+                            <div className="pagination-controls">
+                                <select
+                                    value={pageSize}
+                                    aria-label="Items per page"
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="pagination-select"
+                                >
+                                    <option value={25}>25 per page</option>
+                                    <option value={50}>50 per page</option>
+                                    <option value={100}>100 per page</option>
+                                </select>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(p => p - 1)}
+                                >
+                                    Previous
+                                </Button>
+                                <span className="page-number">Page {currentPage}</span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={currentPage >= totalPages}
+                                    onClick={() => setCurrentPage(p => p + 1)}
+                                >
+                                    Next
+                                </Button>
+                            </div>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
