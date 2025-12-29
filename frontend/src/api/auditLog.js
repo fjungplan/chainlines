@@ -8,20 +8,16 @@ import apiClient from './client';
 
 export const auditLogApi = {
     /**
-     * Get list of edits with optional filters
-     * @param {Object} params - Query parameters
-     * @param {string[]} params.status - Filter by status(es): PENDING, APPROVED, REJECTED, REVERTED
-     * @param {string} params.entity_type - Filter by entity type
-     * @param {string} params.user_id - Filter by submitter user ID
-     * @param {string} params.start_date - Filter by start date (ISO 8601)
-     * @param {string} params.end_date - Filter by end date (ISO 8601)
-     * @param {string} params.sort_by - Field to sort by (created_at, status, action, entity_type)
-     * @param {string} params.sort_order - Sort order (asc, desc)
-     * @param {number} params.skip - Pagination offset
-     * @param {number} params.limit - Pagination limit
+     * Get list of audit log entries.
+     * @param {Object} params - Query parameters.
+     * @param {number} params.skip - Pagination skip.
+     * @param {number} params.limit - Pagination limit.
+     * @param {string[]} [params.status] - Filter by status.
+     * @param {string} [params.entity_type] - Filter by entity type.
+     * @param {string} [params.search] - Search query.
+     * @returns {Promise<Object>} Object containing items and total count.
      */
-    getList: (params = {}) =>
-        apiClient.get('/api/v1/audit-log', { params }),
+    getList: (params) => apiClient.get('/api/v1/audit-log', { params }),
 
     /**
      * Get full details of a single edit

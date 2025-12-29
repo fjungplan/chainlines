@@ -67,11 +67,9 @@ describe('AuditLogPage', () => {
     it('renders and fetches data', async () => {
         renderPage();
 
+        // Check for search
+        expect(screen.getByPlaceholderText(/search/i)).toBeEnabled();
         expect(screen.getByRole('heading', { name: "Audit Log" })).toBeInTheDocument();
-        // We expect "5 pending" badge
-        await waitFor(() => {
-            expect(screen.getByText(/5 pending/i)).toBeInTheDocument();
-        });
 
         expect(auditLogApi.getList).toHaveBeenCalledWith(
             expect.objectContaining({ status: ['PENDING'] })

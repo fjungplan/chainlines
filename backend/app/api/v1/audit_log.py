@@ -6,7 +6,7 @@ Accessible to Moderators and Admins only.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, or_, func, cast, String
 from typing import List, Optional
 from datetime import datetime
 
@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/audit-log", tags=["audit-log"])
 async def list_audit_log(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Search term (entity, submitter, summary)"),
     status: Optional[List[str]] = Query(None, description="Filter by status(es)"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     user_id: Optional[str] = Query(None, description="Filter by submitter user ID"),
@@ -44,11 +45,30 @@ async def list_audit_log(
     # Build query
     stmt = select(EditHistory)
     
+    # Search functionality
+    if search:
+        # Join with User to search submitter name
+        stmt = stmt.join(User, EditHistory.user_id == User.user_id, isouter=True)
+        
+        search_term = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                User.display_name.ilike(search_term),
+                EditHistory.source_notes.ilike(search_term),
+                EditHistory.review_notes.ilike(search_term),
+                # Cast JSON to string to search content (rudimentary full-text for snapshots)
+                cast(EditHistory.snapshot_after, String).ilike(search_term)
+            )
+        )
+    
     # Status filter - default to PENDING only if not specified
     if status:
         status_values = [EditStatus(s) for s in status]
         stmt = stmt.where(EditHistory.status.in_(status_values))
-    else:
+    elif not search:
+        # If searching, we likely want to see everything unless status is explicit
+        # But if no search and no status, default to pending?
+        # Let's keep existing behavior: default to PENDING if no status specified
         stmt = stmt.where(EditHistory.status == EditStatus.PENDING)
     
     # Entity type filter
@@ -61,11 +81,17 @@ async def list_audit_log(
 
     # Date range filter
     if start_date:
+        # Ensure naive datetime for comparison with naive DB timestamp
+        if start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
         stmt = stmt.where(EditHistory.created_at >= start_date)
     if end_date:
+        if end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
         stmt = stmt.where(EditHistory.created_at <= end_date)
 
     # Get total count
+    # We need to ensure the count query respects the same joins/filters
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await session.execute(total_stmt)).scalar_one()
 

@@ -31,6 +31,7 @@ const ENTITY_TYPE_OPTIONS = [
     { value: 'team_node', label: 'Team' },
     { value: 'team_era', label: 'Team Era' },
     { value: 'sponsor_master', label: 'Sponsor' },
+    { value: 'sponsor_brand', label: 'Sponsor Brand' },
     { value: 'sponsor_link', label: 'Sponsor Link' },
     { value: 'lineage_event', label: 'Lineage Event' },
 ];
@@ -41,27 +42,42 @@ export default function AuditLogPage() {
     const { isAdmin, isModerator } = useAuth();
     const navigate = useNavigate();
 
-    // Filters
-    const [statusFilters, setStatusFilters] = useState(['PENDING']);
-    const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
-    const [searchQuery, setSearchQuery] = useState('');
+
 
     // Data State
     const [edits, setEdits] = useState([]);
-    const [pendingCount, setPendingCount] = useState(0);
     const [loading, setLoading] = useState(false); // Initial load or filter change
     const [fetchingMore, setFetchingMore] = useState(false); // Infinite scroll load
     const [error, setError] = useState(null);
     const [hasMore, setHasMore] = useState(true);
+
+    // Filter State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [statusFilters, setStatusFilters] = useState(['PENDING']);
+    const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [sortConfig, setSortConfig] = useState({ key: 'created_at', direction: 'desc' });
 
     // Pagination tracking
     const pageRef = useRef(1);
 
     // Check permissions
     const canAccess = isAdmin() || isModerator();
+
+    // Debounce Search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // Fetch edits function
     // isLoadMore: true = append, false = reset/replace
@@ -81,6 +97,7 @@ export default function AuditLogPage() {
 
         try {
             const params = {};
+            if (debouncedSearch) params.search = debouncedSearch;
             if (statusFilters.length > 0) params.status = statusFilters;
             if (entityTypeFilter !== 'ALL') params.entity_type = entityTypeFilter;
             if (startDate) params.start_date = new Date(startDate).toISOString();
@@ -102,11 +119,7 @@ export default function AuditLogPage() {
             params.skip = (currentPage - 1) * currentLimit;
             params.limit = currentLimit;
 
-            const [editsResponse, countResponse] = await Promise.all([
-                auditLogApi.getList(params),
-                // Only need pending count on initial load really, but keeping it fresh is fine
-                !isLoadMore ? auditLogApi.getPendingCount() : Promise.resolve({ data: { count: pendingCount } })
-            ]);
+            const editsResponse = await auditLogApi.getList(params);
 
             let newItems = [];
             let total = 0;
@@ -138,10 +151,6 @@ export default function AuditLogPage() {
                 // Handled layout effect?
             }
 
-            if (!isLoadMore) {
-                setPendingCount(countResponse.data.count);
-            }
-
         } catch (err) {
             console.error('Failed to fetch audit log:', err);
             setError('Failed to load audit log. Please try again.');
@@ -149,7 +158,7 @@ export default function AuditLogPage() {
             setLoading(false);
             setFetchingMore(false);
         }
-    }, [canAccess, statusFilters, entityTypeFilter, startDate, endDate, sortConfig, pendingCount, loading, fetchingMore]);
+    }, [canAccess, debouncedSearch, statusFilters, entityTypeFilter, startDate, endDate, sortConfig, loading, fetchingMore]);
 
     // Initial Load & Filter Changes
     // This effect runs when filters change. It triggers a "reset" load.
@@ -160,7 +169,7 @@ export default function AuditLogPage() {
         // We need to fetch on mount AND on filter change.
         fetchEdits(false);
         // eslint-disable-next-line
-    }, [statusFilters, entityTypeFilter, startDate, endDate, sortConfig]);
+    }, [debouncedSearch, statusFilters, entityTypeFilter, startDate, endDate, sortConfig]);
     // Excluding fetchEdits from deps to avoid loop if fetchEdits changes (it shouldn't due to useCallback but safely handling)
 
     // Infinite Scroll Hook
@@ -170,6 +179,10 @@ export default function AuditLogPage() {
 
 
     // Handlers
+    const handleSearch = (e) => {
+        setSearchQuery(e.target.value);
+    };
+
     const handleStatusFilter = (status) => {
         setStatusFilters(prev => {
             if (prev.includes(status)) return prev.filter(s => s !== status);
@@ -224,29 +237,20 @@ export default function AuditLogPage() {
                         </Link>
                         <h1>Audit Log</h1>
                     </div>
-                    <div className="header-right">
-                        {pendingCount > 0 && (
-                            <span className="pending-badge">
-                                {pendingCount} pending
-                            </span>
-                        )}
-                    </div>
                 </div>
 
                 {/* Controls */}
                 <div className="audit-controls">
                     <input
                         type="text"
-                        placeholder="Search audit log... (Functionality coming soon)"
+                        placeholder="Search..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        disabled
+                        onChange={handleSearch}
                     />
 
                     <div className="filter-divider"></div>
 
                     <div className="filter-group filter-btn-group">
-                        <span className="filter-label">Status:</span>
                         {STATUS_OPTIONS.map(option => (
                             <Button
                                 key={option.value}
@@ -352,7 +356,7 @@ export default function AuditLogPage() {
                                             </td>
                                             <td>{edit.action}</td>
                                             <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>
-                                            <td>{formatDateTime(edit.submitted_at)}</td>
+                                            <td>{new Date(edit.submitted_at).toLocaleString()}</td>
                                             <td>{edit.reviewed_by ? (edit.reviewed_by.display_name || edit.reviewed_by.email) : '-'}</td>
                                             <td className="summary-cell">{edit.summary}</td>
                                             <td>

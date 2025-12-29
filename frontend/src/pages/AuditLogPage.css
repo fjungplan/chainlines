@@ -51,16 +51,6 @@
     color: var(--color-text-light);
 }
 
-/* Pending Badge in Header */
-.pending-badge {
-    background: var(--color-warning);
-    color: #000;
-    padding: 0.375rem 0.75rem;
-    border-radius: 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
 /* Controls - Matching .team-controls */
 .audit-controls {
     display: flex;
@@ -69,19 +59,35 @@
     gap: 12px;
     margin-bottom: 1rem;
     width: 100%;
-    flex-wrap: wrap;
-    /* allow wrapping if many filters */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    /* Scrollbar space if needed */
 }
 
 .audit-controls input[type="text"] {
-    flex: 1;
-    min-width: 200px;
-    /* Styles usually come from global input but ensuring here */
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-primary);
+    width: 200px;
+    flex-shrink: 0;
+    padding: 0.75rem;
+    /* Match Input.css */
+    border: 1px solid var(--border-color, #444);
+    border-radius: 4px;
+    /* Match Input.css */
+    background-color: var(--bg-surface, #2d2d2d);
+    color: var(--text-primary, #ffffff);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.audit-controls input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color, #ff4d00);
+}
+
+.filter-select {
+    min-width: 150px;
+    /* Allow it to be slightly wider */
 }
 
 /* Filters embedded in controls */
@@ -98,15 +104,6 @@
     margin: 0 0.5rem;
 }
 
-.filter-select {
-    padding: 0.5rem;
-    border-radius: var(--radius-md);
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-primary);
-    font-size: 0.9rem;
-}
-
 .filter-date-group {
     display: flex;
     align-items: center;
@@ -114,13 +111,24 @@
 }
 
 .filter-input-date {
-    padding: 0.4rem;
-    border-radius: var(--radius-md);
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-primary);
+    width: 130px;
+    /* Force compact width */
+    padding: 0.75rem;
+    /* Match Input.css */
+    border: 1px solid var(--border-color, #444);
+    border-radius: 4px;
+    /* Match Input.css */
+    background-color: var(--bg-surface, #2d2d2d);
+    color: var(--color-text-primary, #ffffff);
+    /* Fallback to standard color */
     font-family: inherit;
     font-size: 0.9rem;
+    /* Slight reduction for date inputs context */
+}
+
+.filter-input-date:focus {
+    outline: none;
+    border-color: var(--primary-color, #ff4d00);
 }
 
 /* Filter Buttons */
