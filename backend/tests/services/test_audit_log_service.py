@@ -228,3 +228,270 @@ class TestResolveEntityName:
             async_session, "team_node", fake_id
         )
         assert name == "Unknown"
+
+
+class TestCanModerateEdit:
+    """Test permission checking for edit moderation."""
+    
+    @pytest.fixture
+    async def admin_user(self, async_session):
+        """Create an admin user."""
+        from app.models.enums import UserRole
+        user = User(
+            user_id=uuid4(),
+            email="admin@example.com",
+            google_id="admin_google_id",
+            display_name="Admin User",
+            role=UserRole.ADMIN
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def moderator_user(self, async_session):
+        """Create a moderator user."""
+        from app.models.enums import UserRole
+        user = User(
+            user_id=uuid4(),
+            email="mod@example.com",
+            google_id="mod_google_id",
+            display_name="Mod User",
+            role=UserRole.MODERATOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def editor_user(self, async_session):
+        """Create an editor user."""
+        from app.models.enums import UserRole
+        user = User(
+            user_id=uuid4(),
+            email="editor@example.com",
+            google_id="editor_google_id",
+            display_name="Editor User",
+            role=UserRole.EDITOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.mark.asyncio
+    async def test_admin_can_moderate_admin_edit(self, async_session, admin_user):
+        """Admin can moderate edits submitted by another admin."""
+        from app.services.audit_log_service import AuditLogService
+        
+        another_admin = User(
+            user_id=uuid4(),
+            email="admin2@example.com",
+            google_id="admin2_google_id",
+            role=UserRole.ADMIN
+        )
+        async_session.add(another_admin)
+        await async_session.flush()
+        
+        result = AuditLogService.can_moderate_edit(admin_user, another_admin)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_admin_can_moderate_moderator_edit(self, async_session, admin_user, moderator_user):
+        """Admin can moderate edits submitted by a moderator."""
+        from app.services.audit_log_service import AuditLogService
+        
+        result = AuditLogService.can_moderate_edit(admin_user, moderator_user)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_admin_can_moderate_editor_edit(self, async_session, admin_user, editor_user):
+        """Admin can moderate edits submitted by an editor."""
+        from app.services.audit_log_service import AuditLogService
+        
+        result = AuditLogService.can_moderate_edit(admin_user, editor_user)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_moderator_can_moderate_editor_edit(self, async_session, moderator_user, editor_user):
+        """Moderator can moderate edits submitted by an editor."""
+        from app.services.audit_log_service import AuditLogService
+        
+        result = AuditLogService.can_moderate_edit(moderator_user, editor_user)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_moderator_can_moderate_moderator_edit(self, async_session, moderator_user):
+        """Moderator can moderate edits submitted by another moderator."""
+        from app.services.audit_log_service import AuditLogService
+        
+        another_mod = User(
+            user_id=uuid4(),
+            email="mod2@example.com",
+            google_id="mod2_google_id",
+            role=UserRole.MODERATOR
+        )
+        async_session.add(another_mod)
+        await async_session.flush()
+        
+        result = AuditLogService.can_moderate_edit(moderator_user, another_mod)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_moderator_cannot_moderate_admin_edit(self, async_session, moderator_user, admin_user):
+        """Moderator CANNOT moderate edits submitted by an admin."""
+        from app.services.audit_log_service import AuditLogService
+        
+        result = AuditLogService.can_moderate_edit(moderator_user, admin_user)
+        assert result is False
+    
+    @pytest.mark.asyncio
+    async def test_editor_cannot_moderate_any_edit(self, async_session, editor_user, moderator_user):
+        """Editor cannot moderate any edits."""
+        from app.services.audit_log_service import AuditLogService
+        
+        result = AuditLogService.can_moderate_edit(editor_user, moderator_user)
+        assert result is False
+
+
+class TestIsMostRecentApproved:
+    """Test chronology checking for revert operations."""
+    
+    @pytest.fixture
+    async def test_user(self, async_session):
+        """Create a test user."""
+        user = User(
+            user_id=uuid4(),
+            email="chrono_test@example.com",
+            google_id="chrono_test_id",
+            display_name="Chrono Test User"
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def test_entity_id(self):
+        """Create a consistent entity ID for testing."""
+        return uuid4()
+    
+    @pytest.mark.asyncio
+    async def test_single_approved_is_most_recent(self, async_session, test_user, test_entity_id):
+        """A single approved edit is the most recent."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_after={"test": "data"},
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(edit)
+        await async_session.commit()
+        
+        result = await AuditLogService.is_most_recent_approved(async_session, edit)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_older_approved_is_not_most_recent(self, async_session, test_user, test_entity_id):
+        """An older approved edit is NOT the most recent."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        from datetime import timedelta
+        
+        # Create older approved edit
+        older_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_after={"version": 1},
+            reviewed_at=datetime.utcnow() - timedelta(hours=1)
+        )
+        async_session.add(older_edit)
+        await async_session.flush()
+        
+        # Create newer approved edit
+        newer_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_after={"version": 2},
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(newer_edit)
+        await async_session.commit()
+        
+        # Older edit should NOT be most recent
+        result = await AuditLogService.is_most_recent_approved(async_session, older_edit)
+        assert result is False
+        
+        # Newer edit SHOULD be most recent
+        result = await AuditLogService.is_most_recent_approved(async_session, newer_edit)
+        assert result is True
+    
+    @pytest.mark.asyncio
+    async def test_pending_edit_is_not_most_recent_approved(self, async_session, test_user, test_entity_id):
+        """A pending edit is not considered 'most recent approved'."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.PENDING,
+            snapshot_after={"test": "data"}
+        )
+        async_session.add(edit)
+        await async_session.commit()
+        
+        result = await AuditLogService.is_most_recent_approved(async_session, edit)
+        assert result is False
+    
+    @pytest.mark.asyncio
+    async def test_approved_with_pending_sibling_is_still_most_recent(self, async_session, test_user, test_entity_id):
+        """An approved edit is still most recent even if there's a newer pending edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        from datetime import timedelta
+        
+        # Create approved edit
+        approved_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_after={"version": 1},
+            reviewed_at=datetime.utcnow() - timedelta(hours=1)
+        )
+        async_session.add(approved_edit)
+        await async_session.flush()
+        
+        # Create newer pending edit
+        pending_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_entity_id,
+            user_id=test_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.PENDING,
+            snapshot_after={"version": 2}
+        )
+        async_session.add(pending_edit)
+        await async_session.commit()
+        
+        # Approved should still be the most recent APPROVED
+        result = await AuditLogService.is_most_recent_approved(async_session, approved_edit)
+        assert result is True

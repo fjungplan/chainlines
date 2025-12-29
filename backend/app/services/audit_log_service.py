@@ -138,3 +138,85 @@ class AuditLogService:
         succ_name = (successor.display_name or successor.legal_name) if successor else "Unknown Team"
         
         return f"{pred_name} → {succ_name} ({event.event_year})"
+    
+    # =========================================================================
+    # Permission Checking
+    # =========================================================================
+    
+    @staticmethod
+    def can_moderate_edit(current_user: User, edit_submitter: User) -> bool:
+        """
+        Check if the current user can moderate an edit submitted by another user.
+        
+        Permission rules:
+        - Admins can moderate any edit
+        - Moderators can moderate edits by editors and other moderators
+        - Moderators CANNOT moderate edits submitted by admins
+        - Editors cannot moderate any edits
+        
+        Args:
+            current_user: The user attempting to moderate
+            edit_submitter: The user who submitted the edit
+            
+        Returns:
+            True if moderation is allowed, False otherwise
+        """
+        from app.models.enums import UserRole
+        
+        # Must be at least a moderator to moderate anything
+        if current_user.role not in (UserRole.MODERATOR, UserRole.ADMIN):
+            return False
+        
+        # Admins can moderate anything
+        if current_user.role == UserRole.ADMIN:
+            return True
+        
+        # Moderators cannot touch admin-submitted edits
+        if edit_submitter.role == UserRole.ADMIN:
+            return False
+        
+        # Moderators can moderate everything else
+        return True
+    
+    # =========================================================================
+    # Chronology Checking
+    # =========================================================================
+    
+    @staticmethod
+    async def is_most_recent_approved(
+        session: AsyncSession,
+        edit: "EditHistory"
+    ) -> bool:
+        """
+        Check if this edit is the most recent APPROVED edit for its entity.
+        
+        Used to determine if a revert is allowed - only the most recent
+        approved edit can be reverted.
+        
+        Args:
+            session: Database session
+            edit: The edit to check
+            
+        Returns:
+            True if this is the most recent approved edit for the entity
+        """
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus
+        
+        # If this edit is not approved, it cannot be the "most recent approved"
+        if edit.status != EditStatus.APPROVED:
+            return False
+        
+        # Find any approved edits for the same entity that are newer
+        stmt = select(EditHistory).where(
+            EditHistory.entity_type == edit.entity_type,
+            EditHistory.entity_id == edit.entity_id,
+            EditHistory.status == EditStatus.APPROVED,
+            EditHistory.reviewed_at > edit.reviewed_at,
+            EditHistory.edit_id != edit.edit_id
+        )
+        result = await session.execute(stmt)
+        newer_approved = result.scalars().first()
+        
+        # If there are no newer approved edits, this is the most recent
+        return newer_approved is None
