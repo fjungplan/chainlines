@@ -495,3 +495,192 @@ class TestIsMostRecentApproved:
         # Approved should still be the most recent APPROVED
         result = await AuditLogService.is_most_recent_approved(async_session, approved_edit)
         assert result is True
+
+
+class TestRevertEdit:
+    """Test revert_edit() functionality."""
+    
+    @pytest.fixture
+    async def admin_user(self, async_session):
+        """Create an admin user."""
+        user = User(
+            user_id=uuid4(),
+            email="revert_admin@example.com",
+            google_id="revert_admin_id",
+            display_name="Revert Admin",
+            role=UserRole.ADMIN
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def moderator_user(self, async_session):
+        """Create a moderator user."""
+        user = User(
+            user_id=uuid4(),
+            email="revert_mod@example.com",
+            google_id="revert_mod_id",
+            display_name="Revert Mod",
+            role=UserRole.MODERATOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def editor_user(self, async_session):
+        """Create an editor user."""
+        user = User(
+            user_id=uuid4(),
+            email="revert_editor@example.com",
+            google_id="revert_editor_id",
+            display_name="Revert Editor",
+            role=UserRole.EDITOR
+        )
+        async_session.add(user)
+        await async_session.flush()
+        return user
+    
+    @pytest.fixture
+    async def test_team_node(self, async_session, editor_user):
+        """Create a team node for testing."""
+        node = TeamNode(
+            legal_name="Revert Test Team",
+            display_name="Revert Team",
+            founding_year=2020,
+            created_by=editor_user.user_id
+        )
+        async_session.add(node)
+        await async_session.flush()
+        return node
+    
+    @pytest.fixture
+    async def approved_edit(self, async_session, editor_user, test_team_node, admin_user):
+        """Create an approved edit that can be reverted."""
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "Old Name"},
+            snapshot_after={"legal_name": "Revert Test Team"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(edit)
+        await async_session.commit()
+        return edit
+    
+    @pytest.mark.asyncio
+    async def test_revert_edit_success(self, async_session, approved_edit, admin_user, test_team_node):
+        """Successfully revert an approved edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.enums import EditStatus
+        
+        result = await AuditLogService.revert_edit(
+            async_session, approved_edit, admin_user, notes="Reverting for test"
+        )
+        
+        assert result.status == "REVERTED"
+        assert result.message == "Edit reverted successfully"
+        
+        # Check edit status was updated
+        await async_session.refresh(approved_edit)
+        assert approved_edit.status == EditStatus.REVERTED
+        assert approved_edit.reverted_by == admin_user.user_id
+        assert approved_edit.reverted_at is not None
+    
+    @pytest.mark.asyncio
+    async def test_revert_fails_if_not_most_recent(self, async_session, editor_user, admin_user, test_team_node):
+        """Revert should fail if edit is not the most recent approved."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        from datetime import timedelta
+        
+        # Create older approved edit
+        older_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "V1"},
+            snapshot_after={"legal_name": "V2"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow() - timedelta(hours=1)
+        )
+        async_session.add(older_edit)
+        await async_session.flush()
+        
+        # Create newer approved edit
+        newer_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "V2"},
+            snapshot_after={"legal_name": "V3"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(newer_edit)
+        await async_session.commit()
+        
+        # Try to revert the older edit - should fail
+        with pytest.raises(ValueError, match="not the most recent"):
+            await AuditLogService.revert_edit(async_session, older_edit, admin_user)
+    
+    @pytest.mark.asyncio
+    async def test_moderator_cannot_revert_admin_edit(self, async_session, admin_user, moderator_user, test_team_node):
+        """Moderator cannot revert an edit submitted by an admin."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        # Create an edit submitted by admin
+        admin_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=admin_user.user_id,  # Admin submitted this
+            action=EditAction.UPDATE,
+            status=EditStatus.APPROVED,
+            snapshot_before={"legal_name": "Old"},
+            snapshot_after={"legal_name": "New"},
+            reviewed_by=admin_user.user_id,
+            reviewed_at=datetime.utcnow()
+        )
+        async_session.add(admin_edit)
+        await async_session.commit()
+        
+        # Moderator tries to revert - should fail
+        with pytest.raises(PermissionError, match="permission"):
+            await AuditLogService.revert_edit(async_session, admin_edit, moderator_user)
+    
+    @pytest.mark.asyncio
+    async def test_revert_pending_edit_fails(self, async_session, editor_user, admin_user, test_team_node):
+        """Cannot revert a pending edit."""
+        from app.services.audit_log_service import AuditLogService
+        from app.models.edit import EditHistory
+        from app.models.enums import EditStatus, EditAction
+        
+        pending_edit = EditHistory(
+            entity_type="team_node",
+            entity_id=test_team_node.node_id,
+            user_id=editor_user.user_id,
+            action=EditAction.UPDATE,
+            status=EditStatus.PENDING,
+            snapshot_before={"legal_name": "Old"},
+            snapshot_after={"legal_name": "New"}
+        )
+        async_session.add(pending_edit)
+        await async_session.commit()
+        
+        with pytest.raises(ValueError, match="not approved"):
+            await AuditLogService.revert_edit(async_session, pending_edit, admin_user)

@@ -220,3 +220,72 @@ class AuditLogService:
         
         # If there are no newer approved edits, this is the most recent
         return newer_approved is None
+    
+    # =========================================================================
+    # Revert Operations
+    # =========================================================================
+    
+    @staticmethod
+    async def revert_edit(
+        session: AsyncSession,
+        edit: "EditHistory",
+        reverter: User,
+        notes: Optional[str] = None
+    ) -> "RevertResponse":
+        """
+        Revert an approved edit to restore the entity to its previous state.
+        
+        Requirements:
+        - Edit must be APPROVED status
+        - Edit must be the most recent approved edit for the entity
+        - Reverter must have permission to moderate edits from the submitter
+        
+        Args:
+            session: Database session
+            edit: The edit to revert
+            reverter: The user performing the revert
+            notes: Optional notes explaining the revert
+            
+        Returns:
+            RevertResponse with status and message
+            
+        Raises:
+            ValueError: If edit is not approved or not most recent
+            PermissionError: If reverter lacks permission
+        """
+        from app.models.enums import EditStatus
+        from app.schemas.audit_log import ReviewEditResponse
+        
+        # Validate edit is approved
+        if edit.status != EditStatus.APPROVED:
+            raise ValueError("Cannot revert: edit is not approved")
+        
+        # Check chronology - must be most recent approved
+        is_most_recent = await AuditLogService.is_most_recent_approved(session, edit)
+        if not is_most_recent:
+            raise ValueError("Cannot revert: this edit is not the most recent approved edit for this entity")
+        
+        # Get the edit submitter for permission check
+        submitter = await session.get(User, edit.user_id)
+        if submitter and not AuditLogService.can_moderate_edit(reverter, submitter):
+            raise PermissionError("You do not have permission to revert this edit")
+        
+        # Perform the revert - update edit status
+        edit.status = EditStatus.REVERTED
+        edit.reverted_by = reverter.user_id
+        edit.reverted_at = datetime.utcnow()
+        
+        if notes:
+            # Append revert notes to existing review notes
+            if edit.review_notes:
+                edit.review_notes = f"{edit.review_notes}\n\nReverted: {notes}"
+            else:
+                edit.review_notes = f"Reverted: {notes}"
+        
+        await session.commit()
+        
+        return ReviewEditResponse(
+            edit_id=str(edit.edit_id),
+            status="REVERTED",
+            message="Edit reverted successfully"
+        )
