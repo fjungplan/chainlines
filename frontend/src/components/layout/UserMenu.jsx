@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import '../UserMenu.css';
 
 export default function UserMenu() {
-  const { user, logout, isAdmin, canEdit, needsModeration } = useAuth();
+  const { user, logout, isAdmin, isModerator, canEdit, needsModeration } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
@@ -33,6 +33,8 @@ export default function UserMenu() {
       navigate(path);
     }
   };
+
+  const isMod = typeof isModerator === 'function' ? isModerator() : false;
 
   return (
     <div className="user-menu" ref={menuRef}>
@@ -89,11 +91,17 @@ export default function UserMenu() {
             </>
           )}
 
+          {(isAdmin() || isMod) && (
+            <>
+              <button className="menu-item" onClick={() => handleMenuItemClick('/audit-log')}>
+                Audit Log
+              </button>
+              <div className="menu-divider" />
+            </>
+          )}
+
           {isAdmin() && (
             <>
-              <button className="menu-item" onClick={() => handleMenuItemClick('/moderation')}>
-                Moderation Queue
-              </button>
               <button className="menu-item" onClick={() => handleMenuItemClick('/admin')}>
                 Admin Panel
               </button>

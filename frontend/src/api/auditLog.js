@@ -51,6 +51,10 @@ export const auditLogApi = {
      */
     reapply: (editId, data = {}) =>
         apiClient.post(`/api/v1/audit-log/${editId}/reapply`, data),
+
+    // Moderation action
+    review: (editId, data) =>
+        apiClient.post(`/api/v1/moderation/review/${editId}`, data),
 };
 
 export default auditLogApi;

@@ -4,7 +4,7 @@ import HomePage from './pages/HomePage';
 import TeamDetailPage from './pages/TeamDetailPage';
 import LoginPage from './pages/auth/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
-import ModerationQueuePage from './pages/ModerationQueuePage';
+
 import AuditLogPage from './pages/AuditLogPage';
 import AuditLogEditor from './pages/AuditLogEditor';
 import MyEditsPage from './pages/MyEditsPage';
@@ -28,7 +28,7 @@ function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="imprint" element={<ImprintPage />} />
-            <Route path="moderation" element={<ModerationQueuePage />} />
+
             <Route path="audit-log" element={<AuditLogPage />} />
             <Route path="audit-log/:editId" element={<AuditLogEditor />} />
             <Route path="me/edits" element={<MyEditsPage />} />

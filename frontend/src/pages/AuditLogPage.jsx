@@ -254,7 +254,7 @@ export default function AuditLogPage() {
 
                 {/* Content */}
                 {loading && <LoadingSpinner />}
-                {error && <ErrorDisplay message={error} />}
+                {error && <ErrorDisplay error={error} />}
 
                 {!loading && !error && (
                     <>

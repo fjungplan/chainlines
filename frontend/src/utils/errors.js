@@ -82,6 +82,7 @@ export function getErrorMessage(error) {
  * @returns {boolean} True if it's a network error
  */
 export function isNetworkError(error) {
+  if (!error || typeof error === 'string') return false;
   return (
     error.code === 'ERR_NETWORK' ||
     error.code === 'ECONNREFUSED' ||
