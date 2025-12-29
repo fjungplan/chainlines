@@ -15,7 +15,7 @@ from app.api.dependencies import require_moderator
 from app.models.user import User
 from app.models.edit import EditHistory
 from app.models.enums import EditStatus
-from app.schemas.audit_log import AuditLogEntryResponse, UserSummary
+from app.schemas.audit_log import AuditLogEntryResponse, AuditLogDetailResponse, UserSummary
 from app.services.audit_log_service import AuditLogService
 
 router = APIRouter(prefix="/api/v1/audit-log", tags=["audit-log"])
@@ -121,6 +121,142 @@ async def get_pending_count(
     count = result.scalar()
     
     return {"count": count or 0}
+
+
+@router.get("/{edit_id}", response_model=AuditLogDetailResponse)
+async def get_audit_log_detail(
+    edit_id: str,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_moderator)
+):
+    """
+    Get full details of a single edit.
+    
+    Returns the edit with resolved entity names, snapshots, and permission flags
+    indicating what actions the current user can take.
+    """
+    edit = await session.get(EditHistory, edit_id)
+    if not edit:
+        raise HTTPException(status_code=404, detail="Edit not found")
+    
+    # Get submitter and reviewer info
+    submitter = await session.get(User, edit.user_id)
+    submitter_summary = UserSummary(
+        user_id=str(submitter.user_id) if submitter else "unknown",
+        display_name=submitter.display_name if submitter else "Unknown",
+        email=submitter.email if submitter else "unknown@example.com"
+    )
+    
+    reviewer_summary = None
+    if edit.reviewed_by:
+        reviewer = await session.get(User, edit.reviewed_by)
+        if reviewer:
+            reviewer_summary = UserSummary(
+                user_id=str(reviewer.user_id),
+                display_name=reviewer.display_name,
+                email=reviewer.email
+            )
+    
+    # Resolve entity name
+    entity_name = await AuditLogService.resolve_entity_name(
+        session, edit.entity_type, edit.entity_id
+    )
+    
+    # Determine permission flags based on current user and edit state
+    can_approve = edit.status == EditStatus.PENDING and AuditLogService.can_moderate_edit(current_user, submitter)
+    can_reject = edit.status == EditStatus.PENDING and AuditLogService.can_moderate_edit(current_user, submitter)
+    
+    # Can revert only if approved, most recent, and has permission
+    can_revert = False
+    if edit.status == EditStatus.APPROVED and submitter and AuditLogService.can_moderate_edit(current_user, submitter):
+        can_revert = await AuditLogService.is_most_recent_approved(session, edit)
+    
+    # Can reapply only if reverted/rejected, no newer approved, and has permission
+    can_reapply = False
+    if edit.status in (EditStatus.REVERTED, EditStatus.REJECTED) and submitter and AuditLogService.can_moderate_edit(current_user, submitter):
+        can_reapply = not await AuditLogService._has_newer_approved_edit(session, edit)
+    
+    return AuditLogDetailResponse(
+        edit_id=str(edit.edit_id),
+        status=edit.status.value,
+        entity_type=edit.entity_type,
+        entity_name=entity_name,
+        action=edit.action.value if edit.action else "UPDATE",
+        submitted_by=submitter_summary,
+        submitted_at=edit.created_at,
+        reviewed_by=reviewer_summary,
+        reviewed_at=edit.reviewed_at,
+        summary=_generate_edit_summary(edit),
+        snapshot_before=edit.snapshot_before,
+        snapshot_after=edit.snapshot_after,
+        source_url=edit.source_url,
+        source_notes=edit.source_notes,
+        review_notes=edit.review_notes,
+        can_approve=can_approve,
+        can_reject=can_reject,
+        can_revert=can_revert,
+        can_reapply=can_reapply
+    )
+
+
+@router.post("/{edit_id}/revert")
+async def revert_edit(
+    edit_id: str,
+    request: dict = {},
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_moderator)
+):
+    """
+    Revert an approved edit.
+    
+    Only the most recent approved edit for an entity can be reverted.
+    Moderators cannot revert edits submitted by admins.
+    """
+    from app.schemas.audit_log import RevertRequest
+    
+    edit = await session.get(EditHistory, edit_id)
+    if not edit:
+        raise HTTPException(status_code=404, detail="Edit not found")
+    
+    try:
+        result = await AuditLogService.revert_edit(
+            session, edit, current_user, notes=request.get("notes")
+        )
+        return result
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{edit_id}/reapply")
+async def reapply_edit(
+    edit_id: str,
+    request: dict = {},
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_moderator)
+):
+    """
+    Re-apply a reverted or rejected edit.
+    
+    Cannot re-apply if a newer approved edit exists for the entity.
+    Moderators cannot re-apply edits submitted by admins.
+    """
+    from app.schemas.audit_log import ReapplyRequest
+    
+    edit = await session.get(EditHistory, edit_id)
+    if not edit:
+        raise HTTPException(status_code=404, detail="Edit not found")
+    
+    try:
+        result = await AuditLogService.reapply_edit(
+            session, edit, current_user, notes=request.get("notes")
+        )
+        return result
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def _generate_edit_summary(edit: EditHistory) -> str:
