@@ -133,3 +133,24 @@ async def require_trusted_user(
             detail="Trusted user status required"
         )
     return current_user
+
+
+async def require_moderator(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Require moderator or admin role for the current user.
+    
+    This dependency checks that the authenticated user is either a MODERATOR
+    or ADMIN. Use this for endpoints that should be accessible to moderators
+    and administrators, like the Audit Log.
+    
+    Raises:
+        HTTPException: If user is not moderator or admin.
+    """
+    if current_user.role not in [UserRole.MODERATOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator or admin access required"
+        )
+    return current_user
