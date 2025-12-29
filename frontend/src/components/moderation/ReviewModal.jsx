@@ -1,29 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Button from '../common/Button';
-import { formatDateTime } from '../../utils/dateUtils';
 import './ReviewModal.css';
 
 /**
- * Modal for reviewing pending edits in the audit log
+ * Generic Modal for confirming actions with a reason/note.
+ * Used for Reject, Revert, and Re-apply actions.
+ * 
  * @param {Object} props
- * @param {Object} props.edit - Edit object to review
- * @param {string} props.edit.edit_id - Unique identifier for the edit
- * @param {string} [props.edit.entity_type] - Type of entity being edited (new schema)
- * @param {string} [props.edit.edit_type] - Type of edit (legacy schema, fallback)
- * @param {Object} [props.edit.submitted_by] - Submitter information (new schema)
- * @param {string} [props.edit.submitted_by.display_name] - Display name of submitter
- * @param {string} [props.edit.submitted_by.email] - Email of submitter
- * @param {string} [props.edit.user_display_name] - Legacy field for user display name
- * @param {string} [props.edit.submitted_at] - Submission timestamp (ISO string, new schema)
- * @param {string} [props.edit.created_at] - Creation timestamp (legacy schema, fallback)
- * @param {Object} [props.edit.snapshot_after] - Snapshot of data after the edit
- * @param {Function} props.onClose - Callback to close the modal
- * @param {Function} props.onReview - Review handler: (editId: string, approved: boolean, notes: string) => Promise<void>
+ * @param {boolean} props.isOpen - Whether the modal is open (controlled by parent mounting)
+ * @param {string} props.title - Modal title (e.g. "Reject Edit")
+ * @param {string} props.action - Action label (e.g. "Reject", "Revert")
+ * @param {string} [props.variant] - Button variant ('danger', 'primary', etc.)
+ * @param {Function} props.onClose - Callback to close
+ * @param {Function} props.onConfirm - Callback with notes: (notes: string) => Promise<void>
  */
-export default function ReviewModal({ edit, onClose, onReview }) {
+export default function ReviewModal({
+    title,
+    action,
+    variant = 'danger',
+    onClose,
+    onConfirm,
+    isReasonRequired = true
+}) {
     const [notes, setNotes] = useState('');
-    const [reviewing, setReviewing] = useState(false);
-    const [validationError, setValidationError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -32,38 +33,25 @@ export default function ReviewModal({ edit, onClose, onReview }) {
         }
     }, []);
 
-    const handleApprove = async () => {
-        setValidationError('');
-        setReviewing(true);
-        try {
-            await onReview(edit.edit_id, true, notes);
-            // Parent component handles modal closing on success
-        } catch (err) {
-            setReviewing(false);
-            throw err; // Let parent handle error display
-        }
-    };
-
-    const handleReject = async () => {
-        if (!notes.trim()) {
-            setValidationError('Rejection notes are required to explain your decision');
+    const handleConfirm = async () => {
+        if (isReasonRequired && !notes.trim()) {
+            setError('Please provide a reason.');
             return;
         }
-        setValidationError('');
-        setReviewing(true);
+
+        setError('');
+        setLoading(true);
         try {
-            await onReview(edit.edit_id, false, notes);
-            // Parent component handles modal closing on success
+            await onConfirm(notes);
+            // Parent closes modal
         } catch (err) {
-            setReviewing(false);
-            throw err; // Let parent handle error display
+            setLoading(false);
+            // Error handling usually in parent, but we reset loading
         }
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Escape') {
-            onClose();
-        }
+        if (e.key === 'Escape') onClose();
     };
 
     return (
@@ -74,68 +62,49 @@ export default function ReviewModal({ edit, onClose, onReview }) {
                 tabIndex={-1}
                 ref={modalRef}
                 onKeyDown={handleKeyDown}
-                aria-modal="true"
                 role="dialog"
             >
                 <div className="modal-header">
-                    <h2>Review Edit</h2>
+                    <h2>{title}</h2>
                     <Button variant="ghost" onClick={onClose} aria-label="Close">×</Button>
                 </div>
+
                 <div className="modal-body">
                     <div className="review-section">
-                        <h3>Edit Type</h3>
-                        <p className="edit-type-badge">{edit.entity_type || edit.edit_type}</p>
-                    </div>
-                    <div className="review-section">
-                        <h3>Submitted By</h3>
-                        <p>{edit.submitted_by?.display_name || edit.submitted_by?.email || edit.user_display_name}</p>
-                        <p className="date">{formatDateTime(edit.submitted_at || edit.created_at)}</p>
-                    </div>
-
-                    {/* Changes Section - Adapted for Audit Log Format */}
-                    {edit.snapshot_after && (
-                        <div className="review-section">
-                            <h3>Changes</h3>
-                            <pre>{JSON.stringify(edit.snapshot_after, null, 2)}</pre>
-                        </div>
-                    )}
-
-                    <div className="review-section">
-                        <h3>Review Notes (Required for rejection)</h3>
+                        <label className="reason-label">
+                            {isReasonRequired ? 'Reason (Required)' : 'Reason (Optional)'}
+                        </label>
                         <textarea
                             value={notes}
                             onChange={e => {
                                 setNotes(e.target.value);
-                                if (validationError) setValidationError('');
+                                if (error) setError('');
                             }}
-                            placeholder="Add notes about your decision..."
+                            placeholder={isReasonRequired
+                                ? "Please enter a reason for this action..."
+                                : "Optional: Enter a reason..."}
                             rows={4}
-                            aria-label="Review notes"
-                            className={validationError ? 'validation-error' : ''}
+                            className={error ? 'validation-error' : ''}
+                            autoFocus
                         />
-                        {validationError && (
-                            <div className="error-message" role="alert">
-                                {validationError}
-                            </div>
-                        )}
+                        {error && <div className="error-message">{error}</div>}
                     </div>
                 </div>
+
                 <div className="modal-footer">
                     <Button
-                        variant="danger"
-                        onClick={handleReject}
-                        disabled={reviewing || !notes}
-                        className="reject-button"
+                        variant="ghost"
+                        onClick={onClose}
+                        disabled={loading}
                     >
-                        Reject
+                        Cancel
                     </Button>
                     <Button
-                        variant="success"
-                        onClick={handleApprove}
-                        disabled={reviewing}
-                        className="approve-button"
+                        variant={variant}
+                        onClick={handleConfirm}
+                        disabled={loading || (isReasonRequired && !notes.trim())}
                     >
-                        Approve & Apply
+                        {loading ? 'Processing...' : `Confirm ${action}`}
                     </Button>
                 </div>
             </div>

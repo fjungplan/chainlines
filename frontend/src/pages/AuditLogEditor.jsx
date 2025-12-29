@@ -49,6 +49,20 @@ const DIFF_COMPONENTS = {
     'lineage_event': LineageDiff
 };
 
+const formatEntityType = (type) => {
+    if (!type) return '-';
+    // Map of raw types to friendly names
+    const typeMap = {
+        'team_node': 'Team',
+        'sponsor_master': 'Sponsor',
+        'team_era': 'Team Era',
+        'linkage_event': 'Lineage Event',
+        'team_sponsor_link': 'Sponsor Link',
+        'brand': 'Brand'
+    };
+    return typeMap[type] || type.replace(/_/g, ' '); // Fallback: replace underscores with spaces
+};
+
 export default function AuditLogEditor() {
     const { editId } = useParams();
     const navigate = useNavigate();
@@ -56,68 +70,92 @@ export default function AuditLogEditor() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
-    const [showReviewModal, setShowReviewModal] = useState(false);
 
-    useEffect(() => {
-        loadEdit();
-    }, [editId]);
+    // Modal Configuration
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        action: '',
+        variant: 'danger',
+        onConfirm: null
+    });
 
     const loadEdit = async () => {
-        setLoading(true);
-        setError(null);
         try {
+            setLoading(true);
             const res = await auditLogApi.getDetail(editId);
             setEdit(res.data);
+            setError(null);
         } catch (err) {
-            console.error('Failed to load edit:', err);
-            setError('Failed to load edit details. It may have been deleted or you do not have permission.');
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRevert = async () => {
-        if (!window.confirm('Are you sure you want to revert this edit? This will create a new REVERTED record.')) return;
+    useEffect(() => {
+        loadEdit();
+    }, [editId]);
 
-        setActionLoading(true);
-        try {
-            await auditLogApi.revert(editId, { notes: 'Reverted via Audit Log UI' });
-            await loadEdit(); // Reload to update status
-        } catch (err) {
-            console.error('Revert failed:', err);
-            alert('Failed to revert edit: ' + getErrorMessage(err));
-        } finally {
-            setActionLoading(false);
-        }
+    const closeModal = () => {
+        setModalConfig(prev => ({ ...prev, isOpen: false }));
     };
 
-    const handleReapply = async () => {
-        if (!window.confirm('Are you sure you want to re-apply this edit?')) return;
-
-        setActionLoading(true);
-        try {
-            await auditLogApi.reapply(editId, { notes: 'Re-applied via Audit Log UI' });
-            await loadEdit();
-        } catch (err) {
-            console.error('Reapply failed:', err);
-            alert('Failed to re-apply edit: ' + getErrorMessage(err));
-        } finally {
-            setActionLoading(false);
-        }
+    const handleApprove = async () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Approve Edit',
+            action: 'Approve',
+            variant: 'success', // Green button
+            isReasonRequired: false,
+            onConfirm: async (notes) => {
+                await auditLogApi.review(editId, { approved: true, notes: notes || 'Approved via UI' });
+                await loadEdit();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
-    const handleReview = async (editId, approved, notes) => {
-        setActionLoading(true);
-        try {
-            await auditLogApi.review(editId, { approved, notes });
-            await loadEdit(); // Reload to see new status
-            setShowReviewModal(false);
-        } catch (err) {
-            console.error('Failed to review edit:', err);
-            setError(getErrorMessage(err));
-        } finally {
-            setActionLoading(false);
-        }
+    const handleRejectClick = () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Reject Edit',
+            action: 'Reject',
+            variant: 'danger',
+            onConfirm: async (notes) => {
+                await auditLogApi.review(editId, { approved: false, notes });
+                await loadEdit();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    const handleRevertClick = () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Revert Edit',
+            action: 'Revert',
+            variant: 'danger',
+            onConfirm: async (notes) => {
+                await auditLogApi.revert(editId, { notes });
+                await loadEdit();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    const handleReapplyClick = () => {
+        setModalConfig({
+            isOpen: true,
+            title: 'Re-apply Edit',
+            action: 'Re-apply',
+            variant: 'primary',
+            onConfirm: async (notes) => {
+                await auditLogApi.reapply(editId, { notes });
+                await loadEdit();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     };
 
     if (loading) return (
@@ -142,7 +180,7 @@ export default function AuditLogEditor() {
                                 <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                             </svg>
                         </Button>
-                        <h2>Edit Audit Log</h2>
+                        <h2>View Audit Log</h2>
                     </div>
                     {edit && (
                         <div className="header-right">
@@ -171,7 +209,7 @@ export default function AuditLogEditor() {
                                         <div className="metadata-row">
                                             <label>Entity</label>
                                             <div className="metadata-value">
-                                                <span className="entity-type-badge">{edit.entity_type}</span>
+                                                <span className="entity-type-badge">{formatEntityType(edit.entity_type)}</span>
                                                 <span className="entity-name-highlight">{edit.entity_name}</span>
                                             </div>
                                         </div>
@@ -248,11 +286,11 @@ export default function AuditLogEditor() {
                             <Button
                                 variant="danger"
                                 className="footer-btn"
-                                onClick={handleRevert}
+                                onClick={handleRevertClick}
                                 disabled={actionLoading}
                                 style={{ borderColor: '#991b1b', color: '#fca5a5' }}
                             >
-                                {actionLoading ? 'Reverting...' : 'Revert Edit'}
+                                Revert Edit
                             </Button>
                         )}
 
@@ -261,10 +299,10 @@ export default function AuditLogEditor() {
                             <Button
                                 variant="secondary"
                                 className="footer-btn"
-                                onClick={handleReapply}
+                                onClick={handleReapplyClick}
                                 disabled={actionLoading}
                             >
-                                {actionLoading ? 'Re-applying...' : 'Re-apply Edit'}
+                                Re-apply Edit
                             </Button>
                         )}
                     </div>
@@ -279,25 +317,40 @@ export default function AuditLogEditor() {
                             Close
                         </Button>
 
-                        {/* Moderation Actions */}
-                        {edit && (edit.can_approve || edit.can_reject) && (
+                        {/* Moderation Actions - Split Buttons */}
+                        {edit && edit.can_reject && (
                             <Button
-                                variant="primary"
-                                onClick={() => setShowReviewModal(true)}
+                                variant="danger"
+                                onClick={handleRejectClick}
+                                className="footer-btn"
+                                disabled={actionLoading}
+                            >
+                                Reject
+                            </Button>
+                        )}
+
+                        {edit && edit.can_approve && (
+                            <Button
+                                variant="success"
+                                onClick={handleApprove}
                                 className="footer-btn save"
                                 disabled={actionLoading}
                             >
-                                Review Edit
+                                Approve
                             </Button>
                         )}
                     </div>
                 </div>
 
-                {showReviewModal && (
+                {modalConfig.isOpen && (
                     <ReviewModal
-                        edit={edit}
-                        onClose={() => setShowReviewModal(false)}
-                        onReview={handleReview}
+                        isOpen={modalConfig.isOpen}
+                        title={modalConfig.title}
+                        action={modalConfig.action}
+                        variant={modalConfig.variant}
+                        isReasonRequired={modalConfig.isReasonRequired}
+                        onClose={closeModal}
+                        onConfirm={modalConfig.onConfirm}
                     />
                 )}
             </div>

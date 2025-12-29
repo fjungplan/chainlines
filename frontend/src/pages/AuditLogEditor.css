@@ -124,3 +124,48 @@
     opacity: 0.5;
     margin: 0.25rem 0;
 }
+
+/* =========================================
+   Moderation Button Overrides (Vibrant)
+   ========================================= */
+
+.audit-log-editor-page .footer-btn.btn-danger {
+    background-color: #ef4444;
+    /* Vibrant Red */
+    border-color: #ef4444;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+}
+
+.audit-log-editor-page .footer-btn.btn-danger:hover:not(:disabled) {
+    background-color: #dc2626;
+    /* Darker red on hover */
+    border-color: #dc2626;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.audit-log-editor-page .footer-btn.btn-success {
+    background-color: #22c55e;
+    /* Vibrant Green */
+    border-color: #22c55e;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 4px 6px rgba(34, 197, 94, 0.2);
+}
+
+.audit-log-editor-page .footer-btn.btn-success:hover:not(:disabled) {
+    background-color: #16a34a;
+    /* Darker green on hover */
+    border-color: #16a34a;
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+}
+
+.audit-log-editor-page .footer-btn:disabled {
+    opacity: 0.5;
+    box-shadow: none;
+    cursor: not-allowed;
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #888;
+}
