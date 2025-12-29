@@ -7,6 +7,12 @@ const SPONSOR_FIELDS = [
     'industry_sector'
 ];
 
+const SPONSOR_LABELS = {
+    legal_name: 'Legal Name',
+    display_name: 'Display Name',
+    industry_sector: 'Industry'
+};
+
 export default function SponsorDiff({ before, after }) {
     const filterData = (data) => {
         if (!data) return null;
@@ -22,6 +28,7 @@ export default function SponsorDiff({ before, after }) {
         <DiffTable
             before={filterData(before)}
             after={filterData(after)}
+            labels={SPONSOR_LABELS}
         />
     );
 }

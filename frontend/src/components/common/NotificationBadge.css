@@ -1,7 +1,7 @@
 .notification-badge {
     position: absolute;
-    bottom: -2px;
-    right: -2px;
+    bottom: -4px;
+    right: -4px;
     background-color: #ffc107;
     /* Warning yellow */
     color: #000;

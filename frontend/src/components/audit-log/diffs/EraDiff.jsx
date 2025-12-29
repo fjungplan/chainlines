@@ -10,6 +10,15 @@ const ERA_FIELDS = [
     'season_year'
 ];
 
+const ERA_LABELS = {
+    registered_name: 'Registered Name',
+    uci_code: 'UCI Code',
+    country_code: 'Country',
+    tier_level: 'Tier',
+    valid_from: 'Valid From',
+    season_year: 'Season'
+};
+
 export default function EraDiff({ before, after }) {
     const filterData = (data) => {
         if (!data) return null;
@@ -25,6 +34,7 @@ export default function EraDiff({ before, after }) {
         <DiffTable
             before={filterData(before)}
             after={filterData(after)}
+            labels={ERA_LABELS}
         />
     );
 }

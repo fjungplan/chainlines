@@ -6,9 +6,10 @@ Accessible to Moderators and Admins only.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, or_, func, cast, String
 from typing import List, Optional
 from datetime import datetime
+import uuid
 
 from app.db.database import get_db
 from app.api.dependencies import require_moderator
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/api/v1/audit-log", tags=["audit-log"])
 async def list_audit_log(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Search term (entity, submitter, summary)"),
     status: Optional[List[str]] = Query(None, description="Filter by status(es)"),
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     user_id: Optional[str] = Query(None, description="Filter by submitter user ID"),
@@ -44,11 +46,30 @@ async def list_audit_log(
     # Build query
     stmt = select(EditHistory)
     
+    # Search functionality
+    if search:
+        # Join with User to search submitter name
+        stmt = stmt.join(User, EditHistory.user_id == User.user_id, isouter=True)
+        
+        search_term = f"%{search}%"
+        stmt = stmt.where(
+            or_(
+                User.display_name.ilike(search_term),
+                EditHistory.source_notes.ilike(search_term),
+                EditHistory.review_notes.ilike(search_term),
+                # Cast JSON to string to search content (rudimentary full-text for snapshots)
+                cast(EditHistory.snapshot_after, String).ilike(search_term)
+            )
+        )
+    
     # Status filter - default to PENDING only if not specified
     if status:
         status_values = [EditStatus(s) for s in status]
         stmt = stmt.where(EditHistory.status.in_(status_values))
-    else:
+    elif not search:
+        # If searching, we likely want to see everything unless status is explicit
+        # But if no search and no status, default to pending?
+        # Let's keep existing behavior: default to PENDING if no status specified
         stmt = stmt.where(EditHistory.status == EditStatus.PENDING)
     
     # Entity type filter
@@ -61,11 +82,17 @@ async def list_audit_log(
 
     # Date range filter
     if start_date:
+        # Ensure naive datetime for comparison with naive DB timestamp
+        if start_date.tzinfo:
+            start_date = start_date.replace(tzinfo=None)
         stmt = stmt.where(EditHistory.created_at >= start_date)
     if end_date:
+        if end_date.tzinfo:
+            end_date = end_date.replace(tzinfo=None)
         stmt = stmt.where(EditHistory.created_at <= end_date)
 
     # Get total count
+    # We need to ensure the count query respects the same joins/filters
     total_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await session.execute(total_stmt)).scalar_one()
 
@@ -78,15 +105,59 @@ async def list_audit_log(
     
     # Secondary sort by ID for stability
     stmt = stmt.order_by(EditHistory.edit_id)
-    
+    # Execute query
+    # Applying offset/limit after order_by for correct pagination
     stmt = stmt.offset(skip).limit(limit)
-    
     result = await session.execute(stmt)
     edits = result.scalars().all()
     
-    # Format each edit with resolved entity names
-    entries = []
+    # helper to process lineage names efficiently
+    # Collect all team IDs from lineage events
+    lineage_team_ids = set()
     for edit in edits:
+        etype = edit.entity_type.upper()
+        if etype in ("LINEAGE", "LINEAGE_EVENT") and edit.snapshot_after:
+            pid = edit.snapshot_after.get("predecessor_id")
+            sid = edit.snapshot_after.get("successor_id")
+            if pid: lineage_team_ids.add(uuid.UUID(pid))
+            if sid: lineage_team_ids.add(uuid.UUID(sid))
+            
+    # Bulk fetch team names if needed
+    team_map = {}
+    if lineage_team_ids:
+        # Avoid circular import, import inside function if needed or rely on existing imports
+        from app.models.team import TeamNode
+        teams_stmt = select(TeamNode.node_id, TeamNode.legal_name, TeamNode.display_name).where(TeamNode.node_id.in_(lineage_team_ids))
+        teams_result = await session.execute(teams_stmt)
+        for t in teams_result.all():
+            # Prefer display_name, fallback to legal_name
+            team_map[str(t.node_id)] = t.display_name or t.legal_name
+
+    # Transform to response schema
+    items = []
+    for edit in edits:
+        entity_name = str(edit.entity_id) # Fallback
+        snap = edit.snapshot_after or {}
+        
+        # Normalize type for checks (handle TEAM, TEAM_NODE, team_node, etc.)
+        etype = edit.entity_type.upper()
+        
+        if etype in ("TEAM", "TEAM_NODE"):
+            entity_name = snap.get("display_name") or snap.get("legal_name") or entity_name
+        elif etype in ("SPONSOR", "SPONSOR_MASTER"):
+            entity_name = snap.get("legal_name") or entity_name
+        elif etype in ("BRAND", "SPONSOR_BRAND"):
+            entity_name = snap.get("brand_name") or snap.get("name") or entity_name
+        elif etype in ("ERA", "TEAM_ERA"):
+            entity_name = snap.get("registered_name") or entity_name
+        elif etype in ("LINEAGE", "LINEAGE_EVENT"):
+            pid = snap.get("predecessor_id")
+            sid = snap.get("successor_id")
+            l_type = snap.get("type", "EVENT")
+            p_name = team_map.get(pid, "Unknown")
+            s_name = team_map.get(sid, "Unknown")
+            entity_name = f"{p_name} {l_type} {s_name}"
+        
         # Get submitter info
         submitter = await session.get(User, edit.user_id)
         submitter_summary = UserSummary(
@@ -106,12 +177,7 @@ async def list_audit_log(
                     email=reviewer.email
                 )
         
-        # Resolve entity name
-        entity_name = await AuditLogService.resolve_entity_name(
-            session, edit.entity_type, edit.entity_id
-        )
-        
-        entries.append(AuditLogEntryResponse(
+        items.append(AuditLogEntryResponse(
             edit_id=str(edit.edit_id),
             entity_type=edit.entity_type,
             entity_name=entity_name,
@@ -124,7 +190,7 @@ async def list_audit_log(
             summary=_generate_edit_summary(edit)
         ))
         
-    return AuditLogListResponse(items=entries, total=total)
+    return AuditLogListResponse(items=items, total=total)
 
 
 @router.get("/pending-count")

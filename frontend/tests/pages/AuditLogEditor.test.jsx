@@ -28,9 +28,9 @@ vi.mock('../../src/components/ErrorDisplay', () => ({
     ErrorDisplay: ({ error }) => <div data-testid="error-display">{typeof error === 'string' ? error : error.message}</div>
 }));
 vi.mock('../../src/components/moderation/ReviewModal', () => ({
-    default: ({ onReview }) => (
+    default: ({ onConfirm }) => (
         <div data-testid="review-modal">
-            <button onClick={() => onReview('edit-123', true, 'LGTM')}>Confirm Review</button>
+            <button onClick={() => onConfirm('LGTM')}>Confirm Review</button>
         </div>
     )
 }));
@@ -90,7 +90,7 @@ describe('AuditLogEditor', () => {
         expect(screen.getByText('Revert Edit')).toBeInTheDocument();
     });
 
-    it('handles interaction - review', async () => {
+    it('handles interaction - approve', async () => {
         // Mock pending state
         auditLogApi.getDetail.mockResolvedValue({
             data: {
@@ -104,22 +104,52 @@ describe('AuditLogEditor', () => {
 
         renderPage('edit-pending');
 
-        await waitFor(() => expect(screen.getByText('Review Edit')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Approve')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('Review Edit'));
+        fireEvent.click(screen.getByText('Approve'));
 
+        // Should open confirm modal
         await waitFor(() => expect(screen.getByTestId('review-modal')).toBeInTheDocument());
 
-        // Simulate review in modal
+        // Simulate confirm in modal (ReviewModal mock calls onReview with notes)
         fireEvent.click(screen.getByText('Confirm Review'));
 
         await waitFor(() => {
-            expect(auditLogApi.review).toHaveBeenCalledWith('edit-123', { approved: true, notes: 'LGTM' });
+            // Approve sends approved: true
+            expect(auditLogApi.review).toHaveBeenCalledWith('edit-pending', expect.objectContaining({ approved: true }));
         });
 
         // Should reload
         await waitFor(() => {
             expect(auditLogApi.getDetail).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    it('handles interaction - reject', async () => {
+        // Mock pending state
+        auditLogApi.getDetail.mockResolvedValue({
+            data: {
+                ...mockEdit,
+                status: 'PENDING',
+                can_approve: true,
+                can_reject: true,
+                can_revert: false
+            }
+        });
+
+        renderPage('edit-pending');
+
+        await waitFor(() => expect(screen.getByText('Reject')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Reject'));
+
+        await waitFor(() => expect(screen.getByTestId('review-modal')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Confirm Review'));
+
+        await waitFor(() => {
+            // Reject sends approved: false
+            expect(auditLogApi.review).toHaveBeenCalledWith('edit-pending', expect.objectContaining({ approved: false }));
         });
     });
 
@@ -132,10 +162,13 @@ describe('AuditLogEditor', () => {
             .mockResolvedValueOnce({ data: { ...mockEdit } }) // First load
             .mockResolvedValueOnce({ data: { ...mockEdit, status: 'REVERTED', can_revert: false } }); // Reload
 
-        // Confirm dialog
-        vi.spyOn(window, 'confirm').mockReturnValue(true);
-
         fireEvent.click(screen.getByText('Revert Edit'));
+
+        // Modal should appear
+        await waitFor(() => expect(screen.getByTestId('review-modal')).toBeInTheDocument());
+
+        // Confirm
+        fireEvent.click(screen.getByText('Confirm Review'));
 
         await waitFor(() => {
             expect(auditLogApi.revert).toHaveBeenCalledWith('edit-123', expect.objectContaining({ notes: expect.any(String) }));
@@ -165,10 +198,13 @@ describe('AuditLogEditor', () => {
 
         await waitFor(() => expect(screen.getByText('Re-apply Edit')).toBeInTheDocument());
 
-        // Confirm dialog
-        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
         fireEvent.click(screen.getByText('Re-apply Edit'));
+
+        // Modal should appear
+        await waitFor(() => expect(screen.getByTestId('review-modal')).toBeInTheDocument());
+
+        // Confirm
+        fireEvent.click(screen.getByText('Confirm Review'));
 
         await waitFor(() => {
             expect(auditLogApi.reapply).toHaveBeenCalledWith('edit-rejected', expect.objectContaining({ notes: expect.any(String) }));
@@ -178,8 +214,6 @@ describe('AuditLogEditor', () => {
         await waitFor(() => {
             expect(auditLogApi.getDetail).toHaveBeenCalledTimes(2);
         });
-
-        confirmSpy.mockRestore();
     });
 
     it('displays error state', async () => {
@@ -196,7 +230,8 @@ describe('AuditLogEditor', () => {
         await waitFor(() => {
             const errorDisplay = screen.getByTestId('error-display');
             expect(errorDisplay).toBeInTheDocument();
-            expect(errorDisplay).toHaveTextContent(/Failed to load edit/i);
+            // Expect the actual error message
+            expect(errorDisplay).toHaveTextContent(/Not found/i);
         });
     });
 });

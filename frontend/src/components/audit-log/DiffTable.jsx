@@ -8,9 +8,10 @@ import './DiffTable.css';
  * @param {Object} props
  * @param {Object} props.before - Snapshot before change
  * @param {Object} props.after - Snapshot after change
+ * @param {Object} [props.labels] - Map of field keys to display names
  * @param {string} [props.className]
  */
-export default function DiffTable({ before = {}, after = {}, className = '' }) {
+export default function DiffTable({ before = {}, after = {}, labels = {}, className = '' }) {
     // Get all unique keys from both objects
     const keys = new Set([
         ...Object.keys(before || {}),
@@ -43,9 +44,12 @@ export default function DiffTable({ before = {}, after = {}, className = '' }) {
                         const sAfter = JSON.stringify(valAfter);
                         const isChanged = sBefore !== sAfter;
 
+                        // Resolve display label
+                        const displayLabel = labels[key] || key;
+
                         return (
                             <tr key={key} className={isChanged ? 'diff-row-changed' : ''}>
-                                <td className="diff-cell-field">{key}</td>
+                                <td className="diff-cell-field">{displayLabel}</td>
                                 <td className="diff-cell-old">
                                     <DiffValue value={valBefore} />
                                 </td>
