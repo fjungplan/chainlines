@@ -351,7 +351,6 @@ export default function AuditLogPage() {
                                                 </span>
                                             </td>
                                             <td className="entity-cell">
-                                                <span className="entity-type">{edit.entity_type}</span>
                                                 <span className="entity-name">{edit.entity_name}</span>
                                             </td>
                                             <td>{edit.action}</td>

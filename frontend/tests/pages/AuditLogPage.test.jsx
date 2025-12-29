@@ -65,11 +65,31 @@ describe('AuditLogPage', () => {
     });
 
     it('renders and fetches data', async () => {
+        // Mock data with entity name
+        auditLogApi.getList.mockResolvedValueOnce({
+            data: {
+                items: [{
+                    edit_id: '123',
+                    status: 'PENDING',
+                    entity_type: 'TEAM',
+                    entity_name: 'QuickStep Team',
+                    action: 'CREATE',
+                    submitted_at: '2023-01-01T00:00:00Z',
+                    submitted_by: { display_name: 'User' }
+                }],
+                total: 1
+            }
+        });
+
         renderPage();
 
         // Check for search
         expect(screen.getByPlaceholderText(/search/i)).toBeEnabled();
         expect(screen.getByRole('heading', { name: "Audit Log" })).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(screen.getByText('QuickStep Team')).toBeInTheDocument();
+        });
 
         expect(auditLogApi.getList).toHaveBeenCalledWith(
             expect.objectContaining({ status: ['PENDING'] })

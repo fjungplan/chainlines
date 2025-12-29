@@ -132,7 +132,7 @@ def seed_audit_log():
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                edit_id, 'TEAM_NODE', node_id, test_user_id, action, status,
+                edit_id, 'team_node', node_id, test_user_id, action, status,
                 reviewed_by, reviewed_at, review_notes,
                 json.dumps(snapshot_before), json.dumps(snapshot_after),
                 f"Sample edit {i+1} for testing",
@@ -167,7 +167,7 @@ def seed_audit_log():
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                edit_id, 'SPONSOR_MASTER', master_id, test_user_id, 'UPDATE', status,
+                edit_id, 'sponsor_master', master_id, test_user_id, 'UPDATE', status,
                 reviewed_by, reviewed_at,
                 json.dumps(snapshot_before), json.dumps(snapshot_after),
                 f"Sample sponsor edit {i+1}",
