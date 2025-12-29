@@ -17,6 +17,9 @@ class EditHistory(Base):
     reviewed_by = Column(GUID(), ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
     reviewed_at = Column(TIMESTAMP, nullable=True)
     review_notes = Column(Text, nullable=True)
+    # Revert tracking fields
+    reverted_by = Column(GUID(), ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
+    reverted_at = Column(TIMESTAMP, nullable=True)
     # Use JSON instead of JSONB for SQLite compatibility (Postgres will use JSONB automatically)
     snapshot_before = Column(JSON, nullable=True)
     snapshot_after = Column(JSON, nullable=False)
@@ -27,3 +30,4 @@ class EditHistory(Base):
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+    reverter = relationship("User", foreign_keys=[reverted_by])

@@ -15,7 +15,7 @@ class EditStatus(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
-    APPLIED = "APPLIED"
+    REVERTED = "REVERTED"
 
 class LineageEventType(str, enum.Enum):
     LEGAL_TRANSFER = "LEGAL_TRANSFER"
