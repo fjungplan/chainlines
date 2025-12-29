@@ -2,60 +2,58 @@
  * Audit Log Page Styles
  * 
  * Follows maintenance-style layout consistent with UserMaintenancePage
- * and TeamMaintenancePage. Uses CSS variables for theming.
+ * and TeamMaintenancePage.
  */
 
-.audit-log-page {
-    min-height: 100vh;
-    background: var(--color-bg-primary, #0a0a0a);
-    padding: 2rem;
+/* Content Card - matches TeamMaintenancePage .maintenance-content-card (if it were global) or .team-list container concept */
+.maintenance-content-card {
+    background-color: var(--color-bg-primary);
+    /* The outer container is usually transparent, but if we need a card look: */
+    /* Actually, in other pages .user-list or .team-list provides the border/bg.
+       Here we will wrap everything common. */
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    /* Approx height adjustment */
 }
 
-.maintenance-page-container {
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-/* Header */
-.maintenance-header {
+/* Header Styling - Matching .team-header */
+.audit-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 20px;
+    border-bottom: 3px solid var(--color-primary);
+    padding-bottom: 15px;
 }
 
-.header-left {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.back-link {
-    color: var(--color-text-muted, #888);
-    text-decoration: none;
-    font-size: 0.875rem;
-    transition: color 0.2s;
-}
-
-.back-link:hover {
-    color: var(--color-primary, #646cff);
-}
-
-.maintenance-header h1 {
-    margin: 0;
-    font-size: 1.75rem;
-    font-weight: 600;
-    color: var(--color-text-primary, #fff);
-}
-
-.header-right {
+.audit-header .header-left {
     display: flex;
     align-items: center;
     gap: 1rem;
 }
 
+.audit-header h1 {
+    margin: 0;
+    font-size: 32px;
+    color: var(--color-text-light);
+}
+
+.back-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    transition: color 0.2s;
+}
+
+.back-link:hover {
+    color: var(--color-text-light);
+}
+
+/* Pending Badge in Header */
 .pending-badge {
-    background: var(--color-warning, #f59e0b);
+    background: var(--color-warning);
     color: #000;
     padding: 0.375rem 0.75rem;
     border-radius: 1rem;
@@ -63,18 +61,30 @@
     font-weight: 600;
 }
 
-/* Filter Bar */
-.filter-bar {
+/* Controls - Matching .team-controls */
+.audit-controls {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 1.5rem;
-    padding: 1rem;
-    background: var(--color-bg-secondary, #1a1a1a);
-    border-radius: 0.5rem;
+    gap: 12px;
     margin-bottom: 1rem;
+    width: 100%;
     flex-wrap: wrap;
+    /* allow wrapping if many filters */
 }
 
+.audit-controls input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    /* Styles usually come from global input but ensuring here */
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+/* Filters embedded in controls */
 .filter-group {
     display: flex;
     align-items: center;
@@ -84,70 +94,76 @@
 .filter-divider {
     width: 1px;
     height: 24px;
-    background: var(--color-border, #333);
+    background: var(--color-border);
+    margin: 0 0.5rem;
 }
 
 .filter-select {
-    padding: 0.375rem 0.75rem;
-    border-radius: 0.375rem;
-    background: var(--color-bg-tertiary, #252525);
-    border: 1px solid var(--color-border, #333);
-    color: var(--color-text-primary, #fff);
-    font-size: 0.875rem;
-    outline: none;
-    transition: border-color 0.2s;
-    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
 }
 
-.filter-select:focus,
-.filter-input:focus {
-    border-color: var(--color-primary, #646cff);
+.filter-date-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.filter-input {
-    padding: 0.375rem 0.75rem;
-    border-radius: 0.375rem;
-    background: var(--color-bg-tertiary, #252525);
-    border: 1px solid var(--color-border, #333);
-    color: var(--color-text-primary, #fff);
-    font-size: 0.875rem;
-    outline: none;
-    transition: border-color 0.2s;
+.filter-input-date {
+    padding: 0.4rem;
+    border-radius: var(--radius-md);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
     font-family: inherit;
+    font-size: 0.9rem;
 }
 
-.filter-separator {
-    color: var(--color-text-muted, #888);
-    font-size: 0.875rem;
-}
-
-.filter-label {
-    color: var(--color-text-muted, #888);
-    font-size: 0.875rem;
-    margin-right: 0.5rem;
+/* Filter Buttons */
+.filter-btn-group {
+    display: flex;
+    gap: 0.25rem;
 }
 
 .filter-btn.status-pending {
-    --btn-active-bg: var(--color-warning, #f59e0b);
+    --btn-active-bg: var(--color-warning);
+    --btn-active-text: #000;
 }
 
 .filter-btn.status-approved {
-    --btn-active-bg: var(--color-success, #22c55e);
+    --btn-active-bg: var(--color-success);
+    --btn-active-text: #000;
 }
 
 .filter-btn.status-rejected {
-    --btn-active-bg: var(--color-danger, #ef4444);
+    --btn-active-bg: var(--color-danger);
+    --btn-active-text: #fff;
 }
 
 .filter-btn.status-reverted {
-    --btn-active-bg: var(--color-info, #8b5cf6);
+    --btn-active-bg: var(--color-info);
+    --btn-active-text: #fff;
 }
 
-/* Table Container */
-.audit-log-table-container {
-    background: var(--color-bg-secondary, #1a1a1a);
-    border-radius: 0.5rem;
-    overflow: hidden;
+/* Table Container - Matching .team-list / .user-list */
+.audit-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-bg-primary);
+    display: flex;
+    flex-direction: column;
+}
+
+.audit-list-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
 }
 
 .audit-log-table {
@@ -155,162 +171,156 @@
     border-collapse: collapse;
 }
 
-.audit-log-table th,
-.audit-log-table td {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--color-border, #333);
-}
-
 .audit-log-table th {
-    background: var(--color-bg-tertiary, #252525);
-    color: var(--color-text-muted, #888);
+    position: sticky;
+    top: 0;
+    background-color: var(--color-bg-secondary);
+    z-index: 10;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    color: var(--color-text-secondary);
     font-weight: 500;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--color-bg-secondary);
+    white-space: nowrap;
 }
 
 .audit-log-table th.sortable {
     cursor: pointer;
     user-select: none;
-    transition: color 0.2s;
 }
 
 .audit-log-table th.sortable:hover {
-    color: var(--color-text-primary, #fff);
-}
-
-
-
-.audit-log-table tbody tr.clickable-row {
-    cursor: pointer;
-}
-
-.audit-log-table tbody tr.clickable-row:hover {
-    background: var(--color-bg-tertiary, #252525);
+    color: var(--color-text-light);
 }
 
 .audit-log-table td {
-    color: var(--color-text-primary, #fff);
-    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--color-bg-code);
+    vertical-align: middle;
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
 }
 
-/* Status Badge */
-.status-badge {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
+.audit-log-table tr:hover {
+    background-color: var(--color-bg-tertiary);
+    cursor: pointer;
 }
 
-.status-badge.status-pending {
-    background: rgba(245, 158, 11, 0.2);
-    color: #f59e0b;
-}
-
-.status-badge.status-approved {
-    background: rgba(34, 197, 94, 0.2);
-    color: #22c55e;
-}
-
-.status-badge.status-rejected {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-}
-
-.status-badge.status-reverted {
-    background: rgba(139, 92, 246, 0.2);
-    color: #8b5cf6;
-}
-
-/* Entity Cell */
+/* Specific Cell Styles */
 .entity-cell {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
 }
 
 .entity-type {
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    color: var(--color-text-muted, #888);
-    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
 }
 
 .entity-name {
     font-weight: 500;
+    color: var(--color-text-light);
 }
 
-/* Summary Cell */
 .summary-cell {
-    max-width: 200px;
+    max-width: 250px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-secondary);
+}
+
+/* Status Badges - Keeping existing colors but ensuring standard sizing */
+.status-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fca5a5;
+    /* pending often associated with attention */
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.status-badge.status-approved {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.status-badge.status-rejected {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.status-badge.status-reverted {
+    background-color: rgba(139, 92, 246, 0.2);
+    color: #d8b4fe;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+/* Pagination Bar - Removed in favor of Infinite Scroll */
+/* 
+.pagination-bar {
+    ...
+} 
+*/
+
+.end-of-list {
+    display: block;
+    text-align: center;
+    padding: 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-text-secondary);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Empty State */
 .empty-message {
+    padding: 3rem;
     text-align: center;
-    color: var(--color-text-muted, #888);
-    padding: 3rem 1rem;
+    color: var(--color-text-secondary);
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .audit-log-page {
-        padding: 1rem;
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .audit-controls {
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .audit-log-table th,
-    .audit-log-table td {
-        padding: 0.5rem;
+    .filter-divider {
+        display: none;
     }
 
-    .summary-cell {
-        max-width: 150px;
+    .audit-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
     }
-}
-
-/* Pagination */
-.pagination-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 1rem;
-    padding: 1rem;
-    background: var(--color-bg-secondary, #1a1a1a);
-    border-radius: 0.5rem;
-    color: var(--color-text-secondary, #a3a3a3);
-    font-size: 0.875rem;
-}
-
-.pagination-controls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.pagination-select {
-    padding: 0.375rem 0.5rem;
-    border-radius: 0.25rem;
-    border: 1px solid var(--color-border, #404040);
-    background: var(--color-bg-tertiary, #252525);
-    color: var(--color-text-primary, #fff);
-    cursor: pointer;
-    font-size: 0.875rem;
-}
-
-.pagination-select:focus {
-    outline: none;
-    border-color: var(--color-primary, #3b82f6);
-}
-
-.page-number {
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-primary, #fff);
 }
