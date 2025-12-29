@@ -840,7 +840,8 @@ class TestReapplyEdit:
             snapshot_after={"legal_name": "V2"},
             reviewed_by=admin_user.user_id,
             reviewed_at=datetime.utcnow() - timedelta(hours=2),
-            reverted_at=datetime.utcnow() - timedelta(hours=1)
+            reverted_at=datetime.utcnow() - timedelta(hours=1),
+            created_at=datetime.utcnow() - timedelta(hours=3)
         )
         async_session.add(older_reverted)
         await async_session.flush()
@@ -855,7 +856,8 @@ class TestReapplyEdit:
             snapshot_before={"legal_name": "V2"},
             snapshot_after={"legal_name": "V3"},
             reviewed_by=admin_user.user_id,
-            reviewed_at=datetime.utcnow()
+            reviewed_at=datetime.utcnow(),
+            created_at=datetime.utcnow()
         )
         async_session.add(newer_approved)
         await async_session.commit()

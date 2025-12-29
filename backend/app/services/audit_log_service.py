@@ -380,7 +380,7 @@ class AuditLogService:
             EditHistory.entity_type == edit.entity_type,
             EditHistory.entity_id == edit.entity_id,
             EditHistory.status == EditStatus.APPROVED,
-            EditHistory.created_at > edit.created_at,
+            EditHistory.created_at >= edit.created_at,
             EditHistory.edit_id != edit.edit_id
         )
         result = await session.execute(stmt)
