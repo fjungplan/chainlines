@@ -7,7 +7,7 @@
  * Uses maintenance-style layout consistent with other admin pages.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auditLogApi } from '../api/auditLog';
 import { LoadingSpinner } from '../components/Loading';
@@ -36,12 +36,7 @@ const ENTITY_TYPE_OPTIONS = [
 
 export default function AuditLogPage() {
     const { isAdmin, isModerator } = useAuth();
-
-    // State
-    const [edits, setEdits] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [pendingCount, setPendingCount] = useState(0);
+    const navigate = useNavigate();
 
     // Filters
     const [statusFilters, setStatusFilters] = useState(['PENDING']); // Default to pending
@@ -52,12 +47,14 @@ export default function AuditLogPage() {
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(50);
+    const [pageSize, setPageSize] = useState(25);
     const [totalItems, setTotalItems] = useState(0);
 
-    // Selected edit for detail view
-    const [selectedEdit, setSelectedEdit] = useState(null);
-    const [detailLoading, setDetailLoading] = useState(false);
+    // State
+    const [edits, setEdits] = useState([]);
+    const [pendingCount, setPendingCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     // Check permissions
     const canAccess = isAdmin() || isModerator();
@@ -159,17 +156,8 @@ export default function AuditLogPage() {
     };
 
     // View edit detail
-    const handleViewEdit = async (edit) => {
-        setDetailLoading(true);
-        try {
-            const response = await auditLogApi.getDetail(edit.edit_id);
-            setSelectedEdit(response.data);
-        } catch (err) {
-            console.error('Failed to load edit detail:', err);
-            setError('Failed to load edit details.');
-        } finally {
-            setDetailLoading(false);
-        }
+    const handleViewEdit = (edit) => {
+        navigate(`/audit-log/${edit.edit_id}`);
     };
 
     // Get sort indicator

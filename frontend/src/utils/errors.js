@@ -8,21 +8,23 @@
  * @returns {string} User-friendly error message
  */
 export function getErrorMessage(error) {
+  if (typeof error === 'string') return error;
+
   // Handle axios errors
   if (error.response) {
     // Server responded with error status
     const status = error.response.status;
     const data = error.response.data;
-    
+
     // Try to get message from response
     if (data?.detail) {
       return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
     }
-    
+
     if (data?.message) {
       return data.message;
     }
-    
+
     // Default messages by status code
     switch (status) {
       case 400:
@@ -51,25 +53,25 @@ export function getErrorMessage(error) {
         return `An error occurred (${status}). Please try again.`;
     }
   }
-  
+
   // Handle network errors
   if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
     return 'Cannot connect to server. Please check your internet connection and ensure the backend is running.';
   }
-  
+
   if (error.code === 'ECONNREFUSED') {
     return 'Connection refused. The server may not be running.';
   }
-  
+
   if (error.code === 'ETIMEDOUT') {
     return 'Request timed out. Please try again.';
   }
-  
+
   // Handle request errors (before sending)
   if (error.request) {
     return 'No response from server. Please check your connection.';
   }
-  
+
   // Fallback to error message or generic message
   return error.message || 'An unexpected error occurred. Please try again.';
 }

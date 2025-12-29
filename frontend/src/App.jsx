@@ -6,6 +6,7 @@ import LoginPage from './pages/auth/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ModerationQueuePage from './pages/ModerationQueuePage';
 import AuditLogPage from './pages/AuditLogPage';
+import AuditLogEditor from './pages/AuditLogEditor';
 import MyEditsPage from './pages/MyEditsPage';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SponsorMaintenancePage from './pages/maintenance/SponsorMaintenancePage';
@@ -29,6 +30,7 @@ function App() {
             <Route path="imprint" element={<ImprintPage />} />
             <Route path="moderation" element={<ModerationQueuePage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
+            <Route path="audit-log/:editId" element={<AuditLogEditor />} />
             <Route path="me/edits" element={<MyEditsPage />} />
             <Route path="admin" element={<AdminPanelPage />} />
             <Route path="maintenance/sponsors" element={<SponsorMaintenancePage />} />
