@@ -2,12 +2,15 @@
 from .rate_limiter import RateLimiter
 from .scheduler import ScraperScheduler
 from .parsers import PCScraper
+from .checkpoint import CheckpointManager, CheckpointData
 
 __all__ = [
     "RateLimiter",
     "ScraperScheduler",
     "PCScraper",
     "create_scheduler",
+    "CheckpointManager",
+    "CheckpointData",
 ]
 
 
@@ -18,8 +21,7 @@ def create_scheduler() -> ScraperScheduler:
     Returns:
         Configured ScraperScheduler instance
     """
-    rate_limiter = RateLimiter()
     scrapers = [
-        PCScraper(rate_limiter=rate_limiter),
+        PCScraper(),
     ]
     return ScraperScheduler(scrapers=scrapers)

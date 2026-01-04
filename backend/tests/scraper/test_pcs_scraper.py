@@ -13,8 +13,7 @@ FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "pcs"
 @pytest.fixture
 def pcs_scraper():
     """Create PCScraper instance for testing."""
-    rate_limiter = RateLimiter()
-    return PCScraper(rate_limiter=rate_limiter)
+    return PCScraper()
 
 
 def load_fixture(filename: str) -> str:

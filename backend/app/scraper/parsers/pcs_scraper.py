@@ -12,6 +12,9 @@ class PCScraper(BaseScraper):
     
     BASE_URL = "https://www.procyclingstats.com"
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
     @property
     def domain(self) -> str:
         """Return domain for rate limiting."""

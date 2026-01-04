@@ -59,11 +59,11 @@
 
 ## SLICE 6: Checkpoint System (Day 7)
 
-- [ ] 6.1 Design checkpoint JSON schema
-- [ ] 6.2 Implement `CheckpointManager` class
-- [ ] 6.3 Add checkpoint file location config
-- [ ] 6.4 Integrate with scraper loop
-- [ ] **SLICE 6 COMMITTED**
+- [x] 6.1 Design checkpoint JSON schema
+- [x] 6.2 Implement `CheckpointManager` class
+- [x] 6.3 Add checkpoint file location config
+- [x] 6.4 Integrate with scraper loop
+- [x] **SLICE 6 COMMITTED**
 
 ---
 
