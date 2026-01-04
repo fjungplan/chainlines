@@ -210,7 +210,7 @@ class LineageDecision(BaseModel):
 ### 7.2 TeamEra
 * **`valid_from` (Mandatory):** Default to `{season_year}-01-01` if exact date unknown.
 * **`uci_code` / `tier_level` (Optional):** Leave NULL if missing. Do NOT hallucinate.
-* **`country_code` (Optional):** LLM should infer from "Nationality" or "registered in" text fields if possible.
+* **`country_code` (Optional):** 3-letter IOC/UCI code (e.g., NED, GER, ITA). LLM should infer from "Nationality" or "registered in" text fields if possible.
 * **Multiple Eras Per Season:** Allowed (different `valid_from` dates) for mid-season rebrands.
 
 ---

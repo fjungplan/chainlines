@@ -994,7 +994,7 @@ Create `backend/tests/scraper/fixtures/cyclingflash/team_detail_2024.html`:
   <h1>Team Visma | Lease a Bike (2024)</h1>
   <span class="uci-code">TJV</span>
   <span class="tier">WorldTour</span>
-  <span class="country">NL</span>
+  <span class="country">NED</span>
 </div>
 <div class="sponsors">
   <span class="sponsor">Visma</span>
@@ -1040,7 +1040,7 @@ Create `backend/app/scraper/sources/cyclingflash.py`:
 import re
 from typing import Optional
 from bs4 import BeautifulSoup
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
 
 class ScrapedTeamData(BaseModel):
@@ -1048,7 +1048,10 @@ class ScrapedTeamData(BaseModel):
     name: str
     uci_code: Optional[str] = None
     tier: Optional[str] = None
-    country_code: Optional[str] = None
+    country_code: Optional[str] = Field(
+        default=None,
+        description="3-letter IOC/UCI country code (e.g., NED, GER, ITA, FRA)"
+    )
     sponsors: list[str] = []
     previous_season_url: Optional[str] = None
     season_year: int
@@ -1090,7 +1093,7 @@ def test_parse_team_detail_extracts_data():
     assert data.name == "Team Visma | Lease a Bike"
     assert data.uci_code == "TJV"
     assert data.tier == "WorldTour"
-    assert data.country_code == "NL"
+    assert data.country_code == "NED"
     assert data.sponsors == ["Visma", "Lease a Bike"]
     assert data.previous_season_url == "/team/team-jumbo-visma-2023"
     assert data.season_year == 2024
@@ -1299,7 +1302,7 @@ async def test_extract_team_data_prompt():
             name="UAE Team Emirates",
             uci_code="UAD",
             tier="WorldTour",
-            country_code="AE",
+            country_code="UAE",
             sponsors=["Emirates", "Colnago"],
             season_year=2024
         )
@@ -1339,7 +1342,7 @@ Extract the following information:
 - Team name (without year suffix)
 - UCI code (3-letter code if present)
 - Tier level (WorldTour, ProTeam, Continental, or null)
-- Country code (2-letter ISO code if determinable)
+- Country code (3-letter IOC/UCI code, e.g., NED, GER, FRA, if determinable)
 - List of sponsor names (in order of appearance/prominence)
 - Previous season URL (if there's a link to previous year's page)
 
