@@ -47,6 +47,9 @@ class ScraperRunResponse(BaseModel):
     run_id: uuid.UUID
     phase: int
     tier: Optional[str]
+    start_year: Optional[int]
+    end_year: Optional[int]
+    dry_run: bool
     status: ScraperRunStatus
     started_at: datetime
     completed_at: Optional[datetime]
@@ -165,6 +168,7 @@ async def start_scraper(
         tier=request.tier,
         start_year=request.start_year,
         end_year=request.end_year,
+        dry_run=request.dry_run,
         status=ScraperRunStatus.PENDING
     )
     db.add(run)

@@ -25,6 +25,6 @@ class BaseScraper:
         headers = {"User-Agent": self._user_agent.get()}
         
         async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(url, headers=headers)
+            response = await client.get(url, headers=headers, follow_redirects=True)
             response.raise_for_status()
             return response.text

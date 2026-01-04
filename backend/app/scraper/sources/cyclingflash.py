@@ -26,10 +26,14 @@ class CyclingFlashParser:
         soup = BeautifulSoup(html, 'html.parser')
         urls = []
         
-        for link in soup.select('.team-list a'):
+        # New structure uses team-card or simply links containing /team/
+        for link in soup.find_all('a', href=True):
             href = link.get('href')
-            if href and '/team/' in href:
-                urls.append(href)
+            # Filter for team links, ensuring we don't pick up duplicates or root links
+            if href and '/team/' in href and not href.endswith('/teams'):
+                # Avoid duplicates in the list
+                if href not in urls:
+                    urls.append(href)
         
         return urls
 
@@ -37,24 +41,47 @@ class CyclingFlashParser:
         """Extract team data from detail page."""
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Extract name (remove year suffix)
-        header = soup.select_one('.team-header h1')
+        # Extract name from H1 (remove year suffix)
+        header = soup.select_one('h1')
         raw_name = header.get_text(strip=True) if header else "Unknown"
         name = re.sub(r'\s*\(\d{4}\)\s*$', '', raw_name)
         
-        # Extract fields
-        uci_code = self._get_text(soup, '.uci-code')
-        raw_tier = self._get_text(soup, '.tier')
+        # Metadata table parsing
+        uci_code = None
+        raw_tier = None
+        country_code = None
+        
+        table = soup.find('table')
+        if table:
+            for tr in table.find_all('tr'):
+                cells = tr.find_all(['td', 'th'])
+                if len(cells) >= 2:
+                    label = cells[0].get_text(strip=True).lower()
+                    value = cells[1].get_text(strip=True)
+                    if 'code' in label:
+                        uci_code = value
+                    elif 'category' in label:
+                        raw_tier = value
+                    elif 'country' in label:
+                        country_code = value
+
+        # Map tier level
         from app.scraper.utils.tier_mapper import map_tier_label_to_level
         tier_level = map_tier_label_to_level(raw_tier, season_year)
-        country_code = self._get_text(soup, '.country')
         
-        # Extract sponsors
-        sponsors = [s.get_text(strip=True) for s in soup.select('.sponsors .sponsor')]
+        # Extract sponsors from brand links
+        sponsors = []
+        for link in soup.select('a[href*="/brands/"]'):
+            sponsor_name = link.get_text(strip=True)
+            if sponsor_name and sponsor_name not in sponsors:
+                sponsors.append(sponsor_name)
         
-        # Extract previous season link
-        prev_link = soup.select_one('.prev-season')
-        prev_url = prev_link.get('href') if prev_link else None
+        # Extract previous season link (if any)
+        # Search for links containing "Season" or similar patterns
+        prev_url = None
+        prev_link = soup.find('a', string=re.compile(r"Previous Season", re.I))
+        if prev_link:
+            prev_url = prev_link.get('href')
         
         return ScrapedTeamData(
             name=name,
@@ -82,6 +109,7 @@ class CyclingFlashScraper(BaseScraper):
     
     async def get_team_list(self, year: int) -> list[str]:
         """Get list of team URLs for a given year."""
+        # The URL often redirects to /teams/{year}/road/men
         url = f"{self.BASE_URL}/teams/{year}"
         html = await self.fetch(url)
         return self._parser.parse_team_list(html)

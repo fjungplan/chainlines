@@ -2,7 +2,7 @@ from datetime import datetime
 import uuid
 import enum
 from typing import Optional
-from sqlalchemy import String, Integer, DateTime, Enum
+from sqlalchemy import String, Integer, DateTime, Enum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, utc_now
 from app.db.types import GUID
@@ -24,6 +24,7 @@ class ScraperRun(Base):
     tier: Mapped[str] = mapped_column(String, nullable=True) # "1", "2", "3", "all", or None
     start_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     end_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False, server_default='false', nullable=False)
     
     status: Mapped[ScraperRunStatus] = mapped_column(
         Enum(ScraperRunStatus), 
