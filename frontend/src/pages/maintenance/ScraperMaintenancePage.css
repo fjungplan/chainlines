@@ -157,26 +157,48 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
     gap: 1.5rem;
     padding: 1rem 0;
+}
+
+.status-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
 .traffic-light {
     display: flex;
     flex-direction: row;
-    /* Ensure row */
     align-items: center;
-    /* Vertically center light and text */
     gap: 1rem;
     background: #1a1a1a;
     padding: 0.75rem 1.5rem;
-    /* Adjusted padding */
     border-radius: 2rem;
-    /* Pill shape */
     border: 2px solid #333;
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.live-output-btn {
+    background: transparent;
+    border: 1px solid #333;
+    color: var(--color-text-secondary);
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.live-output-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary-hover);
+    background: rgba(59, 130, 246, 0.05);
 }
 
 .light {

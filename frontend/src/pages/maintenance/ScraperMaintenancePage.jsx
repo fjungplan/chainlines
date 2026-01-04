@@ -299,35 +299,37 @@ const ScraperMaintenancePage = () => {
                             </div>
 
                             <div className="status-display-container">
-                                {/* Traffic Light & Label Combined */}
-                                <div className="traffic-light">
-                                    <div
-                                        className={`light ${error ? 'active-red' :
-                                            !activeRun ? 'active-gray' :
-                                                activeRun.status === 'PAUSED' ? 'active-amber' :
-                                                    activeRun.status === 'FAILED' ? 'active-red' :
-                                                        activeRun.status === 'COMPLETED' ? 'active-green-static' :
-                                                            ['RUNNING', 'PENDING'].includes(activeRun.status) ? 'active-green' : 'active-gray'
-                                            }`}
-                                        title={error ? error : (activeRun ? activeRun.status : "IDLE")}
-                                    ></div>
-                                    <div className="status-label">
-                                        {activeRun ? activeRun.status : (error ? "FAILED" : "IDLE")}
+                                <div className="status-header-row">
+                                    {/* Traffic Light & Label Combined */}
+                                    <div className="traffic-light">
+                                        <div
+                                            className={`light ${error ? 'active-red' :
+                                                !activeRun ? 'active-gray' :
+                                                    activeRun.status === 'PAUSED' ? 'active-amber' :
+                                                        activeRun.status === 'FAILED' ? 'active-red' :
+                                                            activeRun.status === 'COMPLETED' ? 'active-green-static' :
+                                                                ['RUNNING', 'PENDING'].includes(activeRun.status) ? 'active-green' : 'active-gray'
+                                                }`}
+                                            title={error ? error : (activeRun ? activeRun.status : "IDLE")}
+                                        ></div>
+                                        <div className="status-label">
+                                            {activeRun ? activeRun.status : (error ? "FAILED" : "IDLE")}
+                                        </div>
                                     </div>
-                                </div>
 
-                                {activeRun && (
-                                    <button
-                                        onClick={() => handleViewLogs(activeRun.run_id)}
-                                        className="mb-4 text-xs font-mono text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                            <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z" />
-                                            <path d="M4 11.794V4.206l6.897 3.794L4 11.794z" />
-                                        </svg>
-                                        {'>'}_ View Live Output
-                                    </button>
-                                )}
+                                    {activeRun && (
+                                        <button
+                                            onClick={() => handleViewLogs(activeRun.run_id)}
+                                            className="live-output-btn"
+                                        >
+                                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z" />
+                                                <path d="M4 11.794V4.206l6.897 3.794L4 11.794z" />
+                                            </svg>
+                                            View Logs
+                                        </button>
+                                    )}
+                                </div>
 
                                 <div className="status-controls">
                                     {/* Combined Start/Resume Button */}

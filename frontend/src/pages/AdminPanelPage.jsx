@@ -33,7 +33,7 @@ export default function AdminPanelPage() {
             <span className="tile-icon"><i className="bi bi-arrow-repeat"></i></span>
             <div className="tile-content">
               <h3>Scraper Status</h3>
-              <p>Control scraper execution and view logs.</p>
+              <p>Scraper execution and logs.</p>
             </div>
           </Link>
 
