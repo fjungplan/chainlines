@@ -37,7 +37,7 @@ async def test_extract_team_data_prompt():
             name="UAE Team Emirates",
             uci_code="UAD",
             tier="WorldTour",
-            country_code="AE",
+            country_code="UAE",
             sponsors=["Emirates", "Colnago"],
             season_year=2024
         )

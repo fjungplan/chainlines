@@ -17,7 +17,7 @@ Extract the following information:
 - Team name (without year suffix)
 - UCI code (3-letter code if present)
 - Tier level (WorldTour, ProTeam, Continental, or null)
-- Country code (2-letter ISO code if determinable)
+- Country code (3-letter IOC/UCI code, e.g., NED, GER, FRA, if determinable)
 - List of sponsor names (in order of appearance/prominence)
 - Previous season URL (if there's a link to previous year's page)
 
