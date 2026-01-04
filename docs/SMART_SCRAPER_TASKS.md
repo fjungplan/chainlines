@@ -80,12 +80,12 @@
 
 ## SLICE 8: Phase 2 Orchestration - Team Assembly (Day 10-11)
 
-- [ ] 8.1 Implement team queue processor
-- [ ] 8.2 Implement sponsor mapping (string → UUID)
-- [ ] 8.3 Implement prominence calculation
-- [ ] 8.4 Integrate with AuditLogService for writes
-- [ ] 8.5 Wire Phase 2 into `SmartScraperService`
-- [ ] **SLICE 8 COMMITTED**
+- [x] 8.1 Implement team queue processor
+- [x] 8.2 Implement sponsor mapping (string → UUID)
+- [x] 8.3 Implement prominence calculation
+- [x] 8.4 Integrate with AuditLogService for writes
+- [x] 8.5 Wire Phase 2 into `SmartScraperService`
+- [x] **SLICE 8 COMMITTED**
 
 ---
 
