@@ -69,12 +69,12 @@
 
 ## SLICE 7: Phase 1 Orchestration - Discovery (Day 8-9)
 
-- [ ] 7.1 Implement sponsor name collector
-- [ ] 7.2 Define `SponsorResolution` Pydantic model
-- [ ] 7.3 Write `resolve_sponsor` LLM prompt
-- [ ] 7.4 Implement brand color search logic
-- [ ] 7.5 Wire Phase 1 into `SmartScraperService`
-- [ ] **SLICE 7 COMMITTED**
+- [x] 7.1 Implement sponsor name collector
+- [x] 7.2 Define `SponsorResolution` Pydantic model
+- [x] 7.3 Write `resolve_sponsor` LLM prompt
+- [x] 7.4 Implement brand color search logic
+- [x] 7.5 Wire Phase 1 into `SmartScraperService`
+- [x] **SLICE 7 COMMITTED**
 
 ---
 
