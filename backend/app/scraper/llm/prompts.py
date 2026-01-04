@@ -1,6 +1,7 @@
 """LLM prompts for scraper operations."""
 from typing import TYPE_CHECKING
 from app.scraper.sources.cyclingflash import ScrapedTeamData
+from app.scraper.llm.lineage import LineageDecision
 
 if TYPE_CHECKING:
     from app.scraper.llm.service import LLMService
@@ -22,6 +23,30 @@ Extract the following information:
 - Previous season URL (if there's a link to previous year's page)
 
 Return the data in the specified JSON format.
+"""
+
+DECIDE_LINEAGE_PROMPT = """
+Analyze the relationship between these two cycling teams and determine the lineage type.
+
+PREDECESSOR TEAM (ended):
+{predecessor_info}
+
+SUCCESSOR TEAM (started):
+{successor_info}
+
+Determine the relationship type:
+- LEGAL_TRANSFER: Same legal entity, continuous UCI license
+- SPIRITUAL_SUCCESSION: No legal link, but cultural/personnel continuity
+- MERGE: Multiple predecessors combined into one successor
+- SPLIT: One predecessor split into multiple successors
+
+Consider:
+- UCI codes (same = likely legal transfer)
+- Staff continuity (>50% = strong connection)
+- Sponsor continuity
+- Time gap (>2 years = weaker connection)
+
+Return your decision with confidence score (0.0 to 1.0).
 """
 
 
@@ -58,4 +83,31 @@ class ScraperPrompts:
         return await self._llm.generate_structured(
             prompt=prompt,
             response_model=ScrapedTeamData
+        )
+
+    async def decide_lineage(
+        self,
+        predecessor_info: str,
+        successor_info: str
+    ) -> LineageDecision:
+        """Decide lineage relationship between teams.
+        
+        Uses LLM to analyze predecessor and successor team information
+        and determine the type of lineage relationship.
+        
+        Args:
+            predecessor_info: Description of the predecessor team.
+            successor_info: Description of the successor team.
+            
+        Returns:
+            LineageDecision with event type, confidence, and reasoning.
+        """
+        prompt = DECIDE_LINEAGE_PROMPT.format(
+            predecessor_info=predecessor_info,
+            successor_info=successor_info
+        )
+        
+        return await self._llm.generate_structured(
+            prompt=prompt,
+            response_model=LineageDecision
         )

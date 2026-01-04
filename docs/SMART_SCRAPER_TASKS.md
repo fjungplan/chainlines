@@ -91,11 +91,11 @@
 
 ## SLICE 9: LLM Prompts - Lineage Decision (Day 12)
 
-- [ ] 9.1 Define `LineageDecision` Pydantic model
-- [ ] 9.2 Write `decide_lineage` prompt
-- [ ] 9.3 Test all event types
-- [ ] 9.4 Test confidence scoring
-- [ ] **SLICE 9 COMMITTED**
+- [x] 9.1 Define `LineageDecision` Pydantic model
+- [x] 9.2 Write `decide_lineage` prompt
+- [x] 9.3 Test all event types
+- [x] 9.4 Test confidence scoring
+- [x] **SLICE 9 COMMITTED**
 
 ---
 
