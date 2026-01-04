@@ -2,7 +2,7 @@
 import re
 from typing import Optional
 from bs4 import BeautifulSoup
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
 
 class ScrapedTeamData(BaseModel):
@@ -10,7 +10,10 @@ class ScrapedTeamData(BaseModel):
     name: str
     uci_code: Optional[str] = None
     tier: Optional[str] = None
-    country_code: Optional[str] = None
+    country_code: Optional[str] = Field(
+        default=None,
+        description="3-letter IOC/UCI country code (e.g., NED, GER, ITA, FRA)"
+    )
     sponsors: list[str] = []
     previous_season_url: Optional[str] = None
     season_year: int
