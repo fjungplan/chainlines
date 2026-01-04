@@ -132,12 +132,12 @@
 
 ## SLICE 13: CLI Interface (Day 17)
 
-- [ ] 13.1 Implement argparse CLI
-- [ ] 13.2 Add --phase argument
-- [ ] 13.3 Add --tier argument
-- [ ] 13.4 Add --resume argument
-- [ ] 13.5 Add --dry-run argument
-- [ ] **SLICE 13 COMMITTED**
+- [x] 13.1 Implement argparse CLI
+- [x] 13.2 Add --phase argument
+- [x] 13.3 Add --tier argument
+- [x] 13.4 Add --resume argument
+- [x] 13.5 Add --dry-run argument
+- [x] **SLICE 13 COMMITTED**
 
 ---
 
