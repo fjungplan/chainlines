@@ -16,14 +16,15 @@
 
 ## SLICE 2: LLM Client Layer (Day 2)
 
-- [ ] 2.1 Create `BaseLLMClient` protocol
-- [ ] 2.2 Implement `GeminiClient`
-- [ ] 2.3 Implement `DeepseekClient`
-- [ ] 2.4 Implement `LLMService` with fallback chain
-- [ ] 2.5 Add instructor patching to `LLMService`
-- [ ] **SLICE 2 COMMITTED**
+- [x] 2.1 Create `BaseLLMClient` protocol
+- [x] 2.2 Implement `GeminiClient`
+- [x] 2.3 Implement `DeepseekClient`
+- [x] 2.4 Implement `LLMService` with fallback chain
+- [x] 2.5 Add instructor patching to `LLMService`
+- [x] **SLICE 2 COMMITTED**
 
 ---
+
 
 ## SLICE 3: Scraper Base Infrastructure (Day 3)
 
