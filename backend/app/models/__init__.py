@@ -11,6 +11,8 @@ from app.models.sponsor import (  # noqa: F401
 	TeamSponsorLink,
 )
 from app.models.lineage import LineageEvent  # noqa: F401
+from app.models.run_log import ScraperRun  # noqa: F401
+from app.models.run_log import ScraperRun  # noqa: F401
 
 __all__ = [
 	"TeamNode",
@@ -19,4 +21,5 @@ __all__ = [
 	"SponsorBrand",
 	"TeamSponsorLink",
 	"LineageEvent",
+    "ScraperRun",
 ]

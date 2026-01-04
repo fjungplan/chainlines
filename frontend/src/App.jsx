@@ -12,6 +12,7 @@ import AdminPanelPage from './pages/AdminPanelPage';
 import SponsorMaintenancePage from './pages/maintenance/SponsorMaintenancePage';
 import TeamMaintenancePage from './pages/maintenance/TeamMaintenancePage';
 import LineageMaintenancePage from './pages/maintenance/LineageMaintenancePage';
+import ScraperMaintenancePage from './pages/maintenance/ScraperMaintenancePage';
 import UserMaintenancePage from './pages/maintenance/UserMaintenancePage';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
@@ -36,6 +37,7 @@ function App() {
             <Route path="maintenance/sponsors" element={<SponsorMaintenancePage />} />
             <Route path="maintenance/teams" element={<TeamMaintenancePage />} />
             <Route path="maintenance/lineage" element={<LineageMaintenancePage />} />
+            <Route path="admin/scraper" element={<ScraperMaintenancePage />} />
             <Route path="admin/users" element={<UserMaintenancePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

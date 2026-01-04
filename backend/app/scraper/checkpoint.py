@@ -12,6 +12,9 @@ class CheckpointData(BaseModel):
     completed_urls: list[str] = Field(default_factory=list)
     sponsor_names: set[str] = Field(default_factory=set)
     team_queue: list[str] = Field(default_factory=list)
+    tier: Optional[str] = None
+    start_year: Optional[int] = None
+    end_year: Optional[int] = None
     last_updated: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:

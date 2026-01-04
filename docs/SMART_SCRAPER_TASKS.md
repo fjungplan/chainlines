@@ -161,6 +161,17 @@
 
 ---
 
+## SLICE 16: Scraper Admin UI (Day 21)
+
+- [x] 16.1 Create `ScraperRun` database model
+- [x] 16.2 Implement Admin API (`/checkpoint`, `/start`, `/runs`, `/logs`)
+- [x] 16.3 Implement Frontend API Client (`scraper.js`)
+- [x] 16.4 Create `ScraperMaintenancePage` with Resume/Log features
+- [x] 16.5 Integrate into Admin Panel
+- [x] **SLICE 16 COMMITTED**
+
+---
+
 ## Final
 
 - [x] Create Pull Request

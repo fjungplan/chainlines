@@ -31,12 +31,33 @@ def test_checkpoint_manager_save_and_load():
         data = CheckpointData(phase=2, current_position="test-url")
         manager.save(data)
         
+        
         # Load
         loaded = manager.load()
         assert loaded is not None
         assert loaded.phase == 2
         assert loaded.current_position == "test-url"
 
+def test_checkpoint_metadata_persistence():
+    """CheckpointManager should save and load metadata fields."""
+    from app.scraper.checkpoint import CheckpointManager, CheckpointData
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "checkpoint.json"
+        manager = CheckpointManager(path)
+        
+        data = CheckpointData(
+            phase=1,
+            tier="2",
+            start_year=2024,
+            end_year=2020
+        )
+        manager.save(data)
+        
+        loaded = manager.load()
+        assert loaded.tier == "2"
+        assert loaded.start_year == 2024
+        assert loaded.end_year == 2020
 def test_checkpoint_manager_returns_none_if_no_file():
     """CheckpointManager.load should return None if no checkpoint exists."""
     from app.scraper.checkpoint import CheckpointManager
