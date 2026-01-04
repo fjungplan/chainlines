@@ -122,11 +122,11 @@
 
 ## SLICE 12: Concurrent Workers (Day 16)
 
-- [ ] 12.1 Implement async worker pool
-- [ ] 12.2 Per-source rate limiting in workers
-- [ ] 12.3 Worker coordination
-- [ ] 12.4 Integrate into Phase 2+ orchestration
-- [ ] **SLICE 12 COMMITTED**
+- [x] 12.1 Implement async worker pool
+- [x] 12.2 Per-source rate limiting in workers
+- [x] 12.3 Worker coordination
+- [x] 12.4 Integrate into Phase 2+ orchestration
+- [x] **SLICE 12 COMMITTED**
 
 ---
 

@@ -2,6 +2,7 @@
 from .rate_limiter import RateLimiter
 from .scheduler import ScraperScheduler
 from .checkpoint import CheckpointManager, CheckpointData
+from .workers import WorkerPool, MultiSourceCoordinator
 
 __all__ = [
     "RateLimiter",
@@ -9,6 +10,8 @@ __all__ = [
     "create_scheduler",
     "CheckpointManager",
     "CheckpointData",
+    "WorkerPool",
+    "MultiSourceCoordinator",
 ]
 
 
