@@ -13,8 +13,8 @@ const ScraperMaintenancePage = () => {
     // Form State
     const [phase, setPhase] = useState(0); // 0 = All Phases
     const [tier, setTier] = useState("all");
-    const [startYear, setStartYear] = useState(2025);
-    const [endYear, setEndYear] = useState(1990);
+    const [startYear, setStartYear] = useState(2026);
+    const [endYear, setEndYear] = useState(2020);
     const [resume, setResume] = useState(false);
     const [dryRun, setDryRun] = useState(false);
     const [isLocked, setIsLocked] = useState(false); // Locked when Resuming
