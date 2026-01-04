@@ -156,11 +156,11 @@ This way, while Worker 1 waits for its rate-limit delay, other workers can be ac
 
 2. `decide_lineage(previous_eras: List[TeamEra], current_data: ScrapedTeamData) -> LineageDecision`
    * **Standard Continuation:** `Team A (2023)` → `Team A (2024)` = `LEGAL_TRANSFER`
-   * **Absorption (Merge):** `Team Small` merges into `Team Big` → `MERGE`
-   * **Fusion (Merge):** `Team A` + `Team B` → `Team New` = `MERGE`
-   * **Spin-off (Split):** Part of `Team A` forms `Team B` = `SPLIT`
-   * **Dissolution (Split):** `Team A` dies → `Team B` + `Team C` = `SPLIT`
-   * **Spiritual Succession:** No legal link, but cultural/personnel continuity (e.g., T-Mobile → HTC-Columbia) = `SPIRITUAL_SUCCESSION`
+   * **Absorption (Merge):** `Team Small` joins into `Team Big` (Team Big continues) = `MERGE`
+   * **Fusion (Merge):** `Team A` + `Team B` → `Team New` (neither continues) = `MERGE`
+   * **Spin-off (Split):** Part of `Team A` forms `Team B` (Team A continues) = `SPLIT`
+   * **Dissolution (Split):** `Team A` dies → `Team B` + `Team C` (neither is Team A) = `SPLIT`
+   * **Spiritual Succession:** No legal link, but cultural/personnel continuity (e.g., T-Mobile → HTC-Columbia). Best found in Wikipedia "History" sections = `SPIRITUAL_SUCCESSION`
 
 3. `resolve_sponsor_brand(names: List[str]) -> List[SponsorResolution]`
    * Maps raw strings to Master/Brand hierarchy.

@@ -2269,25 +2269,28 @@ Add to `backend/app/scraper/llm/prompts.py`:
 from app.scraper.llm.lineage import LineageDecision
 
 DECIDE_LINEAGE_PROMPT = """
-Analyze the relationship between these two cycling teams and determine the lineage type.
+Analyze the relationship between these cycling teams and determine the lineage type.
 
-PREDECESSOR TEAM (ended):
+PREDECESSOR TEAM:
 {predecessor_info}
 
-SUCCESSOR TEAM (started):
+SUCCESSOR TEAM:
 {successor_info}
 
 Determine the relationship type:
-- LEGAL_TRANSFER: Same legal entity, continuous UCI license
-- SPIRITUAL_SUCCESSION: No legal link, but cultural/personnel continuity
-- MERGE: Multiple predecessors combined into one successor
-- SPLIT: One predecessor split into multiple successors
+- LEGAL_TRANSFER: Same legal entity, continuous UCI license (the standard season-to-season continuation)
+- SPIRITUAL_SUCCESSION: No legal link, but cultural/personnel continuity (often documented in Wikipedia "History" sections)
+- MERGE: Multiple predecessors combined into one successor (includes joins into an already-existing team)
+- SPLIT: One predecessor split into multiple successors (includes spin-offs where the original team continues)
 
-Consider:
-- UCI codes (same = likely legal transfer)
-- Staff continuity (>50% = strong connection)
-- Sponsor continuity
-- Time gap (>2 years = weaker connection)
+Key considerations:
+- UCI codes: Same code = likely legal transfer
+- Staff continuity: >50% retained staff = strong connection
+- Sponsor continuity: Same major sponsors suggest legal transfer
+- Wikipedia "History" sections are the best source for spiritual succession evidence
+
+IMPORTANT: Lineage events occur on a single date (typically season start). Time gaps should be minimal
+(e.g., a team folding mid-season may have a successor starting the following season).
 
 Return your decision with confidence score (0.0 to 1.0).
 """
