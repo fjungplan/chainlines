@@ -223,7 +223,7 @@ class TestTeamSponsorLink:
                 era_id=era.era_id,
                 brand_id=brand.brand_id,
                 rank_order=1,
-                prominence_percent=0  # Too low
+                prominence_percent=-1  # Too low
             )
         
         with pytest.raises(ValueError):
@@ -233,30 +233,50 @@ class TestTeamSponsorLink:
                 rank_order=1,
                 prominence_percent=101  # Too high
             )
-        
+
         # Test valid edge cases
-        link1 = TeamSponsorLink(
+        link0 = TeamSponsorLink(
             era_id=era.era_id,
             brand_id=brand.brand_id,
             rank_order=1,
-            prominence_percent=1  # Minimum
+            prominence_percent=0  # Minimum allowed
         )
-        db_session.add(link1)
+        db_session.add(link0)
         await db_session.flush()
         
         # Create another brand for second link
-        brand2 = SponsorBrand(
+        brand_2 = SponsorBrand(
             master_id=master.master_id,
             brand_name="Brand 2",
             default_hex_color="#111111"
         )
-        db_session.add(brand2)
+        db_session.add(brand_2)
+        await db_session.flush()
+
+        # Test valid edge cases
+        link1 = TeamSponsorLink(
+            era_id=era.era_id,
+            brand_id=brand_2.brand_id,
+            rank_order=2,
+            prominence_percent=1  # Minimum (0 is also valid now, but testing varied values)
+        )
+        db_session.add(link1)
+        await db_session.flush()
+        
+        
+        # Create third brand for final link test
+        brand3 = SponsorBrand(
+            master_id=master.master_id,
+            brand_name="Brand 3",
+            default_hex_color="#222222"
+        )
+        db_session.add(brand3)
         await db_session.flush()
         
         link2 = TeamSponsorLink(
             era_id=era.era_id,
-            brand_id=brand2.brand_id,
-            rank_order=2,
+            brand_id=brand3.brand_id,
+            rank_order=3,
             prominence_percent=100  # Maximum
         )
         # This will violate business logic (total > 100) but model allows it
