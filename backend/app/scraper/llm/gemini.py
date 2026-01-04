@@ -9,7 +9,7 @@ T = TypeVar('T', bound=BaseModel)
 class GeminiClient:
     """Client for Google Gemini API with structured output."""
     
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-pro"):
         genai.configure(api_key=api_key)
         self._model = genai.GenerativeModel(model)
         self._client = instructor.from_gemini(

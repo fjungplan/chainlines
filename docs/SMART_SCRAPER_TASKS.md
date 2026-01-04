@@ -25,8 +25,8 @@
 
 ---
 
-
 ## SLICE 3: Scraper Base Infrastructure (Day 3)
+
 
 - [ ] 3.1 Create `BaseScraper` abstract class
 - [ ] 3.2 Implement rate limiting with configurable delays

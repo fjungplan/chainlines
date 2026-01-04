@@ -9,7 +9,7 @@ T = TypeVar('T', bound=BaseModel)
 class DeepseekClient:
     """Client for Deepseek API (OpenAI-compatible) with structured output."""
     
-    def __init__(self, api_key: str, model: str = "deepseek-chat"):
+    def __init__(self, api_key: str, model: str = "deepseek-reasoner"):
         self._openai = AsyncOpenAI(
             api_key=api_key,
             base_url="https://api.deepseek.com"
