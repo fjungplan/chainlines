@@ -1,112 +1,114 @@
+"""Test base scraper infrastructure."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from app.scraper.base import BaseScraper
-from app.scraper.rate_limiter import RateLimiter
-import httpx
-
-
-# Mock scraper implementation for testing
-class MockScraper(BaseScraper):
-    @property
-    def domain(self) -> str:
-        return "mock.example.com"
-
-    async def scrape_team(self, team_identifier: str):
-        return {"team_name": team_identifier}
-
-
-@pytest.fixture
-def rate_limiter():
-    return RateLimiter(min_delay_seconds=0)
-
-
-@pytest.fixture
-def mock_scraper(rate_limiter):
-    return MockScraper(rate_limiter)
-
+import asyncio
+from unittest.mock import AsyncMock, patch
+import time
 
 @pytest.mark.asyncio
-async def test_base_scraper_initialization(mock_scraper):
-    """Test that base scraper initializes correctly"""
-    assert mock_scraper.rate_limiter is not None
-    assert mock_scraper.client is not None
-    assert isinstance(mock_scraper.client, httpx.AsyncClient)
-
-
-@pytest.mark.asyncio
-async def test_fetch_with_rate_limiting(mock_scraper):
-    """Test that fetch method calls rate limiter"""
-    url = "http://mock.example.com/page"
-    mock_html = "<html><body>Test</body></html>"
-
-    with patch.object(mock_scraper.rate_limiter, "wait_if_needed", new_callable=AsyncMock) as mock_wait:
-        with patch.object(mock_scraper.client, "get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.text = mock_html
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            result = await mock_scraper.fetch(url)
-
-            # Verify rate limiter was called
-            mock_wait.assert_called_once_with(mock_scraper.domain)
-            # Verify HTTP request was made
-            mock_get.assert_called_once_with(url)
-            # Verify result
-            assert result == mock_html
-
+async def test_rate_limiter_enforces_delay():
+    """RateLimiter should enforce minimum delay between calls."""
+    from app.scraper.base.rate_limiter import RateLimiter
+    
+    limiter = RateLimiter(min_delay=0.1, max_delay=0.1)  # Fixed 100ms
+    
+    start = time.monotonic()
+    await limiter.wait()
+    await limiter.wait()
+    elapsed = time.monotonic() - start
+    
+    # Second call should have waited ~100ms
+    assert elapsed >= 0.09  # Allow small timing variance
 
 @pytest.mark.asyncio
-async def test_fetch_handles_http_errors(mock_scraper):
-    """Test that fetch handles HTTP errors gracefully"""
-    url = "http://mock.example.com/notfound"
-
-    with patch.object(mock_scraper.rate_limiter, "wait_if_needed", new_callable=AsyncMock):
-        with patch.object(mock_scraper.client, "get") as mock_get:
-            mock_get.side_effect = httpx.HTTPStatusError(
-                "404 Not Found", request=MagicMock(), response=MagicMock()
-            )
-
-            result = await mock_scraper.fetch(url)
-
-            # Should return None on error
-            assert result is None
-
-
-@pytest.mark.asyncio
-async def test_fetch_handles_network_errors(mock_scraper):
-    """Test that fetch handles network errors gracefully"""
-    url = "http://mock.example.com/page"
-
-    with patch.object(mock_scraper.rate_limiter, "wait_if_needed", new_callable=AsyncMock):
-        with patch.object(mock_scraper.client, "get") as mock_get:
-            mock_get.side_effect = httpx.NetworkError("Connection failed")
-
-            result = await mock_scraper.fetch(url)
-
-            # Should return None on network error
-            assert result is None
-
+async def test_rate_limiter_randomizes_delay():
+    """RateLimiter should randomize delays within range."""
+    from app.scraper.base.rate_limiter import RateLimiter
+    
+    limiter = RateLimiter(min_delay=0.05, max_delay=0.15)
+    delays = []
+    
+    for _ in range(5):
+        start = time.monotonic()
+        await limiter.wait()
+        delays.append(time.monotonic() - start)
+    
+    # At least some variance (not all identical)
+    # First call has no delay, so check from second onwards
+    assert len(set(round(d, 2) for d in delays[1:])) > 1 or len(delays) < 3
 
 @pytest.mark.asyncio
-async def test_user_agent_header_is_set(rate_limiter):
-    """Test that User-Agent header is set correctly"""
-    scraper = MockScraper(rate_limiter)
-
-    assert "User-Agent" in scraper.client.headers
-    assert "CyclingLineageBot" in scraper.client.headers["User-Agent"]
-
+async def test_retry_succeeds_after_failures():
+    """Retry decorator should retry on failure and succeed."""
+    from app.scraper.base.retry import with_retry
+    
+    call_count = 0
+    
+    @with_retry(max_attempts=3, base_delay=0.01)
+    async def flaky_function():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise ConnectionError("Temporary failure")
+        return "success"
+    
+    result = await flaky_function()
+    assert result == "success"
+    assert call_count == 3
 
 @pytest.mark.asyncio
-async def test_scraper_close_cleans_up(mock_scraper):
-    """Test that close method cleans up resources"""
-    with patch.object(mock_scraper.client, "aclose", new_callable=AsyncMock) as mock_close:
-        await mock_scraper.close()
-        mock_close.assert_called_once()
+async def test_retry_raises_after_max_attempts():
+    """Retry decorator should raise after max attempts exceeded."""
+    from app.scraper.base.retry import with_retry
+    
+    @with_retry(max_attempts=2, base_delay=0.01)
+    async def always_fails():
+        raise ConnectionError("Always fails")
+    
+    with pytest.raises(ConnectionError):
+        await always_fails()
 
+def test_user_agent_rotator_returns_different_agents():
+    """UserAgentRotator should return varying user agents."""
+    from app.scraper.base.user_agent import UserAgentRotator
+    
+    rotator = UserAgentRotator()
+    agents = [rotator.get() for _ in range(10)]
+    
+    # Should have at least 2 different agents in 10 calls
+    assert len(set(agents)) >= 2
+
+def test_user_agent_rotator_all_valid():
+    """All user agents should be valid strings."""
+    from app.scraper.base.user_agent import UserAgentRotator
+    
+    rotator = UserAgentRotator()
+    for _ in range(10):
+        agent = rotator.get()
+        assert isinstance(agent, str)
+        assert len(agent) > 20  # Reasonable UA length
+        assert "Mozilla" in agent or "ChainlinesBot" in agent
 
 @pytest.mark.asyncio
-async def test_scrape_team_abstract_method(mock_scraper):
-    """Test that scrape_team is implemented in subclass"""
-    result = await mock_scraper.scrape_team("test-team")
-    assert result == {"team_name": "test-team"}
+async def test_base_scraper_fetches_with_rate_limit():
+    """BaseScraper should fetch URLs respecting rate limits."""
+    from app.scraper.base.scraper import BaseScraper
+    
+    class TestScraper(BaseScraper):
+        pass
+    
+    scraper = TestScraper(min_delay=0.01, max_delay=0.01)
+    
+    # Mock httpx
+    with patch('app.scraper.base.scraper.httpx.AsyncClient') as mock_client_class:
+        mock_client = AsyncMock()
+        mock_response = AsyncMock()
+        mock_response.text = "<html>test</html>"
+        mock_response.status_code = 200
+        mock_response.raise_for_status = lambda: None
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+        
+        html = await scraper.fetch("https://example.com")
+        assert html == "<html>test</html>"

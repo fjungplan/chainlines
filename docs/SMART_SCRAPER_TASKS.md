@@ -28,22 +28,22 @@
 ## SLICE 3: Scraper Base Infrastructure (Day 3)
 
 
-- [ ] 3.1 Create `BaseScraper` abstract class
-- [ ] 3.2 Implement rate limiting with configurable delays
-- [ ] 3.3 Implement retry with exponential backoff
-- [ ] 3.4 Implement User-Agent rotation
-- [ ] **SLICE 3 COMMITTED**
+- [x] 3.1 Create `BaseScraper` abstract class
+- [x] 3.2 Implement rate limiting with configurable delays
+- [x] 3.3 Implement retry with exponential backoff
+- [x] 3.4 Implement User-Agent rotation
+- [x] **SLICE 3 COMMITTED**
 
 ---
 
 ## SLICE 4: CyclingFlash Scraper (Day 4-5)
 
-- [ ] 4.1 Create HTML fixture files
-- [ ] 4.2 Implement team list parser
-- [ ] 4.3 Implement team detail parser
-- [ ] 4.4 Implement "Previous Season" link follower
-- [ ] 4.5 Integrate into `CyclingFlashScraper` class
-- [ ] **SLICE 4 COMMITTED**
+- [x] 4.1 Create HTML fixture files
+- [x] 4.2 Implement team list parser
+- [x] 4.3 Implement team detail parser
+- [x] 4.4 Implement "Previous Season" link follower
+- [x] 4.5 Integrate into `CyclingFlashScraper` class
+- [x] **SLICE 4 COMMITTED**
 
 ---
 
