@@ -68,13 +68,20 @@ class DiscoveryService:
                 
             try:
                 urls = await self._scraper.get_team_list(year)
-                for url in urls:
-                    # Even if URL is already in queue, we might need to check other seasons
-                    # but Phase 1 builds the "skeleton" of unique nodes later.
-                    # For now, we collect all URLs that match the tier in any year.
+                logger.info(f"Found {len(urls)} total teams for year {year}. Starting detail extraction...")
+                
+                for i, url in enumerate(urls, 1):
+                    # Check for Pause/Abort every 5 teams
+                    if self._monitor and i % 5 == 0:
+                        await self._monitor.check_status()
+                    
+                    if i % 10 == 0 or i == 1 or i == len(urls):
+                        logger.info(f"Year {year}: Processing team {i}/{len(urls)}: {url}")
+                        
                     data = await self._scraper.get_team(url, year)
                     
                     if tier_level and data.tier_level != tier_level:
+                        # Skip but we still had to fetch to find out (for now)
                         continue
                         
                     if url not in team_urls:
