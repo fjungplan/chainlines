@@ -99,3 +99,26 @@ def test_memoire_scraper_parser():
     parser = MemoireParser()
     data = parser.parse_team(html)
     assert data["founded_year"] == 1975
+
+@pytest.mark.asyncio
+async def test_memoire_scraper_uses_wayback():
+    """MemoireScraper should use WaybackScraper to fetch content."""
+    from app.scraper.sources.memoire import MemoireScraper
+    from app.scraper.sources.wayback import WaybackScraper
+
+    # Mock WaybackScraper methods
+    with patch.object(WaybackScraper, "get_newest_snapshot", new_callable=AsyncMock) as mock_snap, \
+         patch.object(WaybackScraper, "fetch_archived_page", new_callable=AsyncMock) as mock_fetch:
+        
+        # Setup mocks
+        mock_snap.return_value = {"url": "http://archive.org/snapshot"}
+        mock_fetch.return_value = """
+        <div class="content"><p>Année d'existence: 1975</p></div>
+        """
+        
+        scraper = MemoireScraper(min_delay=0, max_delay=0)
+        data = await scraper.get_team("algo")
+        
+        assert data["founded_year"] == 1975
+        mock_snap.assert_called_once()
+        mock_fetch.assert_called_once_with("http://archive.org/snapshot")

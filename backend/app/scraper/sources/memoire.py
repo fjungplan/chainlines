@@ -24,18 +24,32 @@ class MemoireParser:
         return {"founded_year": founded}
 
 
+from app.scraper.sources.wayback import WaybackScraper
+
 class MemoireScraper(BaseScraper):
-    """Scraper for Memoire du Cyclisme."""
+    """Scraper for Memoire du Cyclisme via Wayback Machine (site is offline)."""
 
     BASE_URL = "http://www.memoire-du-cyclisme.eu"
 
     def __init__(self, **kwargs):
-        super().__init__(min_delay=3.0, max_delay=6.0, **kwargs)
+        # We don't use BaseScraper's fetch directly, we use Wayback's
+        # But we initialize it to keep interface consistent if needed,
+        # or just initialize the sub-scraper.
+        super().__init__(**kwargs)
         self._parser = MemoireParser()
+        self._wayback = WaybackScraper(**kwargs)
 
     async def get_team(self, slug: str) -> Dict[str, Any]:
-        """Get enrichment data for a team."""
-        # Note: Exact URL structure varies, generic placeholder logic
-        url = f"{self.BASE_URL}/{slug}"
-        html = await self.fetch(url)
+        """Get enrichment data for a team via Archive.org."""
+        target_url = f"{self.BASE_URL}/{slug}"
+        
+        # 1. Find newest snapshot
+        snapshot = await self._wayback.get_newest_snapshot(target_url)
+        if not snapshot or "url" not in snapshot:
+            return {"founded_year": None}
+            
+        # 2. Fetch content from Archive.org
+        html = await self._wayback.fetch_archived_page(snapshot["url"])
+        
+        # 3. Parse
         return self._parser.parse_team(html)
