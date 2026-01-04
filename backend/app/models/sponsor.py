@@ -80,14 +80,14 @@ class TeamSponsorLink(Base):
         UniqueConstraint("era_id", "brand_id", name="uq_era_brand"),
         UniqueConstraint("era_id", "rank_order", name="uq_era_rank"),
         CheckConstraint("rank_order >= 1", name="check_rank_order_positive"),
-        CheckConstraint("prominence_percent > 0 AND prominence_percent <= 100", name="check_prominence_range"),
+        CheckConstraint("prominence_percent >= 0 AND prominence_percent <= 100", name="check_prominence_range"),
     )
 
     @validates("prominence_percent")
     def validate_prominence(self, key, value):
         if value is not None:
-            if value <= 0 or value > 100:
-                raise ValueError("prominence_percent must be between 1 and 100")
+            if value < 0 or value > 100:
+                raise ValueError("prominence_percent must be between 0 and 100")
         return value
 
     @validates("rank_order")

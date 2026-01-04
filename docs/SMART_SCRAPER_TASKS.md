@@ -6,11 +6,11 @@
 
 ## SLICE 1: Foundation (Day 1)
 
-- [ ] 1.1 Add dependencies to `requirements.txt`
-- [ ] 1.2 Create Alembic migration for prominence constraint
-- [ ] 1.3 Update `TeamSponsorLink` model validator
-- [ ] 1.4 Create "Smart Scraper" user seed script
-- [ ] **SLICE 1 COMMITTED**
+- [x] 1.1 Add dependencies to `requirements.txt`
+- [x] 1.2 Create Alembic migration for prominence constraint
+- [x] 1.3 Update `TeamSponsorLink` model validator
+- [x] 1.4 Create "Smart Scraper" user seed script
+- [x] **SLICE 1 COMMITTED**
 
 ---
 
