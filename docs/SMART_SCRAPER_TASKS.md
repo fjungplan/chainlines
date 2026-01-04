@@ -49,11 +49,11 @@
 
 ## SLICE 5: LLM Prompts - Data Extraction (Day 6)
 
-- [ ] 5.1 Define `ScrapedTeamData` Pydantic model
-- [ ] 5.2 Write `extract_team_data` prompt
-- [ ] 5.3 Integrate prompt into `LLMService`
-- [ ] 5.4 Test with CyclingFlash fixture HTML
-- [ ] **SLICE 5 COMMITTED**
+- [x] 5.1 Define `ScrapedTeamData` Pydantic model
+- [x] 5.2 Write `extract_team_data` prompt
+- [x] 5.3 Integrate prompt into `LLMService`
+- [x] 5.4 Test with CyclingFlash fixture HTML
+- [x] **SLICE 5 COMMITTED**
 
 ---
 
