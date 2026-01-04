@@ -30,17 +30,21 @@ class DiscoveryResult:
     team_urls: list[str]
     sponsor_names: set[str]
 
+from app.scraper.monitor import ScraperStatusMonitor
+
 class DiscoveryService:
     """Orchestrates Phase 1: Team discovery and sponsor collection."""
     
     def __init__(
         self,
         scraper: CyclingFlashScraper,
-        checkpoint_manager: CheckpointManager
+        checkpoint_manager: CheckpointManager,
+        monitor: Optional[ScraperStatusMonitor] = None
     ):
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
         self._collector = SponsorCollector()
+        self._monitor = monitor
     
     async def discover_teams(
         self,
@@ -58,6 +62,10 @@ class DiscoveryService:
             logger.info(f"Resuming from checkpoint with {len(team_urls)} teams")
         
         for year in range(start_year, end_year - 1, -1):  # Backwards
+            # Check for Pause/Abort call
+            if self._monitor:
+                await self._monitor.check_status()
+                
             try:
                 urls = await self._scraper.get_team_list(year)
                 for url in urls:

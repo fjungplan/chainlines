@@ -60,6 +60,8 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
 
 from pathlib import Path
 from app.scraper.checkpoint import CheckpointManager
+from app.scraper.monitor import ScraperStatusMonitor
+import uuid
 
 async def run_scraper(
     phase: int,
@@ -67,7 +69,8 @@ async def run_scraper(
     resume: bool,
     dry_run: bool,
     start_year: int = 2025,
-    end_year: int = 1990
+    end_year: int = 1990,
+    run_id: Optional[uuid.UUID] = None
 ) -> None:
     """Run the scraper for specified phase."""
     logger.info(f"Starting Phase {phase} for tier {tier}")
@@ -77,6 +80,9 @@ async def run_scraper(
     
     checkpoint_path = Path("./scraper_checkpoint.json")
     checkpoint_manager = CheckpointManager(checkpoint_path)
+    
+    # Initialize monitor if run_id provided
+    monitor = ScraperStatusMonitor(run_id) if run_id else None
     
     if not resume:
         checkpoint_manager.clear()
@@ -88,7 +94,8 @@ async def run_scraper(
         scraper = CyclingFlashScraper()
         service = DiscoveryService(
             scraper=scraper,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
+            monitor=monitor
         )
         
         # Convert string tier to level if not "all"

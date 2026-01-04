@@ -114,7 +114,8 @@ async def run_scraper_with_logging(run_id: uuid.UUID, request: ScraperStartReque
                 resume=request.resume,
                 dry_run=request.dry_run,
                 start_year=request.start_year,
-                end_year=request.end_year
+                end_year=request.end_year,
+                run_id=run_id
             )
             local_logger.info(f"--- Phase {phase} Completed ---")
             
@@ -214,3 +215,62 @@ async def get_run_logs(
         
     content = log_file.read_text(encoding="utf-8")
     return PlainTextResponse(content)
+
+@router.post("/pause", status_code=200)
+async def pause_scraper(
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_admin_user)
+):
+    """Pause the currently running scraper."""
+    # Find any RUNNING task
+    query = select(ScraperRun).where(ScraperRun.status == ScraperRunStatus.RUNNING).order_by(desc(ScraperRun.started_at)).limit(1)
+    result = await db.execute(query)
+    run = result.scalars().first()
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="No running scraper found")
+        
+    run.status = ScraperRunStatus.PAUSED
+    await db.commit()
+    return {"message": "Scraper signaled to pause", "run_id": run.run_id}
+
+@router.post("/resume", status_code=200)
+async def resume_scraper(
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_admin_user)
+):
+    """Resume a paused scraper."""
+    # Find latest PAUSED task
+    query = select(ScraperRun).where(ScraperRun.status == ScraperRunStatus.PAUSED).order_by(desc(ScraperRun.started_at)).limit(1)
+    result = await db.execute(query)
+    run = result.scalars().first()
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="No paused scraper found")
+        
+    run.status = ScraperRunStatus.RUNNING
+    await db.commit()
+    return {"message": "Scraper signaled to resume", "run_id": run.run_id}
+
+@router.post("/abort", status_code=200)
+async def abort_scraper(
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_admin_user)
+):
+    """Abort the currently running or paused scraper."""
+    # Find running or paused
+    query = select(ScraperRun).where(
+        ScraperRun.status.in_([ScraperRunStatus.RUNNING, ScraperRunStatus.PAUSED])
+    ).order_by(desc(ScraperRun.started_at)).limit(1)
+    
+    result = await db.execute(query)
+    run = result.scalars().first()
+    
+    if not run:
+        raise HTTPException(status_code=404, detail="No active scraper found to abort")
+        
+    run.status = ScraperRunStatus.ABORTED
+    run.completed_at = datetime.utcnow()
+    run.error_message = "Aborted by user"
+    await db.commit()
+    return {"message": "Scraper signaled to abort", "run_id": run.run_id}

@@ -10,6 +10,8 @@ from app.db.types import GUID
 class ScraperRunStatus(str, enum.Enum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    ABORTED = "ABORTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 

@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import CenteredPageLayout from '../../components/layout/CenteredPageLayout';
-import Card from '../../components/common/Card';
+import { useNavigate, Link } from 'react-router-dom';
 import Button from '../../components/common/Button';
 import { scraperApi } from '../../api/scraper';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
+import './ScraperMaintenancePage.css';
 
 const ScraperMaintenancePage = () => {
     const navigate = useNavigate();
-    const { user, isSuperAdmin } = useAuth();
+    const { user, isAdmin } = useAuth();
 
     // Form State
     const [phase, setPhase] = useState(0); // 0 = All Phases
@@ -20,12 +19,13 @@ const ScraperMaintenancePage = () => {
     const [isLocked, setIsLocked] = useState(false); // Locked when Resuming
 
     // Run State
-    const [isRunning, setIsRunning] = useState(false);
+    const [activeRun, setActiveRun] = useState(null);
     const [message, setMessage] = useState(null);
     const [error, setError] = useState(null);
     const [runs, setRuns] = useState([]);
-    const [totalRuns, setTotalRuns] = useState(0);
-    const [page, setPage] = useState(0);
+
+    // Derived State
+    const isRunning = !!activeRun;
 
     // Modal State
     const [showLogModal, setShowLogModal] = useState(false);
@@ -41,9 +41,6 @@ const ScraperMaintenancePage = () => {
                     if (data.tier) setTier(data.tier);
                     if (data.start_year) setStartYear(data.start_year);
                     if (data.end_year) setEndYear(data.end_year);
-                    // Phase is tricky, checkpoint stores current phase implementation detail
-                    // We assume user resumes the phase they were in? 
-                    // Actually, checkpoint data.phase is useful.
                     if (data.phase) setPhase(data.phase);
 
                     setIsLocked(true);
@@ -62,14 +59,17 @@ const ScraperMaintenancePage = () => {
     // Fetch Runs
     const fetchRuns = async () => {
         try {
-            const data = await scraperApi.getRuns(page * 10, 10);
+            // Fetch top 100 latest runs
+            const data = await scraperApi.getRuns(0, 100);
             setRuns(data.items);
-            setTotalRuns(data.total);
 
-            // Check if any is RUNNING, if so poll?
-            const anyRunning = data.items.some(r => r.status === 'RUNNING' || r.status === 'PENDING');
-            if (anyRunning) {
-                setTimeout(fetchRuns, 5000); // Poll every 5s
+            // Find actively running or paused task
+            const current = data.items.find(r => ['RUNNING', 'PAUSED', 'PENDING'].includes(r.status));
+            setActiveRun(current || null);
+
+            // Poll faster if active
+            if (current) {
+                setTimeout(fetchRuns, 2000);
             }
         } catch (err) {
             console.error("Failed to fetch runs", err);
@@ -78,10 +78,9 @@ const ScraperMaintenancePage = () => {
 
     useEffect(() => {
         fetchRuns();
-    }, [page]);
+    }, []);
 
     const handleStart = async () => {
-        setIsRunning(true);
         setError(null);
         setMessage(null);
         try {
@@ -93,12 +92,42 @@ const ScraperMaintenancePage = () => {
                 resume: resume,
                 dry_run: dryRun
             });
-            setMessage("Scraper started successfully in background.");
-            fetchRuns();
+            setMessage("Scraper started successfully.");
+            // Immediate fetch to catch the new run
+            setTimeout(fetchRuns, 500);
         } catch (err) {
             setError(err.response?.data?.detail || "Failed to start scraper");
-        } finally {
-            setIsRunning(false);
+        }
+    };
+
+    const handlePause = async () => {
+        try {
+            await scraperApi.pauseScraper();
+            setMessage("Signal sent: Pause");
+            fetchRuns();
+        } catch (err) {
+            setError("Failed to pause scraper");
+        }
+    };
+
+    const handleResume = async () => {
+        try {
+            await scraperApi.resumeScraper();
+            setMessage("Signal sent: Resume");
+            fetchRuns();
+        } catch (err) {
+            setError("Failed to resume scraper");
+        }
+    };
+
+    const handleAbort = async () => {
+        if (!window.confirm("Are you sure you want to abort the scraper?")) return;
+        try {
+            await scraperApi.abortScraper();
+            setMessage("Signal sent: Abort");
+            fetchRuns();
+        } catch (err) {
+            setError("Failed to abort scraper");
         }
     };
 
@@ -116,192 +145,227 @@ const ScraperMaintenancePage = () => {
         }
     };
 
-    if (!isSuperAdmin()) {
-        return <div className="p-8 text-center text-red-500">Access Denied</div>;
+    if (!isAdmin()) {
+        return <div className="maintenance-page-container justify-center text-red-500 font-bold">Access Denied</div>;
     }
 
     return (
-        <CenteredPageLayout title="Scraper Maintenance">
-            <div className="flex justify-start mb-6">
-                <Button variant="secondary" onClick={() => navigate('/admin')}>
-                    ← Back to Admin
-                </Button>
+        <div className="maintenance-page-container">
+            <div className="maintenance-content-card">
+                {/* Header */}
+                <div className="scraper-header">
+                    <div className="header-left">
+                        <Link to="/admin" className="back-link" title="Back to Admin Panel">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
+                            </svg>
+                        </Link>
+                        <h1>Scraper Maintenance</h1>
+                    </div>
+                </div>
+
+                {/* Scrollable Content Area */}
+                <div className="scraper-scroll-content">
+                    {/* Notifications */}
+                    {error && <div className="mb-4 p-3 bg-red-900/50 text-red-200 rounded border border-red-700">{error}</div>}
+                    {message && <div className="mb-4 p-3 bg-green-900/50 text-green-200 rounded border border-green-700">{message}</div>}
+
+                    {/* Controls Section */}
+                    {/* Controls Section - Split View */}
+                    <div className="scraper-controls-row">
+                        {/* Left Panel: Execution Parameters */}
+                        <div className="execution-params-section">
+                            <div className="control-group-header">
+                                <h3 className="control-group-title">Execution Parameters</h3>
+                                <div className="header-controls">
+                                    <label className="control-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={resume}
+                                            onChange={(e) => setResume(e.target.checked)}
+                                            disabled={isRunning}
+                                        />
+                                        <span>Resume</span>
+                                    </label>
+
+                                    <label className="control-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={dryRun}
+                                            onChange={(e) => setDryRun(e.target.checked)}
+                                            disabled={isRunning}
+                                        />
+                                        <span>Dry Run</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="scraper-form-row">
+                                <div className="form-group wide-select">
+                                    <label>Phase</label>
+                                    <select
+                                        value={phase}
+                                        onChange={(e) => setPhase(parseInt(e.target.value))}
+                                        disabled={isLocked || isRunning}
+                                    >
+                                        <option value={0}>All Phases (Sequential)</option>
+                                        <option value={1}>Phase 1: Discovery (Sponsors)</option>
+                                        <option value={2}>Phase 2: Assembly (Teams)</option>
+                                        <option value={3}>Phase 3: Lineage (History)</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Tier</label>
+                                    <select
+                                        value={tier}
+                                        onChange={(e) => setTier(e.target.value)}
+                                        disabled={isLocked || isRunning}
+                                    >
+                                        <option value="all">All Tiers</option>
+                                        <option value="1">Tier 1</option>
+                                        <option value="2">Tier 2</option>
+                                        <option value="3">Tier 3</option>
+                                    </select>
+                                </div>
+
+                                <div className="form-group year-input">
+                                    <label>Start Year</label>
+                                    <input
+                                        type="number"
+                                        value={startYear}
+                                        onChange={(e) => setStartYear(e.target.value)}
+                                        disabled={isLocked || isRunning}
+                                    />
+                                </div>
+
+                                <div className="form-group year-input">
+                                    <label>End Year</label>
+                                    <input
+                                        type="number"
+                                        value={endYear}
+                                        onChange={(e) => setEndYear(e.target.value)}
+                                        disabled={isLocked || isRunning}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4 mt-auto border-t border-slate-700">
+                                <Button onClick={handleStart} disabled={isRunning} isLoading={isRunning}>
+                                    {resume ? 'Resume Scraper' : 'Start Scraper'}
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Right Panel: Scraper Status */}
+                        <div className="scraper-status-section">
+                            <div className="control-group-header">
+                                <h3 className="control-group-title">Scraper Status</h3>
+                            </div>
+
+                            <div className="status-display-container">
+                                {/* Traffic Light & Label Combined */}
+                                <div className="traffic-light">
+                                    <div
+                                        className={`light ${!activeRun ? 'active-red' :
+                                                activeRun.status === 'PAUSED' ? 'active-amber' :
+                                                    ['RUNNING', 'PENDING'].includes(activeRun.status) ? 'active-green' : 'active-gray'
+                                            }`}
+                                        title={activeRun ? activeRun.status : "STOPPED"}
+                                    ></div>
+                                    <div className="status-label">
+                                        {activeRun ? activeRun.status : "IDLE"}
+                                    </div>
+                                </div>
+
+                                <div className="status-controls">
+                                    <button
+                                        className="control-btn btn-pause"
+                                        onClick={handlePause}
+                                        disabled={!activeRun || activeRun.status !== 'RUNNING'}
+                                    >
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
+                                        Pause
+                                    </button>
+                                    <button
+                                        className="control-btn btn-resume"
+                                        onClick={handleResume}
+                                        disabled={!activeRun || activeRun.status !== 'PAUSED'}
+                                    >
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.7 8a.7.7 0 0 0-.2-.6l-9-5A.7.7 0 0 0 2.5 3v10a.7.7 0 0 0 1 .6l9-5z" /></svg>
+                                        Resume
+                                    </button>
+                                    <button
+                                        className="control-btn btn-abort"
+                                        onClick={handleAbort}
+                                        disabled={!activeRun}
+                                    >
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 1h11a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5v-11A1.5 1.5 0 0 1 2.5 1z" /></svg>
+                                        Abort
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="run-history-section">
+                        <div className="control-group-header">
+                            <h3 className="control-group-title">Run History</h3>
+                        </div>
+                        <div className="history-table-container">
+                            <table className="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Started</th>
+                                        <th>Phase</th>
+                                        <th>Tier</th>
+                                        <th>Range</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {runs.map(run => (
+                                        <tr key={run.run_id}>
+                                            <td>{new Date(run.started_at).toLocaleString()}</td>
+                                            <td>{run.phase === 0 ? "All" : run.phase}</td>
+                                            <td>{run.tier || "-"}</td>
+                                            <td>{run.start_year ? `${run.start_year}-${run.end_year}` : "N/A"}</td>
+                                            <td>
+                                                <span className={`status-badge status-${run.status.toLowerCase()}`}>
+                                                    {run.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button
+                                                    onClick={() => handleViewLogs(run.run_id)}
+                                                    className="text-sm text-blue-400 hover:text-blue-300 underline"
+                                                >
+                                                    View Logs
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {runs.length === 0 && (
+                                        <tr>
+                                            <td colSpan="6" className="p-8 text-center text-gray-500">No runs recorded</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+
+                    </div>
+                </div>
             </div>
-
-            <Card className="mb-6">
-                <h2 className="text-xl font-bold mb-4 text-white">Scraper Controls</h2>
-
-                {error && <div className="mb-4 p-3 bg-red-900/50 text-red-200 rounded border border-red-700">{error}</div>}
-                {message && <div className="mb-4 p-3 bg-green-900/50 text-green-200 rounded border border-green-700">{message}</div>}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {/* Left Column: Core Params */}
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-gray-400 mb-1">Phase</label>
-                            <select
-                                value={phase}
-                                onChange={(e) => setPhase(parseInt(e.target.value))}
-                                disabled={isLocked || isRunning}
-                                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white"
-                            >
-                                <option value={0}>All Phases (Sequential)</option>
-                                <option value={1}>Phase 1: Discovery (Sponsors)</option>
-                                <option value={2}>Phase 2: Assembly (Teams)</option>
-                                <option value={3}>Phase 3: Lineage (History)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-gray-400 mb-1">Tier</label>
-                            <select
-                                value={tier}
-                                onChange={(e) => setTier(e.target.value)}
-                                disabled={isLocked || isRunning}
-                                className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white"
-                            >
-                                <option value="all">All Tiers</option>
-                                <option value="1">Tier 1 (WorldTour)</option>
-                                <option value="2">Tier 2 (ProTeam)</option>
-                                <option value="3">Tier 3 (Continental)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Right Column: Range & Options */}
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-gray-400 mb-1">Start Year</label>
-                                <input
-                                    type="number"
-                                    value={startYear}
-                                    onChange={(e) => setStartYear(e.target.value)}
-                                    disabled={isLocked || isRunning}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-gray-400 mb-1">End Year</label>
-                                <input
-                                    type="number"
-                                    value={endYear}
-                                    onChange={(e) => setEndYear(e.target.value)}
-                                    disabled={isLocked || isRunning}
-                                    className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-white"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex space-x-6 pt-2">
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={resume}
-                                    onChange={(e) => setResume(e.target.checked)}
-                                    disabled={isRunning}
-                                    className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
-                                />
-                                <span className={resume ? "text-blue-400 font-medium" : "text-gray-400"}>Resume Checkpoint</span>
-                            </label>
-
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={dryRun}
-                                    onChange={(e) => setDryRun(e.target.checked)}
-                                    disabled={isRunning}
-                                    className="w-4 h-4 rounded border-gray-600 bg-slate-800 text-amber-500 focus:ring-amber-500 focus:ring-offset-slate-900"
-                                />
-                                <span className={dryRun ? "text-amber-400 font-medium" : "text-gray-400"}>Dry Run (Log Only)</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex justify-end pt-4 border-t border-slate-700">
-                    <Button onClick={handleStart} disabled={isRunning} isLoading={isRunning}>
-                        {resume ? 'Resume Scraper' : 'Start Scraper'}
-                    </Button>
-                </div>
-            </Card>
-
-            <Card>
-                <h3 className="text-lg font-bold mb-4 text-white">Run History</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="text-gray-400 border-b border-slate-700">
-                                <th className="p-3">Started</th>
-                                <th className="p-3">Phase</th>
-                                <th className="p-3">Tier</th>
-                                <th className="p-3">Range</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-700">
-                            {runs.map(run => (
-                                <tr key={run.run_id} className="text-gray-300 hover:bg-slate-800/50">
-                                    <td className="p-3">{new Date(run.started_at).toLocaleString()}</td>
-                                    <td className="p-3">{run.phase === 0 ? "All" : run.phase}</td>
-                                    <td className="p-3">{run.tier || "-"}</td>
-                                    <td className="p-3">{run.start_year ? `${run.start_year}-${run.end_year}` : "N/A"}</td>
-                                    <td className="p-3">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${run.status === 'COMPLETED' ? 'bg-green-900 text-green-300' :
-                                                run.status === 'FAILED' ? 'bg-red-900 text-red-300' :
-                                                    run.status === 'RUNNING' ? 'bg-blue-900 text-blue-300 animate-pulse' :
-                                                        'bg-gray-700 text-gray-300'
-                                            }`}>
-                                            {run.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-3">
-                                        <button
-                                            onClick={() => handleViewLogs(run.run_id)}
-                                            className="text-sm text-blue-400 hover:text-blue-300 underline"
-                                        >
-                                            View Logs
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {runs.length === 0 && (
-                                <tr>
-                                    <td colSpan="6" className="p-8 text-center text-gray-500">No runs recorded</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination (Simple) */}
-                <div className="flex justify-between items-center mt-4 text-sm text-gray-400">
-                    <span>Page {page + 1}</span>
-                    <div className="space-x-2">
-                        <button
-                            disabled={page === 0}
-                            onClick={() => setPage(p => Math.max(0, p - 1))}
-                            className="px-3 py-1 bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50"
-                        >
-                            Previous
-                        </button>
-                        <button
-                            disabled={(page + 1) * 10 >= totalRuns}
-                            onClick={() => setPage(p => p + 1)}
-                            className="px-3 py-1 bg-slate-800 rounded hover:bg-slate-700 disabled:opacity-50"
-                        >
-                            Next
-                        </button>
-                    </div>
-                </div>
-            </Card>
 
             {/* Log Modal */}
             {showLogModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
                     <div className="bg-slate-900 rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700 shadow-2xl">
                         <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800 rounded-t-lg">
-                            <h3 className="font-bold text-white">Execution Logs</h3>
+                            <h3 className="font-bold text-white mb-0">Execution Logs</h3>
                             <button
                                 onClick={() => setShowLogModal(false)}
                                 className="text-gray-400 hover:text-white"
@@ -309,7 +373,7 @@ const ScraperMaintenancePage = () => {
                                 ✕
                             </button>
                         </div>
-                        <div className="flex-1 overflow-auto p-4 bg-black font-mono text-xs text-green-400">
+                        <div className="log-modal-content">
                             <pre>{logContent}</pre>
                         </div>
                         <div className="p-4 border-t border-slate-700 bg-slate-800 rounded-b-lg flex justify-end">
@@ -318,7 +382,7 @@ const ScraperMaintenancePage = () => {
                     </div>
                 </div>
             )}
-        </CenteredPageLayout>
+        </div>
     );
 };
 
