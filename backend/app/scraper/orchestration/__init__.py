@@ -8,10 +8,15 @@ from app.scraper.orchestration.phase2 import (
     ProminenceCalculator,
     TeamAssemblyService
 )
+from app.scraper.orchestration.phase3 import (
+    OrphanDetector,
+    LineageConnectionService
+)
 
 __all__ = [
     "SponsorCollector", "DiscoveryService", 
     "DiscoveryResult", "SponsorResolution",
-    "ProminenceCalculator", "TeamAssemblyService"
+    "ProminenceCalculator", "TeamAssemblyService",
+    "OrphanDetector", "LineageConnectionService"
 ]
 

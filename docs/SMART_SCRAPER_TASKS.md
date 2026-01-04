@@ -101,11 +101,11 @@
 
 ## SLICE 10: Phase 3 Orchestration - Lineage (Day 13)
 
-- [ ] 10.1 Implement orphan node detector
-- [ ] 10.2 Implement lineage decision pipeline
-- [ ] 10.3 Integrate with AuditLogService for LineageEvent
-- [ ] 10.4 Wire Phase 3 into `SmartScraperService`
-- [ ] **SLICE 10 COMMITTED**
+- [x] 10.1 Implement orphan node detector
+- [x] 10.2 Implement lineage decision pipeline
+- [x] 10.3 Integrate with AuditLogService for LineageEvent
+- [x] 10.4 Wire Phase 3 into `SmartScraperService`
+- [x] **SLICE 10 COMMITTED**
 
 ---
 

@@ -19,7 +19,7 @@ class LineageDecision(BaseModel):
         successor_ids: UUIDs of successor team(s)
         notes: Optional additional notes
     """
-    event_type: LineageEventType
+    event_type: Optional[LineageEventType]
     confidence: float
     reasoning: str
     predecessor_ids: List[UUID]

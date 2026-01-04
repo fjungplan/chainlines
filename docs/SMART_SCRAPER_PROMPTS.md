@@ -2282,6 +2282,7 @@ Determine the relationship type:
 - SPIRITUAL_SUCCESSION: No legal link, but cultural/personnel continuity (often documented in Wikipedia "History" sections)
 - MERGE: Multiple predecessors combined into one successor (includes joins into an already-existing team)
 - SPLIT: One predecessor split into multiple successors (includes spin-offs where the original team continues)
+- NO_CONNECTION: The teams are unrelated. The predecessor folded without a successor, and the "successor" is a new, unrelated entity.
 
 Key considerations:
 - UCI codes: Same code = likely legal transfer
@@ -2292,7 +2293,7 @@ Key considerations:
 IMPORTANT: Lineage events occur on a single date (typically season start). Time gaps should be minimal
 (e.g., a team folding mid-season may have a successor starting the following season).
 
-Return your decision with confidence score (0.0 to 1.0).
+Return your decision with confidence score (0.0 to 1.0). If unsure, favor NO_CONNECTION or PENDING status.
 """
 
 # Add to ScraperPrompts class:

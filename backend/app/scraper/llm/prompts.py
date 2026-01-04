@@ -40,6 +40,8 @@ Determine the relationship type:
 - MERGE: Multiple predecessors combined into one successor (includes joins into an already-existing team)
 - SPLIT: One predecessor split into multiple successors (includes spin-offs where the original team continues)
 
+If the teams are unrelated (predecessor folded without a successor, and the "successor" is a new, unrelated entity), return null for event_type.
+
 Key considerations:
 - UCI codes: Same code = likely legal transfer
 - Staff continuity: >50% retained staff = strong connection
@@ -49,7 +51,7 @@ Key considerations:
 IMPORTANT: Lineage events occur on a single date (typically season start). Time gaps should be minimal
 (e.g., a team folding mid-season may have a successor starting the following season).
 
-Return your decision with confidence score (0.0 to 1.0).
+Return your decision with confidence score (0.0 to 1.0). If returning null for event_type, confidence should still be provided (confidence that there is NO connection).
 """
 
 
