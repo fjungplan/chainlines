@@ -143,11 +143,11 @@
 
 ## SLICE 14: API Endpoint (Day 18)
 
-- [ ] 14.1 Create `POST /api/admin/scraper/start`
-- [ ] 14.2 Implement background task execution
-- [ ] 14.3 Create `GET /api/admin/scraper/status`
-- [ ] 14.4 Add admin-only authorization
-- [ ] **SLICE 14 COMMITTED**
+- [x] 14.1 Create `POST /api/admin/scraper/start`
+- [x] 14.2 Implement background task execution
+- [x] 14.3 Create `GET /api/admin/scraper/status`
+- [x] 14.4 Add admin-only authorization
+- [x] **SLICE 14 COMMITTED**
 
 ---
 
