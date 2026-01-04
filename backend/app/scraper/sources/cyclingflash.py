@@ -9,7 +9,7 @@ class ScrapedTeamData(BaseModel):
     """Data extracted from a team page."""
     name: str
     uci_code: Optional[str] = None
-    tier: Optional[str] = None
+    tier_level: Optional[int] = None
     country_code: Optional[str] = Field(
         default=None,
         description="3-letter IOC/UCI country code (e.g., NED, GER, ITA, FRA)"
@@ -44,7 +44,9 @@ class CyclingFlashParser:
         
         # Extract fields
         uci_code = self._get_text(soup, '.uci-code')
-        tier = self._get_text(soup, '.tier')
+        raw_tier = self._get_text(soup, '.tier')
+        from app.scraper.utils.tier_mapper import map_tier_label_to_level
+        tier_level = map_tier_label_to_level(raw_tier, season_year)
         country_code = self._get_text(soup, '.country')
         
         # Extract sponsors
@@ -57,7 +59,7 @@ class CyclingFlashParser:
         return ScrapedTeamData(
             name=name,
             uci_code=uci_code,
-            tier=tier,
+            tier_level=tier_level,
             country_code=country_code,
             sponsors=sponsors,
             previous_season_url=prev_url,

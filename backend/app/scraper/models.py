@@ -11,7 +11,7 @@ class ScrapedTeamData(BaseModel):
     uci_code: Optional[str] = None
     founding_year: Optional[int] = None
     dissolution_year: Optional[int] = None
-    tier: Optional[str] = None  # 'WT', 'PT', 'CT'
+    tier_level: Optional[int] = None  # 1, 2, or 3
     sponsors: List[str] = []
 
 

@@ -24,9 +24,9 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--tier",
         type=str,
-        choices=["wt", "pt", "ct", "all"],
-        default="wt",
-        help="Team tier to process (wt=WorldTour, pt=ProTeam, ct=Continental)"
+        choices=["1", "2", "3", "all"],
+        default="1",
+        help="Team tier level to process (1=WorldTour/GS1, 2=ProTeam/GS2, 3=Continental/GS3)"
     )
     
     parser.add_argument(
@@ -91,9 +91,13 @@ async def run_scraper(
             checkpoint_manager=checkpoint_manager
         )
         
+        # Convert string tier to level if not "all"
+        target_tier = int(tier) if tier != "all" else None
+        
         result = await service.discover_teams(
             start_year=start_year,
-            end_year=end_year
+            end_year=end_year,
+            tier_level=target_tier
         )
         
         logger.info(f"Discovered {len(result.team_urls)} teams")

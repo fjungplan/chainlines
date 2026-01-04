@@ -1047,7 +1047,7 @@ class ScrapedTeamData(BaseModel):
     """Data extracted from a team page."""
     name: str
     uci_code: Optional[str] = None
-    tier: Optional[str] = None
+    tier_level: Optional[int] = None
     country_code: Optional[str] = Field(
         default=None,
         description="3-letter IOC/UCI country code (e.g., NED, GER, ITA, FRA)"
@@ -1092,7 +1092,7 @@ def test_parse_team_detail_extracts_data():
     
     assert data.name == "Team Visma | Lease a Bike"
     assert data.uci_code == "TJV"
-    assert data.tier == "WorldTour"
+    assert data.tier_level == 1
     assert data.country_code == "NED"
     assert data.sponsors == ["Visma", "Lease a Bike"]
     assert data.previous_season_url == "/team/team-jumbo-visma-2023"
@@ -1115,7 +1115,9 @@ def parse_team_detail(self, html: str, season_year: int) -> ScrapedTeamData:
     
     # Extract fields
     uci_code = self._get_text(soup, '.uci-code')
-    tier = self._get_text(soup, '.tier')
+    raw_tier = self._get_text(soup, '.tier')
+    from app.scraper.utils.tier_mapper import map_tier_label_to_level
+    tier_level = map_tier_label_to_level(raw_tier, season_year)
     country_code = self._get_text(soup, '.country')
     
     # Extract sponsors
@@ -1128,7 +1130,7 @@ def parse_team_detail(self, html: str, season_year: int) -> ScrapedTeamData:
     return ScrapedTeamData(
         name=name,
         uci_code=uci_code,
-        tier=tier,
+        tier_level=tier_level,
         country_code=country_code,
         sponsors=sponsors,
         previous_season_url=prev_url,
@@ -1301,7 +1303,7 @@ async def test_extract_team_data_prompt():
         return_value=ScrapedTeamData(
             name="UAE Team Emirates",
             uci_code="UAD",
-            tier="WorldTour",
+            tier_level=1,
             country_code="UAE",
             sponsors=["Emirates", "Colnago"],
             season_year=2024
@@ -1341,7 +1343,7 @@ Season Year: {season_year}
 Extract the following information:
 - Team name (without year suffix)
 - UCI code (3-letter code if present)
-- Tier level (WorldTour, ProTeam, Continental, or null)
+- Tier level (numeric: 1=WorldTour, 2=ProTeam, 3=Continental, or null)
 - Country code (3-letter IOC/UCI code, e.g., NED, GER, FRA, if determinable)
 - List of sponsor names (in order of appearance/prominence)
 - Previous season URL (if there's a link to previous year's page)
@@ -1740,7 +1742,8 @@ class DiscoveryService:
     async def discover_teams(
         self,
         start_year: int,
-        end_year: int
+        end_year: int,
+        tier_level: Optional[int] = None
     ) -> DiscoveryResult:
         """Discover all teams and collect sponsor names."""
         checkpoint = self._checkpoint.load()
@@ -2000,7 +2003,7 @@ async def test_team_assembly_creates_edit():
         season_year=2024,
         sponsors=["Visma", "Lease a Bike"],
         uci_code="TJV",
-        tier="WorldTour"
+        tier_level=1
     )
     
     await service.create_team_era(team_data, confidence=0.95)
@@ -2052,7 +2055,7 @@ class TeamAssemblyService:
             "registered_name": data.name,
             "season_year": data.season_year,
             "uci_code": data.uci_code,
-            "tier_level": self._parse_tier(data.tier),
+            "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
             "sponsors": [
                 {"name": s, "prominence": p}
@@ -2075,13 +2078,6 @@ class TeamAssemblyService:
         )
         
         logger.info(f"Created edit for {data.name} ({status.value})")
-    
-    def _parse_tier(self, tier: str | None) -> int | None:
-        """Convert tier string to level."""
-        if not tier:
-            return None
-        tier_map = {"WorldTour": 1, "ProTeam": 2, "Continental": 3}
-        return tier_map.get(tier)
 ```
 
 **Verify:** Run `pytest backend/tests/scraper/test_phase2.py -v`
@@ -3036,12 +3032,8 @@ def test_cli_parses_phase():
     args = parse_args(["--phase", "1"])
     assert args.phase == 1
 
-def test_cli_parses_tier():
-    """CLI should parse --tier argument."""
-    from app.scraper.cli import parse_args
-    
-    args = parse_args(["--tier", "wt"])
-    assert args.tier == "wt"
+    args = parse_args(["--tier", "1"])
+    assert args.tier == "1"
 
 def test_cli_parses_resume():
     """CLI should parse --resume flag."""
@@ -3087,9 +3079,9 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--tier",
         type=str,
-        choices=["wt", "pt", "ct", "all"],
-        default="wt",
-        help="Team tier to process (wt=WorldTour, pt=ProTeam, ct=Continental)"
+        choices=["1", "2", "3", "all"],
+        default="1",
+        help="Team tier level to process (1=WorldTour/GS1, 2=ProTeam/GS2, 3=Continental/GS3)"
     )
     
     parser.add_argument(
@@ -3140,7 +3132,7 @@ async def test_cli_runner_executes_phase1():
         mock_instance.discover_teams = AsyncMock(return_value=None)
         mock_discovery.return_value = mock_instance
         
-        await run_scraper(phase=1, tier="wt", resume=False, dry_run=True)
+        await run_scraper(phase=1, tier="1", resume=False, dry_run=True)
         
         mock_instance.discover_teams.assert_called_once()
 ```
@@ -3181,9 +3173,11 @@ async def run_scraper(
             checkpoint_manager=checkpoint_manager
         )
         
+        target_tier = int(tier) if tier != "all" else None
         result = await service.discover_teams(
             start_year=start_year,
-            end_year=end_year
+            end_year=end_year,
+            tier_level=target_tier
         )
         
         logger.info(f"Discovered {len(result.team_urls)} teams")
@@ -3291,7 +3285,7 @@ async def test_scraper_start_as_admin(
         
         response = await client.post(
             "/api/admin/scraper/start",
-            json={"phase": 1, "tier": "wt"},
+            json={"phase": 1, "tier": "1"},
             headers=admin_auth_headers
         )
         
@@ -3313,7 +3307,7 @@ router = APIRouter(prefix="/scraper", tags=["scraper"])
 class ScraperStartRequest(BaseModel):
     """Request to start scraper."""
     phase: int = 1
-    tier: str = "wt"
+    tier: str = "1"
     resume: bool = False
     dry_run: bool = False
 
@@ -3511,7 +3505,7 @@ async def test_phase2_creates_audit_entries(isolated_session):
         name="Test Team",
         season_year=2024,
         sponsors=["Main Sponsor", "Secondary"],
-        tier="WorldTour"
+        tier_level=1
     )
     
     await service.create_team_era(team_data, confidence=0.95)
@@ -3539,7 +3533,7 @@ Bulk ingestion tool for cycling team historical data.
 
 ```bash
 # Run Phase 1: Discovery
-python -m app.scraper.cli --phase 1 --tier wt
+python -m app.scraper.cli --phase 1 --tier 1
 
 # Resume from checkpoint
 python -m app.scraper.cli --phase 1 --resume
@@ -3555,7 +3549,7 @@ python -m app.scraper.cli --phase 1 --dry-run
 curl -X POST http://localhost:8000/api/admin/scraper/start \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"phase": 1, "tier": "wt"}'
+  -d '{"phase": 1, "tier": "1"}'
 
 # Check status
 curl http://localhost:8000/api/admin/scraper/status/{task_id} \

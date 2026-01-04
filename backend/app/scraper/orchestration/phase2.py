@@ -85,7 +85,7 @@ class TeamAssemblyService:
             "registered_name": data.name,
             "season_year": data.season_year,
             "uci_code": data.uci_code,
-            "tier_level": self._parse_tier(data.tier),
+            "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
             "sponsors": [
                 {"name": s, "prominence": p}
@@ -109,16 +109,3 @@ class TeamAssemblyService:
         
         logger.info(f"Created edit for {data.name} ({status.value})")
     
-    def _parse_tier(self, tier: str | None) -> int | None:
-        """Convert tier string to level.
-        
-        Args:
-            tier: Tier string (e.g., "WorldTour", "ProTeam")
-            
-        Returns:
-            Tier level (1-3) or None
-        """
-        if not tier:
-            return None
-        tier_map = {"WorldTour": 1, "ProTeam": 2, "Continental": 3}
-        return tier_map.get(tier)

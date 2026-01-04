@@ -1,5 +1,5 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List
+from typing import Set, List, Optional
 
 class SponsorCollector:
     """Collects unique sponsor names across all teams."""
@@ -45,7 +45,8 @@ class DiscoveryService:
     async def discover_teams(
         self,
         start_year: int,
-        end_year: int
+        end_year: int,
+        tier_level: Optional[int] = None
     ) -> DiscoveryResult:
         """Discover all teams and collect sponsor names."""
         checkpoint = self._checkpoint.load()
@@ -60,10 +61,16 @@ class DiscoveryService:
             try:
                 urls = await self._scraper.get_team_list(year)
                 for url in urls:
+                    # Even if URL is already in queue, we might need to check other seasons
+                    # but Phase 1 builds the "skeleton" of unique nodes later.
+                    # For now, we collect all URLs that match the tier in any year.
+                    data = await self._scraper.get_team(url, year)
+                    
+                    if tier_level and data.tier_level != tier_level:
+                        continue
+                        
                     if url not in team_urls:
                         team_urls.append(url)
-                        # Get team details for sponsors
-                        data = await self._scraper.get_team(url, year)
                         self._collector.add(data.sponsors)
                         
                         # Save checkpoint periodically
