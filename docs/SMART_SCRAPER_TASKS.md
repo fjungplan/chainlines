@@ -111,12 +111,12 @@
 
 ## SLICE 11: Secondary/Tertiary Scrapers (Day 14-15)
 
-- [ ] 11.1 Implement `CyclingRankingScraper`
-- [ ] 11.2 Implement `WikidataScraper` (SPARQL)
-- [ ] 11.3 Implement `WikipediaScraper` (EN/DE/FR/IT/ES/NL)
-- [ ] 11.4 Implement `WaybackScraper`
-- [ ] 11.5 Implement `MemoireScraper`
-- [ ] **SLICE 11 COMMITTED**
+- [x] 11.1 Implement `CyclingRankingScraper`
+- [x] 11.2 Implement `WikidataScraper` (SPARQL)
+- [x] 11.3 Implement `WikipediaScraper` (EN/DE/FR/IT/ES/NL)
+- [x] 11.4 Implement `WaybackScraper`
+- [x] 11.5 Implement `MemoireScraper`
+- [x] **SLICE 11 COMMITTED**
 
 ---
 
