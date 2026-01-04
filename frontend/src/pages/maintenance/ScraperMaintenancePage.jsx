@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../../components/common/Button';
 import { scraperApi } from '../../api/scraper';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatDateTime } from '../../utils/dateUtils';
 import './ScraperMaintenancePage.css';
 
 const ScraperMaintenancePage = () => {
@@ -29,10 +30,45 @@ const ScraperMaintenancePage = () => {
 
     // Modal State
     const [showLogModal, setShowLogModal] = useState(false);
+    const [selectedRunId, setSelectedRunId] = useState(null);
+    const [selectedRunMetadata, setSelectedRunMetadata] = useState(null);
     const [logContent, setLogContent] = useState("");
     const [loadingLog, setLoadingLog] = useState(false);
+    const logContainerRef = useRef(null);
 
-    // Checkpoint Logic
+    // Live Log Polling
+    useEffect(() => {
+        let interval;
+        const fetchLogs = async () => {
+            if (!selectedRunId) return;
+            try {
+                const content = await scraperApi.getRunLogs(selectedRunId);
+                setLogContent(content);
+            } catch (err) {
+                // Ignore error, log file might not exist yet
+            } finally {
+                setLoadingLog(false);
+            }
+        };
+
+        if (showLogModal && selectedRunId) {
+            setLoadingLog(true);
+            // Initial fetch
+            fetchLogs();
+            // Poll every 2s
+            interval = setInterval(fetchLogs, 2000);
+        }
+        return () => clearInterval(interval);
+    }, [showLogModal, selectedRunId]);
+
+    // Auto-scroll logs
+    useEffect(() => {
+        if (showLogModal && logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [logContent, showLogModal]);
+
+    // Resume Logic
     useEffect(() => {
         if (resume) {
             scraperApi.getCheckpoint()
@@ -42,9 +78,7 @@ const ScraperMaintenancePage = () => {
                     if (data.start_year) setStartYear(data.start_year);
                     if (data.end_year) setEndYear(data.end_year);
                     if (data.phase) setPhase(data.phase);
-
                     setIsLocked(true);
-                    setMessage(`Resuming implementation from ${data.last_updated}`);
                 })
                 .catch(err => {
                     setResume(false);
@@ -61,14 +95,24 @@ const ScraperMaintenancePage = () => {
         try {
             // Fetch top 100 latest runs
             const data = await scraperApi.getRuns(0, 100);
-            setRuns(data.items);
+            setRuns(data?.items || []);
 
             // Find actively running or paused task
-            const current = data.items.find(r => ['RUNNING', 'PAUSED', 'PENDING'].includes(r.status));
+            let current = data?.items?.find(r => ['RUNNING', 'PAUSED', 'PENDING'].includes(r.status));
+
+            // If no active run, check if the most recent run finished very recently (e.g., < 30 seconds ago)
+            if (!current && data?.items?.length > 0) {
+                const latest = data.items[0];
+                const finishTime = latest.ended_at ? new Date(latest.ended_at).getTime() : 0;
+                const now = new Date().getTime();
+                if (now - finishTime < 30000) {
+                    current = latest;
+                }
+            }
             setActiveRun(current || null);
 
             // Poll faster if active
-            if (current) {
+            if (current && ['RUNNING', 'PAUSED', 'PENDING'].includes(current.status)) {
                 setTimeout(fetchRuns, 2000);
             }
         } catch (err) {
@@ -92,7 +136,6 @@ const ScraperMaintenancePage = () => {
                 resume: resume,
                 dry_run: dryRun
             });
-            setMessage("Scraper started successfully.");
             // Immediate fetch to catch the new run
             setTimeout(fetchRuns, 500);
         } catch (err) {
@@ -103,7 +146,6 @@ const ScraperMaintenancePage = () => {
     const handlePause = async () => {
         try {
             await scraperApi.pauseScraper();
-            setMessage("Signal sent: Pause");
             fetchRuns();
         } catch (err) {
             setError("Failed to pause scraper");
@@ -113,7 +155,6 @@ const ScraperMaintenancePage = () => {
     const handleResume = async () => {
         try {
             await scraperApi.resumeScraper();
-            setMessage("Signal sent: Resume");
             fetchRuns();
         } catch (err) {
             setError("Failed to resume scraper");
@@ -124,7 +165,6 @@ const ScraperMaintenancePage = () => {
         if (!window.confirm("Are you sure you want to abort the scraper?")) return;
         try {
             await scraperApi.abortScraper();
-            setMessage("Signal sent: Abort");
             fetchRuns();
         } catch (err) {
             setError("Failed to abort scraper");
@@ -132,14 +172,17 @@ const ScraperMaintenancePage = () => {
     };
 
     const handleViewLogs = async (runId) => {
+        const run = runs.find(r => r.run_id === runId);
+        setSelectedRunId(runId);
+        setSelectedRunMetadata(run);
+        setLogContent("");
         setShowLogModal(true);
         setLoadingLog(true);
-        setLogContent("Loading...");
         try {
             const content = await scraperApi.getRunLogs(runId);
             setLogContent(content);
         } catch (err) {
-            setLogContent("Failed to load logs. Log file may be missing.");
+            setLogContent("Failed to load logs.");
         } finally {
             setLoadingLog(false);
         }
@@ -168,10 +211,8 @@ const ScraperMaintenancePage = () => {
                 <div className="scraper-scroll-content">
                     {/* Notifications */}
                     {error && <div className="mb-4 p-3 bg-red-900/50 text-red-200 rounded border border-red-700">{error}</div>}
-                    {message && <div className="mb-4 p-3 bg-green-900/50 text-green-200 rounded border border-green-700">{message}</div>}
 
-                    {/* Controls Section */}
-                    {/* Controls Section - Split View */}
+                    {/* Controls & Status Row */}
                     <div className="scraper-controls-row">
                         {/* Left Panel: Execution Parameters */}
                         <div className="execution-params-section">
@@ -249,12 +290,6 @@ const ScraperMaintenancePage = () => {
                                     />
                                 </div>
                             </div>
-
-                            <div className="flex justify-end pt-4 mt-auto border-t border-slate-700">
-                                <Button onClick={handleStart} disabled={isRunning} isLoading={isRunning}>
-                                    {resume ? 'Resume Scraper' : 'Start Scraper'}
-                                </Button>
-                            </div>
                         </div>
 
                         {/* Right Panel: Scraper Status */}
@@ -267,18 +302,61 @@ const ScraperMaintenancePage = () => {
                                 {/* Traffic Light & Label Combined */}
                                 <div className="traffic-light">
                                     <div
-                                        className={`light ${!activeRun ? 'active-red' :
+                                        className={`light ${error ? 'active-red' :
+                                            !activeRun ? 'active-gray' :
                                                 activeRun.status === 'PAUSED' ? 'active-amber' :
-                                                    ['RUNNING', 'PENDING'].includes(activeRun.status) ? 'active-green' : 'active-gray'
+                                                    activeRun.status === 'FAILED' ? 'active-red' :
+                                                        activeRun.status === 'COMPLETED' ? 'active-green-static' :
+                                                            ['RUNNING', 'PENDING'].includes(activeRun.status) ? 'active-green' : 'active-gray'
                                             }`}
-                                        title={activeRun ? activeRun.status : "STOPPED"}
+                                        title={error ? error : (activeRun ? activeRun.status : "IDLE")}
                                     ></div>
                                     <div className="status-label">
-                                        {activeRun ? activeRun.status : "IDLE"}
+                                        {activeRun ? activeRun.status : (error ? "FAILED" : "IDLE")}
                                     </div>
                                 </div>
 
+                                {activeRun && (
+                                    <button
+                                        onClick={() => handleViewLogs(activeRun.run_id)}
+                                        className="mb-4 text-xs font-mono text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2z" />
+                                            <path d="M4 11.794V4.206l6.897 3.794L4 11.794z" />
+                                        </svg>
+                                        {'>'}_ View Live Output
+                                    </button>
+                                )}
+
                                 <div className="status-controls">
+                                    {/* Combined Start/Resume Button */}
+                                    {activeRun && activeRun.status === 'PAUSED' ? (
+                                        <button
+                                            className="control-btn btn-resume"
+                                            onClick={handleResume}
+                                        >
+                                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.7 8a.7.7 0 0 0-.2-.6l-9-5A.7.7 0 0 0 2.5 3v10a.7.7 0 0 0 1 .6l9-5z" /></svg>
+                                            Resume
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="control-btn btn-start"
+                                            onClick={handleStart}
+                                            disabled={isRunning}
+                                        >
+                                            {isRunning ? (
+                                                <svg className="animate-spin" width="16" height="16" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            ) : (
+                                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
+                                            )}
+                                            {resume ? 'Resume' : 'Start'}
+                                        </button>
+                                    )}
+
                                     <button
                                         className="control-btn btn-pause"
                                         onClick={handlePause}
@@ -287,27 +365,21 @@ const ScraperMaintenancePage = () => {
                                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" /></svg>
                                         Pause
                                     </button>
-                                    <button
-                                        className="control-btn btn-resume"
-                                        onClick={handleResume}
-                                        disabled={!activeRun || activeRun.status !== 'PAUSED'}
-                                    >
-                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.7 8a.7.7 0 0 0-.2-.6l-9-5A.7.7 0 0 0 2.5 3v10a.7.7 0 0 0 1 .6l9-5z" /></svg>
-                                        Resume
-                                    </button>
+
                                     <button
                                         className="control-btn btn-abort"
                                         onClick={handleAbort}
                                         disabled={!activeRun}
                                     >
                                         <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M2.5 1h11a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5v-11A1.5 1.5 0 0 1 2.5 1z" /></svg>
-                                        Abort
+                                        Stop
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    {/* History Section */}
                     <div className="run-history-section">
                         <div className="control-group-header">
                             <h3 className="control-group-title">Run History</h3>
@@ -319,65 +391,88 @@ const ScraperMaintenancePage = () => {
                                         <th>Started</th>
                                         <th>Phase</th>
                                         <th>Tier</th>
-                                        <th>Range</th>
+                                        <th className="text-center">Start</th>
+                                        <th className="text-center">End</th>
+                                        <th className="text-center">Dry Run</th>
                                         <th>Status</th>
-                                        <th>Actions</th>
+                                        <th className="actions-col">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {runs.map(run => (
+                                    {(runs || []).map(run => (
                                         <tr key={run.run_id}>
-                                            <td>{new Date(run.started_at).toLocaleString()}</td>
+                                            <td>{formatDateTime(run.started_at)}</td>
                                             <td>{run.phase === 0 ? "All" : run.phase}</td>
                                             <td>{run.tier || "-"}</td>
-                                            <td>{run.start_year ? `${run.start_year}-${run.end_year}` : "N/A"}</td>
+                                            <td className="text-center">{run.start_year || "-"}</td>
+                                            <td className="text-center">{run.end_year || "-"}</td>
+                                            <td className="text-center">{run.dry_run ? "Yes" : "No"}</td>
                                             <td>
                                                 <span className={`status-badge status-${run.status.toLowerCase()}`}>
                                                     {run.status}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <button
+                                            <td className="actions-col">
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
                                                     onClick={() => handleViewLogs(run.run_id)}
-                                                    className="text-sm text-blue-400 hover:text-blue-300 underline"
                                                 >
-                                                    View Logs
-                                                </button>
+                                                    View
+                                                </Button>
                                             </td>
                                         </tr>
                                     ))}
                                     {runs.length === 0 && (
                                         <tr>
-                                            <td colSpan="6" className="p-8 text-center text-gray-500">No runs recorded</td>
+                                            <td colSpan="8" className="p-8 text-center text-gray-500">No runs recorded</td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
-
-
                     </div>
                 </div>
             </div>
 
             {/* Log Modal */}
             {showLogModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-                    <div className="bg-slate-900 rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-700 shadow-2xl">
-                        <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800 rounded-t-lg">
-                            <h3 className="font-bold text-white mb-0">Execution Logs</h3>
+                <div className="modal-overlay">
+                    <div className="modal-content log-viewer-modal">
+                        <div className="modal-header">
+                            <h2>
+                                Scraper Execution log - {selectedRunMetadata ? (
+                                    <>
+                                        {formatDateTime(selectedRunMetadata.started_at)} - {selectedRunMetadata.status}
+                                    </>
+                                ) : "Loading..."}
+                            </h2>
                             <button
-                                onClick={() => setShowLogModal(false)}
-                                className="text-gray-400 hover:text-white"
+                                onClick={() => {
+                                    setShowLogModal(false);
+                                    setSelectedRunMetadata(null);
+                                    setSelectedRunId(null);
+                                }}
+                                className="close-btn"
+                                title="Close"
                             >
-                                ✕
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
                             </button>
                         </div>
-                        <div className="log-modal-content">
-                            <pre>{logContent}</pre>
+                        <div className="log-modal-body">
+                            <div className="log-container" ref={logContainerRef}>
+                                <pre>{logContent || "Connecting to live logs..."}</pre>
+                            </div>
                         </div>
-                        <div className="p-4 border-t border-slate-700 bg-slate-800 rounded-b-lg flex justify-end">
-                            <Button variant="secondary" onClick={() => setShowLogModal(false)}>Close</Button>
+                        <div className="modal-footer">
+                            <Button variant="secondary" onClick={() => {
+                                setShowLogModal(false);
+                                setSelectedRunMetadata(null);
+                                setSelectedRunId(null);
+                            }}>Close Viewer</Button>
                         </div>
                     </div>
                 </div>

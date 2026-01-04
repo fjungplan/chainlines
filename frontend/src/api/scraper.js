@@ -2,15 +2,36 @@ import apiClient from './client';
 
 export const scraperApi = {
     // Checkpoint & Status
-    getCheckpoint: () => apiClient.get('/admin/scraper/checkpoint'),
+    getCheckpoint: async () => {
+        const response = await apiClient.get('/api/v1/admin/scraper/checkpoint');
+        return response.data;
+    },
 
     // Controls
-    startScraper: (data) => apiClient.post('/admin/scraper/start', data),
-    pauseScraper: () => apiClient.post('/admin/scraper/pause'),
-    resumeScraper: () => apiClient.post('/admin/scraper/resume'),
-    abortScraper: () => apiClient.post('/admin/scraper/abort'),
+    startScraper: async (data) => {
+        const response = await apiClient.post('/api/v1/admin/scraper/start', data);
+        return response.data;
+    },
+    pauseScraper: async () => {
+        const response = await apiClient.post('/api/v1/admin/scraper/pause');
+        return response.data;
+    },
+    resumeScraper: async () => {
+        const response = await apiClient.post('/api/v1/admin/scraper/resume');
+        return response.data;
+    },
+    abortScraper: async () => {
+        const response = await apiClient.post('/api/v1/admin/scraper/abort');
+        return response.data;
+    },
 
     // History & Logs
-    getRuns: (skip = 0, limit = 20) => apiClient.get(`/admin/scraper/runs?skip=${skip}&limit=${limit}`),
-    getRunLogs: (runId) => apiClient.get(`/admin/scraper/runs/${runId}/logs`),
+    getRuns: async (skip = 0, limit = 20) => {
+        const response = await apiClient.get(`/api/v1/admin/scraper/runs?skip=${skip}&limit=${limit}`);
+        return response.data;
+    },
+    getRunLogs: async (runId) => {
+        const response = await apiClient.get(`/api/v1/admin/scraper/runs/${runId}/logs`);
+        return response.data;
+    },
 };

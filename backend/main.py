@@ -130,7 +130,7 @@ app.include_router(sponsors_router)
 app.include_router(lineage_router)
 app.include_router(moderation_router)
 app.include_router(audit_log_router)
-app.include_router(scraper_router, prefix="/api/admin")
+app.include_router(scraper_router, prefix="/api/v1/admin/scraper")
 
 
 

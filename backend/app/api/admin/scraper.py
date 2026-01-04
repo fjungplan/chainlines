@@ -1,16 +1,6 @@
 """Scraper admin API endpoints."""
 import uuid
 import logging
-from fastapi import APIRouter, Depends, BackgroundTasks
-from pydantic import BaseModel
-from app.api.dependencies import require_admin as get_current_admin_user
-
-logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/scraper", tags=["scraper"])
-
-"""Scraper admin API endpoints."""
-import uuid
-import logging
 import asyncio
 from typing import Optional, List
 from pathlib import Path
@@ -26,17 +16,24 @@ from app.scraper.checkpoint import CheckpointManager
 from app.models.run_log import ScraperRun, ScraperRunStatus
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/scraper", tags=["scraper"])
+
+# Note: Prefix is handled in main.py
+router = APIRouter(tags=["scraper"])
 
 CHECKPOINT_PATH = Path("./scraper_checkpoint.json")
 LOG_DIR = Path("logs/scraper")
+
+class ScraperStatusResponse(BaseModel):
+    """Simplified status response."""
+    status: str
+    active: bool
 
 class ScraperStartRequest(BaseModel):
     """Request to start scraper."""
     phase: int = 1
     tier: str = "1"
     resume: bool = False
-    dry_run: bool = False # Restored for Data Visibility
+    dry_run: bool = False
     start_year: int = 2025
     end_year: int = 1990
 
