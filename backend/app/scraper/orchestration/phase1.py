@@ -67,8 +67,13 @@ class DiscoveryService:
                 await self._monitor.check_status()
                 
             try:
-                urls = await self._scraper.get_team_list(year)
-                logger.info(f"Found {len(urls)} total teams for year {year}. Starting detail extraction...")
+                # Use tier-optimized fetch if filtering by tier
+                if tier_level:
+                    urls = await self._scraper.get_team_list_by_tier(year, tier_level)
+                    logger.info(f"Found {len(urls)} Tier {tier_level} teams for year {year}. Starting detail extraction...")
+                else:
+                    urls = await self._scraper.get_team_list(year)
+                    logger.info(f"Found {len(urls)} total teams for year {year}. Starting detail extraction...")
                 
                 for i, url in enumerate(urls, 1):
                     # Check for Pause/Abort every 5 teams

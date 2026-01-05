@@ -21,21 +21,68 @@ class ScrapedTeamData(BaseModel):
 class CyclingFlashParser:
     """Parser for CyclingFlash HTML."""
     
-    def parse_team_list(self, html: str) -> list[str]:
-        """Extract team URLs from list page."""
+    # Tier section headers as they appear on CyclingFlash
+    TIER_HEADERS = {
+        1: ["worldtour", "world tour", "uci worldtour", "gs1", "trade team i"],
+        2: ["proteam", "pro team", "uci proteam", "pro continental", "gs2", "trade team ii"],
+        3: ["continental", "uci continental", "gs3", "trade team iii"],
+    }
+    
+    def parse_team_list(self, html: str, target_tier: int = None) -> list[str]:
+        """Extract team URLs from list page.
+        
+        Args:
+            html: Raw HTML of team list page
+            target_tier: If provided, only return teams from this tier section
+            
+        Returns:
+            List of team URLs (paths)
+        """
         soup = BeautifulSoup(html, 'html.parser')
         urls = []
         
-        # New structure uses team-card or simply links containing /team/
+        # Simple extraction: all team links
         for link in soup.find_all('a', href=True):
             href = link.get('href')
-            # Filter for team links, ensuring we don't pick up duplicates or root links
             if href and '/team/' in href and not href.endswith('/teams'):
-                # Avoid duplicates in the list
                 if href not in urls:
                     urls.append(href)
         
         return urls
+    
+    def parse_team_list_by_tier(self, html: str) -> dict[int, list[str]]:
+        """Parse team list and group URLs by tier section.
+        
+        This is an optimization for when only specific tiers are needed.
+        
+        Returns:
+            Dict mapping tier level (1, 2, 3) to list of team URLs
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Try to find tier sections by headers
+        result = {1: [], 2: [], 3: []}
+        current_tier = None
+        
+        # Look for section headers (h2, h3, or div with tier keywords)
+        for element in soup.find_all(['h2', 'h3', 'div', 'section', 'a']):
+            text = element.get_text(strip=True).lower()
+            
+            # Check if this is a tier header
+            for tier, keywords in self.TIER_HEADERS.items():
+                if any(kw in text for kw in keywords):
+                    current_tier = tier
+                    break
+            
+            # If it's a team link and we know the tier, add it
+            if element.name == 'a':
+                href = element.get('href', '')
+                if '/team/' in href and not href.endswith('/teams'):
+                    if current_tier and href not in result[current_tier]:
+                        result[current_tier].append(href)
+        
+        return result
+
 
     def parse_team_detail(self, html: str, season_year: int) -> ScrapedTeamData:
         """Extract team data from detail page."""
@@ -73,12 +120,22 @@ class CyclingFlashParser:
         from app.scraper.utils.country_mapper import map_country_to_code
         country_code = map_country_to_code(country_code)
         
-        # Extract sponsors from brand links
-        sponsors = []
+        # Extract TITLE sponsors from team name (most prominent)
+        from app.scraper.utils.sponsor_extractor import extract_title_sponsors
+        title_sponsors = extract_title_sponsors(name)
+        
+        # Extract EQUIPMENT sponsors from brand links
+        equipment_sponsors = []
         for link in soup.select('a[href*="/brands/"]'):
             sponsor_name = link.get_text(strip=True)
-            if sponsor_name and sponsor_name not in sponsors:
-                sponsors.append(sponsor_name)
+            if sponsor_name and sponsor_name not in equipment_sponsors:
+                equipment_sponsors.append(sponsor_name)
+        
+        # Combine: Title sponsors first (primary), then equipment sponsors
+        sponsors = title_sponsors.copy()
+        for s in equipment_sponsors:
+            if s not in sponsors:  # Avoid duplicates
+                sponsors.append(s)
         
         # Extract previous season link (if any)
         # Search for links containing "Season" or similar patterns
@@ -113,9 +170,27 @@ class CyclingFlashScraper(BaseScraper):
     
     async def get_team_list(self, year: int) -> list[str]:
         """Get list of team URLs for a given year."""
-        # The URL often redirects to /teams/{year}/road/men
         url = f"{self.BASE_URL}/teams/{year}"
         html = await self.fetch(url)
+        return self._parser.parse_team_list(html)
+    
+    async def get_team_list_by_tier(self, year: int, tier: int) -> list[str]:
+        """Get list of team URLs for a specific tier in a given year.
+        
+        This is an optimization - if the site groups teams by tier,
+        we can skip fetching details for teams outside the target tier.
+        
+        Falls back to full list if tier detection fails.
+        """
+        url = f"{self.BASE_URL}/teams/{year}"
+        html = await self.fetch(url)
+        
+        tier_results = self._parser.parse_team_list_by_tier(html)
+        
+        if tier_results.get(tier):
+            return tier_results[tier]
+        
+        # Fallback: return all teams if tier parsing didn't work
         return self._parser.parse_team_list(html)
     
     async def get_team(self, path: str, season_year: int) -> ScrapedTeamData:
