@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, List, Optional
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.lineage import LineageDecision
 from app.scraper.llm.models import SponsorExtractionResult
+from app.scraper.llm.model_config import PromptType
 
 if TYPE_CHECKING:
     from app.scraper.llm.service import LLMService
@@ -125,7 +126,8 @@ class ScraperPrompts:
         
         return await self._llm.generate_structured(
             prompt=prompt,
-            response_model=ScrapedTeamData
+            response_model=ScrapedTeamData,
+            prompt_type=PromptType.EXTRACT_TEAM_DATA
         )
 
     async def decide_lineage(
@@ -152,7 +154,8 @@ class ScraperPrompts:
         
         return await self._llm.generate_structured(
             prompt=prompt,
-            response_model=LineageDecision
+            response_model=LineageDecision,
+            prompt_type=PromptType.DECIDE_LINEAGE
         )
 
     async def extract_sponsors_from_name(
@@ -182,5 +185,6 @@ class ScraperPrompts:
         
         return await self._llm.generate_structured(
             prompt=prompt,
-            response_model=SponsorExtractionResult
+            response_model=SponsorExtractionResult,
+            prompt_type=PromptType.SPONSOR_EXTRACTION
         )
