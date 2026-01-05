@@ -112,51 +112,13 @@ class DiscoveryService:
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
                     logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country_code}, Tier: {data.tier_level}")
                     
-                    # NEW: Extract title sponsors from team name
-                    if self._session and self._llm_prompts and self._brand_matcher:
-                        title_sponsors, confidence = await self._extract_sponsors(
-                            team_name=data.name,
-                            country_code=data.country_code,
-                            season_year=year
-                        )
+                    # NEW: Enrich with LLM data (centralized service)
+                    if self._session and self._llm_prompts:
+                        # Initialize enricher on demand (or could be in __init__)
+                        from app.scraper.services.enrichment import TeamEnrichmentService
+                        enricher = TeamEnrichmentService(self._session, self._llm_prompts)
                         
-                        # Merge title sponsors with equipment sponsors from parser
-                        # Title sponsors go first (more prominent)
-                        all_sponsors = title_sponsors.copy()
-                        for eq_sponsor in data.sponsors:
-                            eq_name_lower = eq_sponsor.brand_name.lower()
-                            
-                            # Check redundancy
-                            is_redundant = False
-                            if eq_name_lower == data.name.lower():
-                                is_redundant = True
-                            else:
-                                for s in all_sponsors:
-                                    s_name_lower = s.brand_name.lower()
-                                    # specific check: if 'Uno' is substring of 'Uno-X Mobility', drop 'Uno'
-                                    if eq_name_lower == s_name_lower:
-                                        is_redundant = True
-                                        break
-                                    # Only filter substrings if they are reasonably long to avoid false positives (e.g. 'A' in 'Team A')
-                                    if len(eq_name_lower) > 3 and eq_name_lower in s_name_lower:
-                                         is_redundant = True
-                                         break
-                            
-                            if not is_redundant:
-                                # Mark as equipment sponsor
-                                eq_sponsor.type = "EQUIPMENT"
-                                all_sponsors.append(eq_sponsor)
-                        
-                        # Update team data with merged sponsors
-                        data = data.model_copy(update={
-                            "sponsors": all_sponsors,
-                            "extraction_confidence": confidence
-                        })
-                        
-                        logger.debug(
-                            f"Merged sponsors for '{data.name}': "
-                            f"{len(title_sponsors)} title + {len(data.sponsors) - len(title_sponsors)} equipment"
-                        )
+                        data = await enricher.enrich_team_data(data)
 
                     sponsor_names = [s.brand_name for s in data.sponsors]
                     logger.info(f"    - Sponsors: {', '.join(sponsor_names) if sponsor_names else 'None'}")

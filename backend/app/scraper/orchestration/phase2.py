@@ -1,6 +1,6 @@
 """Phase 2: Team Node Assembly."""
 import logging
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID
 from datetime import date
 from sqlalchemy import select
@@ -11,6 +11,9 @@ from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.models import SponsorInfo
 from app.services.audit_log_service import AuditLogService
 from app.models.enums import EditAction, EditStatus
+
+if TYPE_CHECKING:
+    from app.scraper.services.enrichment import TeamEnrichmentService
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +114,8 @@ class TeamAssemblyService:
             "sponsors": [
                 {
                     "name": s_info.brand_name, 
-                    "prominence": prominence_map.get(s_info.brand_name, 0)
+                    "prominence": prominence_map.get(s_info.brand_name, 0),
+                    "parent_company": s_info.parent_company
                 }
                 for s_info in data.sponsors
             ]
@@ -257,12 +261,14 @@ class AssemblyOrchestrator:
         service: TeamAssemblyService,
         scraper: CyclingFlashScraper,
         checkpoint_manager: CheckpointManager,
-        monitor: Optional[ScraperStatusMonitor] = None
+        monitor: Optional[ScraperStatusMonitor] = None,
+        enricher: Optional["TeamEnrichmentService"] = None
     ):
         self._service = service
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
         self._monitor = monitor
+        self._enricher = enricher
 
     async def run(self, years: List[int]) -> None:
         """Process the team queue for specified years."""
@@ -288,10 +294,15 @@ class AssemblyOrchestrator:
             logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
             try:
                 data = await self._scraper.get_team(url, year)
+                
+                # Enrich if service available
+                if self._enricher:
+                    data = await self._enricher.enrich_team_data(data)
+                
                 # LLM Confidence is simulated here or retrieved if we stored it
                 # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
                 # or we would have used an LLM-assisted parser.
-                await self._service.create_team_era(data, confidence=0.95)
+                await self._service.create_team_era(data, confidence=data.extraction_confidence or 0.95)
             except Exception as e:
                 logger.error(f"    - Failed to assemble {url}: {e}")
                 continue

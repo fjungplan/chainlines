@@ -162,7 +162,14 @@ async def run_scraper(
             from app.services.audit_log_service import AuditLogService
             from app.scraper.sources.cyclingflash import CyclingFlashScraper
             
+            from app.scraper.services.enrichment import TeamEnrichmentService
+            
             logger.info("--- Starting Phase 2: Team Assembly ---")
+            
+            enricher = None
+            if llm_prompts:
+                enricher = TeamEnrichmentService(session, llm_prompts)
+                
             service = TeamAssemblyService(
                 audit_service=AuditLogService(),
                 session=session,
@@ -172,7 +179,8 @@ async def run_scraper(
                 service=service,
                 scraper=CyclingFlashScraper(),
                 checkpoint_manager=checkpoint_manager,
-                monitor=monitor
+                monitor=monitor,
+                enricher=enricher
             )
             # For now, process the start_year
             await orchestrator.run(years=[start_year])
