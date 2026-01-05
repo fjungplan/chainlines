@@ -171,6 +171,62 @@ class DiscoveryService:
             team_queue=team_urls,
         ))
     
+    async def _extract_with_resilience(
+        self,
+        team_name: str,
+        country_code: Optional[str],
+        season_year: int,
+        partial_matches: List[str]
+    ) -> Tuple[List[SponsorInfo], float]:
+        """
+        Extract sponsors with full multi-tier resilience.
+        Tier 1: Gemini → Tier 2: Deepseek → Tier 3: Exponential backoff retries
+        
+        Args:
+            team_name: The team name to extract sponsors from.
+            country_code: 3-letter IOC/UCI country code.
+            season_year: Season year for context.
+            partial_matches: Known brands from word-level matching.
+            
+        Returns:
+            Tuple of (sponsors, confidence).
+        """
+        import asyncio
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # The LLM service already has Gemini → Deepseek fallback built-in
+                llm_result = await self._llm_prompts.extract_sponsors_from_name(
+                    team_name=team_name,
+                    season_year=season_year,
+                    country_code=country_code,
+                    partial_matches=partial_matches
+                )
+                
+                logger.info(
+                    f"LLM extraction successful for '{team_name}' "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+                return llm_result.sponsors, llm_result.confidence
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: 1s, 2s, 4s
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"LLM extraction failed for '{team_name}' "
+                        f"(attempt {attempt + 1}/{max_retries}): {e}. "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+                else:
+                    # All retries exhausted
+                    logger.error(
+                        f"LLM extraction failed for '{team_name}' after {max_retries} attempts: {e}"
+                    )
+                    raise
+    
     async def _extract_sponsors(
         self,
         team_name: str,
@@ -203,24 +259,19 @@ class DiscoveryService:
             sponsors = [SponsorInfo(brand_name=b) for b in match_result.known_brands]
             return sponsors, 1.0
         
-        # Level 3: Call LLM for unknown words
+        
+        # Level 3: Call LLM with full resilience
         try:
-            logger.info(f"Calling LLM for '{team_name}' (unknown: {match_result.unmatched_words})")
-            llm_result = await self._llm_prompts.extract_sponsors_from_name(
+            return await self._extract_with_resilience(
                 team_name=team_name,
-                season_year=season_year,
                 country_code=country_code,
+                season_year=season_year,
                 partial_matches=match_result.known_brands
             )
             
-            logger.debug(
-                f"LLM extraction complete for '{team_name}': "
-                f"{len(llm_result.sponsors)} sponsors, confidence={llm_result.confidence}"
-            )
-            return llm_result.sponsors, llm_result.confidence
-            
         except Exception as e:
-            logger.exception(f"LLM extraction failed for '{team_name}': {e}")
+            # Final fallback after all resilience measures exhausted
+            logger.exception(f"All extraction attempts failed for '{team_name}': {e}")
             
             # Add to retry queue
             self._retry_queue.append((team_name, {
@@ -231,10 +282,10 @@ class DiscoveryService:
             
             logger.info(f"Added '{team_name}' to retry queue ({len(self._retry_queue)} items)")
             
-            # Fallback: simple pattern extraction
+            # Fallback: simple pattern extraction with lower confidence
             from app.scraper.utils.sponsor_extractor import extract_title_sponsors
             simple_sponsors = extract_title_sponsors(team_name)
-            return [SponsorInfo(brand_name=s) for s in simple_sponsors], 0.3
+            return [SponsorInfo(brand_name=s) for s in simple_sponsors], 0.2
     
     async def _process_retry_queue(self) -> None:
         """Process all items in retry queue at end of year."""

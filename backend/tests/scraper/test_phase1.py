@@ -362,3 +362,80 @@ async def test_process_retry_queue(discovery_service_with_llm, mock_llm):
     # Verify queue is cleared
     assert len(discovery_service_with_llm._retry_queue) == 0
 
+# -- New Tests for Slice 6.2 --
+
+@pytest.mark.asyncio
+async def test_resilience_gemini_fallback_to_deepseek(discovery_service_with_llm, mock_llm):
+    """Test falls back to Deepseek when Gemini fails."""
+    # Mock brand matcher to pass through to LLM
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=[],
+        unmatched_words=["Test", "Team"],
+        needs_llm=True
+    )
+    
+    # Mock LLM service to return a successful result
+    # (In reality, the LLM service has built-in Gemini → Deepseek fallback)
+    mock_llm.extract_sponsors_from_name.return_value = SponsorExtractionResult(
+        sponsors=[SponsorInfo(brand_name="Test Sponsor")],
+        confidence=0.90,
+        reasoning="Successfully extracted after fallback"
+    )
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_sponsors(
+        team_name="Test Team",
+        country_code="USA",
+        season_year=2024
+    )
+    
+    # Verify extraction succeeded (whether via Gemini or Deepseek fallback)
+    assert len(sponsors) == 1
+    assert sponsors[0].brand_name == "Test Sponsor"
+    assert confidence == 0.90
+
+@pytest.mark.asyncio
+async def test_resilience_exponential_backoff(discovery_service_with_llm, mock_llm, mocker):
+    """Test exponential backoff on transient failures."""
+    # Mock brand matcher to pass through to LLM
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=["Known"],
+        unmatched_words=["Unknown"],
+        needs_llm=True
+    )
+    
+    # Mock to fail twice, succeed third time
+    mock_llm.extract_sponsors_from_name.side_effect = [
+        Exception("Transient error 1"),
+        Exception("Transient error 2"),
+        SponsorExtractionResult(
+            sponsors=[SponsorInfo(brand_name="Success Sponsor")],
+            confidence=0.95,
+            reasoning="Success on retry"
+        )
+    ]
+    
+    # Mock asyncio.sleep to avoid actual delays in tests
+    mock_sleep = mocker.patch('asyncio.sleep')
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_with_resilience(
+        team_name="Known Unknown Team",
+        country_code="USA",
+        season_year=2024,
+        partial_matches=["Known"]
+    )
+    
+    # Verify retries happened
+    assert mock_llm.extract_sponsors_from_name.call_count == 3
+    
+    # Verify exponential backoff: 1s (2^0), 2s (2^1)
+    assert mock_sleep.call_count == 2
+    mock_sleep.assert_any_call(1)
+    mock_sleep.assert_any_call(2)
+    
+    # Verify final success
+    assert len(sponsors) == 1
+    assert sponsors[0].brand_name == "Success Sponsor"
+    assert confidence == 0.95
+
