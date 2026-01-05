@@ -1,7 +1,8 @@
 """LLM prompts for scraper operations."""
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.lineage import LineageDecision
+from app.scraper.llm.models import SponsorExtractionResult
 
 if TYPE_CHECKING:
     from app.scraper.llm.service import LLMService
@@ -52,6 +53,43 @@ IMPORTANT: Lineage events occur on a single date (typically season start). Time 
 (e.g., a team folding mid-season may have a successor starting the following season).
 
 Return your decision with confidence score (0.0 to 1.0). If returning null for event_type, confidence should still be provided (confidence that there is NO connection).
+"""
+
+SPONSOR_EXTRACTION_PROMPT = """You are an expert in professional cycling team sponsorship and brand identification.
+
+TASK: Extract sponsor/brand information from a professional cycling team name.
+
+TEAM INFORMATION:
+- Team Name: {team_name}
+- Season Year: {season_year}
+- Country: {country_code}
+- Partial DB Matches: {partial_matches}
+
+IMPORTANT INSTRUCTIONS:
+1. **Re-verify ALL parts independently** - The partial matches may be incorrect
+   Example: If DB matched "Lotto" but team is "Lotto NL Jumbo", "Lotto" alone is wrong
+
+2. **Extract sponsors accurately:**
+   - Return ONLY actual sponsor/brand names (companies, organizations)
+   - Distinguish sponsors from team descriptors (e.g., "Victorious", "Grenadiers")
+   - Handle multi-word brand names correctly (e.g., "Ineos Grenadier" not "Ineos")
+   - Identify parent companies when possible
+
+3. **Examples:**
+   - "Bahrain Victorious" → sponsor: "Bahrain", descriptor: "Victorious"
+   - "Ineos Grenadiers" → sponsor: "Ineos Grenadier" (brand of INEOS Group), descriptor: "s"
+   - "NSN Cycling Team" → sponsor: "NSN", filler: "Cycling Team"
+   - "UAE Team Emirates XRG" → sponsors: ["UAE", "Emirates", "XRG"]
+   - "Lotto NL Jumbo Team" → sponsors: ["Lotto NL", "Jumbo"], filler: "Team"
+
+4. **Parent Companies:**
+   - If you know the parent company, include it (e.g., "Ineos Grenadier" → INEOS Group)
+   - If uncertain, leave as null
+
+5. **Regional Note:**
+   - "Lotto NL" and "Lotto Belgium" are SEPARATE companies, not variants
+
+Provide your analysis with high confidence and clear reasoning.
 """
 
 
@@ -115,4 +153,34 @@ class ScraperPrompts:
         return await self._llm.generate_structured(
             prompt=prompt,
             response_model=LineageDecision
+        )
+
+    async def extract_sponsors_from_name(
+        self,
+        team_name: str,
+        season_year: int,
+        country_code: Optional[str],
+        partial_matches: List[str]
+    ) -> SponsorExtractionResult:
+        """Extract sponsor information from team name using LLM.
+        
+        Args:
+            team_name: The full team name to analyze.
+            season_year: The season year for context.
+            country_code: 3-letter IOC/UCI country code (or None if unknown).
+            partial_matches: List of potential brand matches from DB lookup.
+            
+        Returns:
+            SponsorExtractionResult with sponsors, descriptors, and confidence.
+        """
+        prompt = SPONSOR_EXTRACTION_PROMPT.format(
+            team_name=team_name,
+            season_year=season_year,
+            country_code=country_code or "Unknown",
+            partial_matches=", ".join(partial_matches) if partial_matches else "None"
+        )
+        
+        return await self._llm.generate_structured(
+            prompt=prompt,
+            response_model=SponsorExtractionResult
         )
