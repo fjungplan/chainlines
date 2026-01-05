@@ -124,8 +124,9 @@ class DiscoveryService:
                         # Title sponsors go first (more prominent)
                         all_sponsors = title_sponsors.copy()
                         for eq_sponsor in data.sponsors:
-                            # Avoid duplicates (case-insensitive check)
-                            if not any(s.brand_name.lower() == eq_sponsor.brand_name.lower() for s in all_sponsors):
+                            # Avoid duplicates (case-insensitive check) and exclude team name itself
+                            if (not any(s.brand_name.lower() == eq_sponsor.brand_name.lower() for s in all_sponsors) and
+                                eq_sponsor.brand_name.lower() != data.name.lower()):
                                 all_sponsors.append(eq_sponsor)
                         
                         # Update team data with merged sponsors
