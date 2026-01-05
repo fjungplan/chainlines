@@ -17,6 +17,9 @@ from app.models.team import TeamNode, TeamEra
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.lineage import LineageEvent
 from app.models.user import User
+from app.models.enums import EditAction, EditStatus
+from app.models.edit import EditHistory
+
 
 
 class AuditLogService:
@@ -387,3 +390,56 @@ class AuditLogService:
         newer_approved = result.scalars().first()
         
         return newer_approved is not None
+
+    @staticmethod
+    async def create_edit(
+        session: AsyncSession,
+        user_id: UUID,
+        entity_type: str,
+        entity_id: Optional[UUID],
+        action: EditAction,
+        old_data: Optional[Dict],
+        new_data: Dict,
+        status: EditStatus = EditStatus.PENDING,
+        source_url: Optional[str] = None
+    ) -> EditHistory:
+        """
+        Create a new edit history record.
+        
+        Args:
+            session: Database session
+            user_id: User performing the edit
+            entity_type: Type of entity
+            entity_id: ID of the entity (can be None for CREATE)
+            action: Type of action (CREATE, UPDATE, DELETE)
+            old_data: Previous state (None for CREATE)
+            new_data: New state
+            status: Status of the edit (PENDING, APPROVED)
+            source_url: Optional URL of the data source
+            
+        Returns:
+            The created EditHistory object
+        """
+        import uuid
+        
+        edit = EditHistory(
+            user_id=user_id,
+            entity_type=entity_type,
+            entity_id=entity_id or uuid.uuid4(),
+            action=action,
+            status=status,
+            snapshot_before=old_data,
+            snapshot_after=new_data,
+            source_url=source_url,
+            created_at=datetime.utcnow()
+        )
+        
+        # Auto-approve high confidence scraper edits
+        if status == EditStatus.APPROVED:
+            edit.reviewed_by = user_id
+            edit.reviewed_at = datetime.utcnow()
+            edit.review_notes = "System: Auto-approved (High Confidence)"
+            
+        session.add(edit)
+        await session.flush()
+        return edit

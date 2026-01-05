@@ -1,5 +1,15 @@
 """Phase 3: Lineage Connection."""
-from typing import List, Dict, Any
+import logging
+from typing import List, Dict, Any, Optional
+from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.scraper.llm.prompts import ScraperPrompts
+from app.services.audit_log_service import AuditLogService
+from app.models.enums import EditAction, EditStatus
+from app.scraper.monitor import ScraperStatusMonitor
+
+logger = logging.getLogger(__name__)
+CONFIDENCE_THRESHOLD = 0.90
 
 class OrphanDetector:
     """Detects orphan nodes that may need lineage connections."""
@@ -23,7 +33,6 @@ class OrphanDetector:
                 gap = started["start_year"] - ended["end_year"]
                 
                 # Check if gap is within range (0 < gap <= max_gap)
-                # gap=1 means successor started the very next season (e.g. 2022 -> 2023)
                 if 0 < gap <= self._max_gap:
                     candidates.append({
                         "predecessor": ended,
@@ -32,16 +41,6 @@ class OrphanDetector:
                     })
         
         return candidates
-
-import logging
-from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.scraper.llm.prompts import ScraperPrompts
-from app.services.audit_log_service import AuditLogService
-from app.models.enums import EditAction, EditStatus, LineageEventType
-
-logger = logging.getLogger(__name__)
-CONFIDENCE_THRESHOLD = 0.90
 
 class LineageConnectionService:
     """Orchestrates Phase 3: Creating lineage connections."""
@@ -70,7 +69,7 @@ class LineageConnectionService:
         )
         
         if decision.event_type is None:
-            logger.info("LLM decided NO_CONNECTION (event_type=None). Skipping.")
+            logger.info(f"    - Decision: NO_CONNECTION (Confidence: {decision.confidence*100:.1f}%)")
             return
 
         status = (
@@ -94,4 +93,46 @@ class LineageConnectionService:
             status=status
         )
         
-        logger.info(f"Created lineage {decision.event_type.value} ({status.value})")
+        logger.info(f"    - Created {decision.event_type.value} connection ({status.value})")
+        if decision.reasoning:
+             logger.info(f"    - Reasoning: {decision.reasoning[:120]}...")
+
+
+class LineageOrchestrator:
+    """Orchestrates Phase 3 processing."""
+    
+    def __init__(
+        self,
+        service: LineageConnectionService,
+        monitor: Optional[ScraperStatusMonitor] = None
+    ):
+        self._service = service
+        self._monitor = monitor
+
+    async def run(self, candidates: List[Dict[str, Any]]) -> None:
+        """Process candidate pairs for lineage connections."""
+        if not candidates:
+            logger.info("Phase 3: No lineage candidates found.")
+            return
+
+        logger.info(f"Phase 3: Starting analysis of {len(candidates)} potential connections")
+        
+        for i, pair in enumerate(candidates, 1):
+            if self._monitor:
+                await self._monitor.check_status()
+            
+            pred = pair["predecessor"]
+            succ = pair["successor"]
+            
+            logger.info(f"Pair {i}/{len(candidates)}: {pred['name']} ([{pred['end_year']}]) -> {succ['name']} ([{succ['start_year']}])")
+            
+            try:
+                await self._service.connect(
+                    predecessor_info=f"Team: {pred['name']}, UCI: {pred.get('uci')}, Year: {pred['end_year']}",
+                    successor_info=f"Team: {succ['name']}, UCI: {succ.get('uci')}, Year: {succ['start_year']}"
+                )
+            except Exception as e:
+                logger.error(f"    - Error analyzing pair: {e}")
+                continue
+
+        logger.info("Phase 3: Lineage analysis complete.")

@@ -1,6 +1,6 @@
 """Phase 2: Team Node Assembly."""
 import logging
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -107,5 +107,60 @@ class TeamAssemblyService:
             status=status
         )
         
-        logger.info(f"Created edit for {data.name} ({status.value})")
+        logger.info(f"    - Edit created: {data.name} -> {status.value} (Confidence: {confidence*100:.1f}%)")
+        for s in new_data["sponsors"]:
+            logger.info(f"      * Sponsor: {s['name']} ({s['prominence']}%)")
+
+
+from app.scraper.monitor import ScraperStatusMonitor
+from app.scraper.checkpoint import CheckpointManager
+from app.scraper.sources.cyclingflash import CyclingFlashScraper
+
+class AssemblyOrchestrator:
+    """Orchestrates Phase 2 processing across the team queue."""
     
+    def __init__(
+        self,
+        service: TeamAssemblyService,
+        scraper: CyclingFlashScraper,
+        checkpoint_manager: CheckpointManager,
+        monitor: Optional[ScraperStatusMonitor] = None
+    ):
+        self._service = service
+        self._scraper = scraper
+        self._checkpoint = checkpoint_manager
+        self._monitor = monitor
+
+    async def run(self, years: List[int]) -> None:
+        """Process the team queue for specified years."""
+        checkpoint = self._checkpoint.load()
+        if not checkpoint or not checkpoint.team_queue:
+            logger.warning("Phase 2: No teams in queue to process. Run Phase 1 first.")
+            return
+
+        queue = checkpoint.team_queue
+        logger.info(f"Phase 2: Starting Assembly for {len(queue)} teams across {years}")
+        
+        for i, url in enumerate(queue, 1):
+            if self._monitor:
+                await self._monitor.check_status()
+            
+            # For each team, we may need to fetch detail for multiple years 
+            # if we want a complete history, but for now we follow the simple 
+            # Phase 1 -> Phase 2 flow where Phase 1 gathered the URLs.
+            
+            # We'll process the latest requested year for this URL
+            year = years[0] # Simplification for now
+            
+            logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
+            try:
+                data = await self._scraper.get_team(url, year)
+                # LLM Confidence is simulated here or retrieved if we stored it
+                # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
+                # or we would have used an LLM-assisted parser.
+                await self._service.create_team_era(data, confidence=0.95)
+            except Exception as e:
+                logger.error(f"    - Failed to assemble {url}: {e}")
+                continue
+
+        logger.info("Phase 2: Assembly complete.")

@@ -75,21 +75,25 @@ class DiscoveryService:
                     if self._monitor and i % 5 == 0:
                         await self._monitor.check_status()
                     
-                    if i % 10 == 0 or i == 1 or i == len(urls):
-                        logger.info(f"Year {year}: Processing team {i}/{len(urls)}: {url}")
-                        
                     data = await self._scraper.get_team(url, year)
                     
+                    prefix = f"Team {i}/{len(urls)} [{year}]"
                     if tier_level and data.tier_level != tier_level:
-                        # Skip but we still had to fetch to find out (for now)
+                        logger.info(f"{prefix}: SKIPPING '{data.name}' - Target Tier {tier_level} vs Found {data.tier_level}")
                         continue
                         
+                    logger.info(f"{prefix}: COLLECTED '{data.name}'")
+                    logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country}, Tier: {data.tier_level}")
+                    logger.info(f"    - Sponsors: {', '.join(data.sponsors) if data.sponsors else 'None'}")
+                    
                     if url not in team_urls:
                         team_urls.append(url)
                         self._collector.add(data.sponsors)
                         
                         # Save checkpoint periodically
-                        self._save_checkpoint(team_urls)
+                        if i % 10 == 0 or i == len(urls):
+                            self._save_checkpoint(team_urls)
+                            logger.info(f"    - Checkpoint saved ({len(team_urls)} unique teams in queue)")
                         
             except Exception as e:
                 logger.error(f"Error in year {year}: {e}")
