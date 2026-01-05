@@ -1,5 +1,5 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List, Optional, Union, TYPE_CHECKING
+from typing import Set, List, Optional, Union, Tuple, TYPE_CHECKING
 from app.scraper.llm.models import SponsorInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.scraper.services.brand_matcher import BrandMatcherService
@@ -137,8 +137,62 @@ class DiscoveryService:
         self._checkpoint.save(CheckpointData(
             phase=1,
             team_queue=team_urls,
-            sponsor_names=self._collector.get_all()
         ))
+    
+    async def _extract_sponsors(
+        self,
+        team_name: str,
+        country_code: Optional[str],
+        season_year: int
+    ) -> Tuple[List[SponsorInfo], float]:
+        """
+        Extract sponsors from team name with multi-tier caching.
+        Returns (sponsors, confidence).
+        """
+        # Fallback if no LLM/DB available
+        if not self._brand_matcher or not self._llm_prompts:
+            logger.warning(f"No LLM/BrandMatcher available, using pattern fallback for '{team_name}'")
+            from app.scraper.utils.sponsor_extractor import extract_title_sponsors
+            simple_sponsors = extract_title_sponsors(team_name)
+            return [SponsorInfo(brand_name=s) for s in simple_sponsors], 0.5
+        
+        # Level 1: Check team name cache (exact match)
+        cached = await self._brand_matcher.check_team_name(team_name)
+        if cached:
+            logger.info(f"Using cached sponsors for '{team_name}'")
+            return cached, 1.0
+        
+        # Level 2: Check brand coverage (word-level matching)
+        match_result = await self._brand_matcher.analyze_words(team_name)
+        
+        if not match_result.needs_llm:
+            # All words are known brands - no LLM needed
+            logger.info(f"All brands known for '{team_name}', skipping LLM")
+            sponsors = [SponsorInfo(brand_name=b) for b in match_result.known_brands]
+            return sponsors, 1.0
+        
+        # Level 3: Call LLM for unknown words
+        try:
+            logger.info(f"Calling LLM for '{team_name}' (unknown: {match_result.unmatched_words})")
+            llm_result = await self._llm_prompts.extract_sponsors_from_name(
+                team_name=team_name,
+                season_year=season_year,
+                country_code=country_code,
+                partial_matches=match_result.known_brands
+            )
+            
+            logger.debug(
+                f"LLM extraction complete for '{team_name}': "
+                f"{len(llm_result.sponsors)} sponsors, confidence={llm_result.confidence}"
+            )
+            return llm_result.sponsors, llm_result.confidence
+            
+        except Exception as e:
+            logger.exception(f"LLM extraction failed for '{team_name}': {e}")
+            # Fallback: simple pattern extraction
+            from app.scraper.utils.sponsor_extractor import extract_title_sponsors
+            simple_sponsors = extract_title_sponsors(team_name)
+            return [SponsorInfo(brand_name=s) for s in simple_sponsors], 0.3
 
 from pydantic import BaseModel
 from typing import Optional

@@ -1,7 +1,45 @@
 """Test Phase 1 Discovery orchestration."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.scraper.llm.models import SponsorInfo
+from app.scraper.llm.models import SponsorInfo, SponsorExtractionResult, BrandMatchResult
+
+@pytest.fixture
+def mock_llm():
+    return AsyncMock()
+
+@pytest.fixture
+def discovery_service_with_llm(mock_llm):
+    from app.scraper.orchestration.phase1 import DiscoveryService
+    
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    mock_session = AsyncMock()
+    
+    service = DiscoveryService(
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint,
+        session=mock_session,
+        llm_prompts=mock_llm
+    )
+    # Mock the brand matcher since it's created internally
+    service._brand_matcher = AsyncMock()
+    return service
+
+@pytest.fixture
+def discovery_service_no_llm():
+    from app.scraper.orchestration.phase1 import DiscoveryService
+    
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    
+    return DiscoveryService(
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint
+    )
+
+@pytest.fixture
+def db_session():
+    return AsyncMock()
 
 def test_sponsor_collector_extracts_unique():
     """SponsorCollector should collect unique sponsor names."""
@@ -59,7 +97,6 @@ def test_sponsor_resolution_model():
     assert resolution.master_name == "AG2R Group"
     assert resolution.confidence >= 0.9
 
-
 @pytest.mark.asyncio
 async def test_discovery_service_with_llm_dependencies():
     """DiscoveryService should accept session and llm_prompts parameters."""
@@ -95,7 +132,6 @@ async def test_discovery_service_with_llm_dependencies():
     # BrandMatcherService should be initialized when session is provided
     assert service._brand_matcher is not None
 
-
 @pytest.mark.asyncio
 async def test_discovery_service_logs_llm_availability():
     """DiscoveryService should log LLM and brand matcher availability."""
@@ -126,3 +162,87 @@ async def test_discovery_service_logs_llm_availability():
     assert service_with_llm._brand_matcher is not None
     assert service_with_llm._llm_prompts == mock_llm_prompts
 
+# -- New Tests for Slice 4.2 --
+
+@pytest.mark.asyncio
+async def test_extract_sponsors_cache_hit(discovery_service_with_llm, db_session):
+    """Test extraction uses cached sponsors when team name found."""
+    # Setup: Mock cache hit (exact team name match)
+    cached_sponsors = [SponsorInfo(brand_name="Lotto"), SponsorInfo(brand_name="Jumbo")]
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = cached_sponsors
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_sponsors(
+        team_name="Lotto Jumbo Team",
+        country_code="NED",
+        season_year=2024
+    )
+    
+    assert len(sponsors) == 2
+    assert confidence == 1.0  # Cache hit = full confidence
+    discovery_service_with_llm._brand_matcher.check_team_name.assert_called_once_with("Lotto Jumbo Team")
+
+@pytest.mark.asyncio
+async def test_extract_sponsors_all_known_brands(discovery_service_with_llm, db_session):
+    """Test extraction skips LLM when all words are known brands."""
+    # Setup: Mock cache miss but full brand coverage
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=["Lotto", "Jumbo"],
+        unmatched_words=[],
+        needs_llm=False
+    )
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_sponsors(
+        team_name="Lotto Jumbo",
+        country_code="NED",
+        season_year=2024
+    )
+    
+    assert len(sponsors) == 2
+    assert confidence == 1.0  # All known = full confidence
+    # Verify LLM was NOT called
+    discovery_service_with_llm._llm_prompts.extract_sponsors_from_name.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_extract_sponsors_llm_call(discovery_service_with_llm, mock_llm):
+    """Test extraction calls LLM for unknown words."""
+    # Setup: Mock cache miss and partial coverage
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=["Lotto"],
+        unmatched_words=["Jumbo"],
+        needs_llm=True
+    )
+    
+    # Mock LLM response
+    mock_llm.extract_sponsors_from_name.return_value = SponsorExtractionResult(
+        sponsors=[SponsorInfo(brand_name="Lotto"), SponsorInfo(brand_name="Jumbo")],
+        confidence=0.95,
+        reasoning="Extracted both brands"
+    )
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_sponsors(
+        team_name="Lotto Jumbo",
+        country_code="NED",
+        season_year=2016
+    )
+    
+    assert len(sponsors) == 2
+    assert sponsors[0].brand_name == "Lotto"
+    assert confidence == 0.95
+    # Verify LLM WAS called
+    mock_llm.extract_sponsors_from_name.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_extract_sponsors_fallback(discovery_service_no_llm):
+    """Test extraction falls back to pattern matching without LLM."""
+    # Service without LLM initialized
+    sponsors, confidence = await discovery_service_no_llm._extract_sponsors(
+        team_name="Lotto Jumbo Team",
+        country_code="NED",
+        season_year=2024
+    )
+    
+    # Should use simple pattern extraction
+    assert len(sponsors) > 0
+    assert confidence < 1.0  # Fallback has lower confidence
