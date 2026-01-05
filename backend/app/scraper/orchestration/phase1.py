@@ -83,7 +83,7 @@ class DiscoveryService:
                         continue
                         
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
-                    logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country}, Tier: {data.tier_level}")
+                    logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country_code}, Tier: {data.tier_level}")
                     logger.info(f"    - Sponsors: {', '.join(data.sponsors) if data.sponsors else 'None'}")
                     
                     if url not in team_urls:

@@ -69,6 +69,10 @@ class CyclingFlashParser:
         from app.scraper.utils.tier_mapper import map_tier_label_to_level
         tier_level = map_tier_label_to_level(raw_tier, season_year)
         
+        # Map country code
+        from app.scraper.utils.country_mapper import map_country_to_code
+        country_code = map_country_to_code(country_code)
+        
         # Extract sponsors from brand links
         sponsors = []
         for link in soup.select('a[href*="/brands/"]'):
