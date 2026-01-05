@@ -73,21 +73,29 @@ IMPORTANT INSTRUCTIONS:
 2. **Extract sponsors accurately:**
    - Return ONLY actual sponsor/brand names (companies, organizations)
    - Distinguish sponsors from team descriptors (e.g., "Victorious", "Grenadiers")
+   - **DO NOT split compound brands** (e.g., "Uno-X Mobility" is ONE brand, NOT "Uno" + "X Mobility")
+   - **DO NOT include the full team name as a sponsor** (e.g., "XDS Astana Team" is the team, "XDS" and "Astana" are the sponsors)
    - Handle multi-word brand names correctly (e.g., "Ineos Grenadier" not "Ineos")
    - Identify parent companies when possible
 
-3. **Examples:**
+3. **Use Web Search / Current Knowledge:**
+   - Use your browsing tool or internal knowledge to verify if a brand is a single entity or a partnership.
+   - **CRITICAL:** Many teams use new 2025/2026 sponsors. Verify the *current* commercial reality.
+   - Example: "Uno-X Mobility" is a specific fuel/mobility sub-brand of Reitan, distinct from just "Uno-X".
+
+4. **Examples:**
    - "Bahrain Victorious" → sponsor: "Bahrain", descriptor: "Victorious"
    - "Ineos Grenadiers" → sponsor: "Ineos Grenadier" (brand of INEOS Group), descriptor: "s"
-   - "NSN Cycling Team" → sponsor: "NSN", filler: "Cycling Team"
+   - "Uno-X Mobility" → sponsor: "Uno-X Mobility" (Single brand)
+   - "XDS Astana Team" → sponsors: ["XDS", "Astana"], filler: "Team"
    - "UAE Team Emirates XRG" → sponsors: ["UAE", "Emirates", "XRG"]
    - "Lotto NL Jumbo Team" → sponsors: ["Lotto NL", "Jumbo"], filler: "Team"
 
-4. **Parent Companies:**
+5. **Parent Companies:**
    - If you know the parent company, include it (e.g., "Ineos Grenadier" → INEOS Group)
    - If uncertain, leave as null
 
-5. **Regional Note:**
+6. **Regional Note:**
    - "Lotto NL" and "Lotto Belgium" are SEPARATE companies, not variants
 
 Provide your analysis with high confidence and clear reasoning.
