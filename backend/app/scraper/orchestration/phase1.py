@@ -1,6 +1,11 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List, Optional, Union
+from typing import Set, List, Optional, Union, TYPE_CHECKING
 from app.scraper.llm.models import SponsorInfo
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.scraper.services.brand_matcher import BrandMatcherService
+
+if TYPE_CHECKING:
+    from app.scraper.llm.prompts import ScraperPrompts
 
 class SponsorCollector:
     """Collects unique sponsor names across all teams."""
@@ -41,12 +46,26 @@ class DiscoveryService:
         self,
         scraper: CyclingFlashScraper,
         checkpoint_manager: CheckpointManager,
-        monitor: Optional[ScraperStatusMonitor] = None
+        monitor: Optional[ScraperStatusMonitor] = None,
+        session: Optional[AsyncSession] = None,
+        llm_prompts: Optional["ScraperPrompts"] = None
     ):
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
         self._collector = SponsorCollector()
         self._monitor = monitor
+        self._session = session
+        self._llm_prompts = llm_prompts
+        
+        # Initialize brand matcher if session available
+        self._brand_matcher = BrandMatcherService(session) if session else None
+        
+        logger.info(
+            f"DiscoveryService initialized with "
+            f"LLM extraction: {llm_prompts is not None}, "
+            f"Brand matching: {self._brand_matcher is not None}"
+        )
+
     
     async def discover_teams(
         self,
