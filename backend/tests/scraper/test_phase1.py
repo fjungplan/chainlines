@@ -246,3 +246,50 @@ async def test_extract_sponsors_fallback(discovery_service_no_llm):
     # Should use simple pattern extraction
     assert len(sponsors) > 0
     assert confidence < 1.0  # Fallback has lower confidence
+
+@pytest.mark.asyncio
+async def test_discover_teams_extracts_sponsors(discovery_service_with_llm, mock_llm, db_session):
+    """Test discovery loop extracts sponsors via LLM."""
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    
+    # Setup: Mock scraper to return team data
+    mock_team_data = ScrapedTeamData(
+        name="Lotto Jumbo Team",
+        uci_code="LOT",
+        tier_level=1,
+        country_code="NED",
+        sponsors=[SponsorInfo(brand_name="Shimano")],  # Equipment sponsor from parser
+        season_year=2024,
+        previous_season_url=None
+    )
+    
+    # Configure mock scraper on the fixture
+    discovery_service_with_llm._scraper.get_team_list_by_tier.return_value = ["/team/lotto-jumbo"]
+    discovery_service_with_llm._scraper.get_team.return_value = mock_team_data
+    
+    # Setup brand matcher mock (part of discovery_service_with_llm fixture)
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value.needs_llm = True
+    
+    # Mock LLM to add title sponsors
+    mock_llm.extract_sponsors_from_name.return_value = SponsorExtractionResult(
+        sponsors=[
+            SponsorInfo(brand_name="Lotto"),
+            SponsorInfo(brand_name="Jumbo")
+        ],
+        confidence=0.95,
+        reasoning="..."
+    )
+    
+    # Run discovery
+    await discovery_service_with_llm.discover_teams(start_year=2024, end_year=2024, tier_level=1)
+    
+    # Verify sponsors were extracted from team name
+    mock_llm.extract_sponsors_from_name.assert_called()
+    
+    # Verify collector has merged sponsors (Lotto, Jumbo, Shimano)
+    collected_names = discovery_service_with_llm._collector.get_all()
+    assert "Lotto" in collected_names
+    assert "Jumbo" in collected_names
+    assert "Shimano" in collected_names
+
