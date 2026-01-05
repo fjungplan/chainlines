@@ -395,8 +395,10 @@ async def test_resilience_gemini_fallback_to_deepseek(discovery_service_with_llm
     assert confidence == 0.90
 
 @pytest.mark.asyncio
-async def test_resilience_exponential_backoff(discovery_service_with_llm, mock_llm, mocker):
+async def test_resilience_exponential_backoff(discovery_service_with_llm, mock_llm):
     """Test exponential backoff on transient failures."""
+    from unittest.mock import patch
+    
     # Mock brand matcher to pass through to LLM
     discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
     discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
@@ -417,25 +419,24 @@ async def test_resilience_exponential_backoff(discovery_service_with_llm, mock_l
     ]
     
     # Mock asyncio.sleep to avoid actual delays in tests
-    mock_sleep = mocker.patch('asyncio.sleep')
-    
-    sponsors, confidence = await discovery_service_with_llm._extract_with_resilience(
-        team_name="Known Unknown Team",
-        country_code="USA",
-        season_year=2024,
-        partial_matches=["Known"]
-    )
-    
-    # Verify retries happened
-    assert mock_llm.extract_sponsors_from_name.call_count == 3
-    
-    # Verify exponential backoff: 1s (2^0), 2s (2^1)
-    assert mock_sleep.call_count == 2
-    mock_sleep.assert_any_call(1)
-    mock_sleep.assert_any_call(2)
-    
-    # Verify final success
-    assert len(sponsors) == 1
-    assert sponsors[0].brand_name == "Success Sponsor"
-    assert confidence == 0.95
+    with patch('asyncio.sleep') as mock_sleep:
+        sponsors, confidence = await discovery_service_with_llm._extract_with_resilience(
+            team_name="Known Unknown Team",
+            country_code="USA",
+            season_year=2024,
+            partial_matches=["Known"]
+        )
+        
+        # Verify retries happened
+        assert mock_llm.extract_sponsors_from_name.call_count == 3
+        
+        # Verify exponential backoff: 1s (2^0), 2s (2^1)
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_any_call(1)
+        mock_sleep.assert_any_call(2)
+        
+        # Verify final success
+        assert len(sponsors) == 1
+        assert sponsors[0].brand_name == "Success Sponsor"
+        assert confidence == 0.95
 

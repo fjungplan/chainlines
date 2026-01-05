@@ -7,6 +7,7 @@ from uuid import uuid4
 async def test_full_phase1_flow_mocked(isolated_session):
     """Full Phase 1 flow should discover teams and collect sponsors."""
     from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.llm.models import SponsorInfo
     from app.scraper.orchestration.phase1 import DiscoveryService
     from app.scraper.checkpoint import CheckpointManager
     from pathlib import Path
@@ -22,13 +23,13 @@ async def test_full_phase1_flow_mocked(isolated_session):
         ScrapedTeamData(
             name="Team A",
             season_year=2024,
-            sponsors=["Sponsor1", "Sponsor2"],
+            sponsors=[SponsorInfo(brand_name="Sponsor1"), SponsorInfo(brand_name="Sponsor2")],
             previous_season_url=None
         ),
         ScrapedTeamData(
             name="Team B",
             season_year=2024,
-            sponsors=["Sponsor2", "Sponsor3"],
+            sponsors=[SponsorInfo(brand_name="Sponsor2"), SponsorInfo(brand_name="Sponsor3")],
             previous_season_url=None
         )
     ])
@@ -56,6 +57,7 @@ async def test_full_phase1_flow_mocked(isolated_session):
 async def test_phase2_creates_audit_entries(isolated_session):
     """Phase 2 should create audit log entries."""
     from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.llm.models import SponsorInfo
     from app.scraper.orchestration.phase2 import TeamAssemblyService
     
     mock_audit = AsyncMock()
@@ -70,7 +72,7 @@ async def test_phase2_creates_audit_entries(isolated_session):
     team_data = ScrapedTeamData(
         name="Test Team",
         season_year=2024,
-        sponsors=["Main Sponsor", "Secondary"],
+        sponsors=[SponsorInfo(brand_name="Main Sponsor"), SponsorInfo(brand_name="Secondary")],
         tier_level=1
     )
     
