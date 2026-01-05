@@ -1,5 +1,6 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List, Optional
+from typing import Set, List, Optional, Union
+from app.scraper.llm.models import SponsorInfo
 
 class SponsorCollector:
     """Collects unique sponsor names across all teams."""
@@ -7,9 +8,10 @@ class SponsorCollector:
     def __init__(self):
         self._names: Set[str] = set()
     
-    def add(self, sponsors: List[str]) -> None:
+    def add(self, sponsors: Union[List[str], List[SponsorInfo]]) -> None:
         """Add sponsor names to collection."""
-        for name in sponsors:
+        for s in sponsors:
+            name = s.brand_name if isinstance(s, SponsorInfo) else s
             if name and name.strip():
                 self._names.add(name.strip())
     
@@ -89,7 +91,8 @@ class DiscoveryService:
                         
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
                     logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country_code}, Tier: {data.tier_level}")
-                    logger.info(f"    - Sponsors: {', '.join(data.sponsors) if data.sponsors else 'None'}")
+                    sponsor_names = [s.brand_name for s in data.sponsors]
+                    logger.info(f"    - Sponsors: {', '.join(sponsor_names) if sponsor_names else 'None'}")
                     
                     if url not in team_urls:
                         team_urls.append(url)

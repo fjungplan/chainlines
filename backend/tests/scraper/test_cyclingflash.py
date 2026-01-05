@@ -1,6 +1,7 @@
 """Test CyclingFlash scraper."""
 import pytest
 from pathlib import Path
+from app.scraper.llm.models import SponsorInfo
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cyclingflash"
 
@@ -31,7 +32,9 @@ def test_parse_team_detail_extracts_data():
     assert data.tier_level == 1
     assert data.country_code == "NED"
     # Title sponsors (Visma, Lease a Bike) + Equipment sponsors (Visma, Lease a Bike, Cervelo) -> Deduplicated
-    assert data.sponsors == ["Visma", "Lease a Bike", "Cervelo"]
+    assert isinstance(data.sponsors[0], SponsorInfo)
+    assert [s.brand_name for s in data.sponsors] == ["Visma", "Lease a Bike", "Cervelo"]
+    assert data.sponsors[0].parent_company is None
     assert data.previous_season_url == "/team/team-jumbo-visma-2023"
     assert data.season_year == 2024
 

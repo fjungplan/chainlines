@@ -80,6 +80,10 @@ class TeamAssemblyService:
             else EditStatus.PENDING
         )
         
+        # Extract brand names for prominence calculation
+        brand_names = [s.brand_name for s in data.sponsors]
+        prominence_values = ProminenceCalculator.calculate(brand_names)
+
         # Build the edit payload
         new_data = {
             "registered_name": data.name,
@@ -88,11 +92,8 @@ class TeamAssemblyService:
             "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
             "sponsors": [
-                {"name": s, "prominence": p}
-                for s, p in zip(
-                    data.sponsors,
-                    ProminenceCalculator.calculate(data.sponsors)
-                )
+                {"name": s_info.brand_name, "prominence": p}
+                for s_info, p in zip(data.sponsors, prominence_values)
             ]
         }
         

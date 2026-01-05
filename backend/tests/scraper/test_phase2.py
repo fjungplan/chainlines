@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+from app.scraper.llm.models import SponsorInfo
 
 
 def test_prominence_calculator_one_sponsor():
@@ -65,9 +66,12 @@ async def test_team_assembly_creates_edit():
     team_data = ScrapedTeamData(
         name="Team Visma",
         season_year=2024,
-        sponsors=["Visma", "Lease a Bike"],
+        sponsors=[
+            SponsorInfo(brand_name="Visma"),
+            SponsorInfo(brand_name="Lease a Bike")
+        ],
         uci_code="TJV",
-        tier="WorldTour"
+        tier_level=1
     )
     
     await service.create_team_era(team_data, confidence=0.95)

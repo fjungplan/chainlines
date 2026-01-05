@@ -1,6 +1,7 @@
 """Test Phase 1 Discovery orchestration."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from app.scraper.llm.models import SponsorInfo
 
 def test_sponsor_collector_extracts_unique():
     """SponsorCollector should collect unique sponsor names."""
@@ -26,7 +27,7 @@ async def test_discovery_service_collects_teams():
     mock_scraper.get_team = AsyncMock(return_value=ScrapedTeamData(
         name="Team A",
         season_year=2024,
-        sponsors=["Sponsor1"],
+        sponsors=[SponsorInfo(brand_name="Sponsor1")],
         previous_season_url=None
     ))
     
