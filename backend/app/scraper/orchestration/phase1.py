@@ -205,9 +205,28 @@ class DiscoveryService:
                 )
                 
                 logger.info(
-                    f"LLM extraction successful for '{team_name}' "
-                    f"(attempt {attempt + 1}/{max_retries})"
+                    f"LLM extraction successful for '{team_name}' (attempt {attempt + 1}/{max_retries})"
                 )
+                
+                # Detailed logging of LLM output
+                log_msg = [f"    - Reasoning: {llm_result.reasoning}"]
+                
+                sponsors_str = []
+                for s in llm_result.sponsors:
+                    s_str = f"'{s.brand_name}'"
+                    if s.parent_company:
+                        s_str += f" (Parent: {s.parent_company})"
+                    sponsors_str.append(s_str)
+                log_msg.append(f"    - Sponsors: {', '.join(sponsors_str)}")
+                
+                if llm_result.team_descriptors:
+                    log_msg.append(f"    - Descriptors: {', '.join(llm_result.team_descriptors)}")
+                if llm_result.filler_words:
+                    log_msg.append(f"    - Fillers: {', '.join(llm_result.filler_words)}")
+                    
+                for msg in log_msg:
+                    logger.info(msg)
+
                 return llm_result.sponsors, llm_result.confidence
                 
             except Exception as e:
