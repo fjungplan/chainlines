@@ -6,7 +6,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.team import TeamEra
 from app.models.sponsor import TeamSponsorLink, SponsorBrand, SponsorMaster
-from app.scraper.llm.models import SponsorInfo
+from app.scraper.llm.models import SponsorInfo, BrandMatchResult
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -60,3 +61,41 @@ class BrandMatcherService:
         
         logger.debug(f"Team name cache MISS: {team_name}")
         return None
+
+    async def analyze_words(self, team_name: str) -> BrandMatchResult:
+        """
+        Check if all words in team name match known brands.
+        Returns analysis result indicating if LLM is needed.
+        """
+        # Tokenize: split on non-alphanumeric, keep words
+        words = re.findall(r'\b[\w]+\b', team_name)
+        
+        known_brands = []
+        unmatched_words = []
+        
+        for word in words:
+            # Exact match against brand_name
+            # Case-insensitive match might be better, but prompt said exact match against brand_name
+            # The user code snippet uses: select(SponsorBrand).where(SponsorBrand.brand_name == word).limit(1)
+            stmt = select(SponsorBrand).where(SponsorBrand.brand_name == word).limit(1)
+            result = await self._session.execute(stmt)
+            brand = result.scalar_one_or_none()
+            
+            if brand:
+                known_brands.append(word)
+            else:
+                unmatched_words.append(word)
+        
+        needs_llm = len(unmatched_words) > 0
+        
+        logger.debug(
+            f"Word analysis for '{team_name}': "
+            f"{len(known_brands)} known, {len(unmatched_words)} unknown, "
+            f"LLM needed: {needs_llm}"
+        )
+        
+        return BrandMatchResult(
+            known_brands=known_brands,
+            unmatched_words=unmatched_words,
+            needs_llm=needs_llm
+        )

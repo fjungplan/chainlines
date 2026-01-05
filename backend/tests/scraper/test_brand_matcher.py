@@ -83,3 +83,49 @@ async def test_team_name_cache_in_memory(db_session: AsyncSession):
     
     assert result1 == result2
     assert result1 is result2 # Identity check for in-memory cache
+
+@pytest.mark.asyncio
+async def test_brand_coverage_complete(db_session: AsyncSession):
+    """Test all words match existing brands - no LLM needed."""
+    # Setup: Create brands "Lotto" and "Jumbo" in DB
+    master = SponsorMaster(legal_name="Test Corp", industry_sector="Retail")
+    brand1 = SponsorBrand(master=master, brand_name="Lotto", default_hex_color="#FFFFFF")
+    brand2 = SponsorBrand(master=master, brand_name="Jumbo", default_hex_color="#FFFF00")
+    db_session.add_all([master, brand1, brand2])
+    await db_session.commit()
+    
+    matcher = BrandMatcherService(db_session)
+    result = await matcher.analyze_words("Lotto Jumbo")
+    
+    assert result.needs_llm == False
+    assert len(result.known_brands) == 2
+    assert "Lotto" in result.known_brands
+    assert "Jumbo" in result.known_brands
+    assert len(result.unmatched_words) == 0
+
+@pytest.mark.asyncio
+async def test_brand_coverage_incomplete(db_session: AsyncSession):
+    """Test unknown words trigger LLM."""
+    # Setup: Only create "Lotto" brand
+    master = SponsorMaster(legal_name="Test Corp", industry_sector="Retail")
+    brand1 = SponsorBrand(master=master, brand_name="Lotto", default_hex_color="#FFFFFF")
+    db_session.add_all([master, brand1])
+    await db_session.commit()
+    
+    matcher = BrandMatcherService(db_session)
+    result = await matcher.analyze_words("Lotto NL Jumbo")
+    
+    assert result.needs_llm == True
+    assert "Lotto" in result.known_brands
+    assert "NL" in result.unmatched_words
+    assert "Jumbo" in result.unmatched_words
+
+@pytest.mark.asyncio
+async def test_brand_coverage_no_brands(db_session: AsyncSession):
+    """Test completely unknown team triggers LLM."""
+    matcher = BrandMatcherService(db_session)
+    result = await matcher.analyze_words("Unknown New Team")
+    
+    assert result.needs_llm == True
+    assert len(result.known_brands) == 0
+    assert len(result.unmatched_words) == 3
