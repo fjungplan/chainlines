@@ -56,6 +56,7 @@ class DiscoveryService:
         self._monitor = monitor
         self._session = session
         self._llm_prompts = llm_prompts
+        self._retry_queue: List[Tuple[str, dict]] = []  # (team_name, context)
         
         # Initialize brand matcher if session available
         self._brand_matcher = BrandMatcherService(session) if session else None
@@ -155,6 +156,9 @@ class DiscoveryService:
                 self._save_checkpoint(team_urls)
                 raise
         
+        # Process retry queue at end of all years
+        await self._process_retry_queue()
+        
         return DiscoveryResult(
             team_urls=team_urls,
             sponsor_names=self._collector.get_all()
@@ -217,10 +221,54 @@ class DiscoveryService:
             
         except Exception as e:
             logger.exception(f"LLM extraction failed for '{team_name}': {e}")
+            
+            # Add to retry queue
+            self._retry_queue.append((team_name, {
+                "country_code": country_code,
+                "season_year": season_year,
+                "partial_matches": match_result.known_brands if match_result else []
+            }))
+            
+            logger.info(f"Added '{team_name}' to retry queue ({len(self._retry_queue)} items)")
+            
             # Fallback: simple pattern extraction
             from app.scraper.utils.sponsor_extractor import extract_title_sponsors
             simple_sponsors = extract_title_sponsors(team_name)
             return [SponsorInfo(brand_name=s) for s in simple_sponsors], 0.3
+    
+    async def _process_retry_queue(self) -> None:
+        """Process all items in retry queue at end of year."""
+        if not self._retry_queue:
+            logger.info("Retry queue is empty, skipping")
+            return
+        
+        logger.info(f"Processing retry queue: {len(self._retry_queue)} items")
+        
+        retry_items = self._retry_queue.copy()
+        self._retry_queue.clear()
+        
+        import asyncio
+        
+        for team_name, context in retry_items:
+            try:
+                logger.info(f"Retrying sponsor extraction for '{team_name}'")
+                
+                # Wait a bit between retries to avoid rate limits
+                await asyncio.sleep(1)
+                
+                sponsors, confidence = await self._extract_sponsors(
+                    team_name=team_name,
+                    country_code=context["country_code"],
+                    season_year=context["season_year"]
+                )
+                
+                if confidence > 0.5:
+                    logger.info(f"Retry successful for '{team_name}': {len(sponsors)} sponsors")
+                else:
+                    logger.warning(f"Retry fallback for '{team_name}': low confidence {confidence}")
+                    
+            except Exception as e:
+                logger.exception(f"Retry failed for '{team_name}': {e}")
 
 from pydantic import BaseModel
 from typing import Optional

@@ -293,3 +293,72 @@ async def test_discover_teams_extracts_sponsors(discovery_service_with_llm, mock
     assert "Jumbo" in collected_names
     assert "Shimano" in collected_names
 
+# -- New Tests for Slice 6.1 --
+
+@pytest.mark.asyncio
+async def test_retry_queue_adds_failed_teams(discovery_service_with_llm, mock_llm):
+    """Test failed LLM extractions are added to retry queue."""
+    # Mock cache and brand matcher to pass through to LLM
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=[],
+        unmatched_words=["Test", "Team"],
+        needs_llm=True
+    )
+    
+    # Mock LLM to fail
+    mock_llm.extract_sponsors_from_name.side_effect = Exception("LLM service unavailable")
+    
+    sponsors, confidence = await discovery_service_with_llm._extract_sponsors(
+        team_name="Test Team",
+        country_code="USA",
+        season_year=2024
+    )
+    
+    # Should fallback to pattern extraction
+    assert len(sponsors) > 0
+    assert confidence < 1.0
+    
+    # Should be in retry queue
+    assert len(discovery_service_with_llm._retry_queue) == 1
+    assert discovery_service_with_llm._retry_queue[0][0] == "Test Team"
+
+@pytest.mark.asyncio
+async def test_process_retry_queue(discovery_service_with_llm, mock_llm):
+    """Test retry queue is processed at end of year."""
+    # Add items to retry queue
+    discovery_service_with_llm._retry_queue.append(("Team 1", {
+        "country_code": "USA",
+        "season_year": 2024,
+        "partial_matches": []
+    }))
+    discovery_service_with_llm._retry_queue.append(("Team 2", {
+        "country_code": "GBR",
+        "season_year": 2024,
+        "partial_matches": []
+    }))
+    
+    # Mock brand matcher for retries
+    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
+    discovery_service_with_llm._brand_matcher.analyze_words.return_value = BrandMatchResult(
+        known_brands=[],
+        unmatched_words=["Team"],
+        needs_llm=True
+    )
+    
+    # Mock LLM to succeed on retry
+    mock_llm.extract_sponsors_from_name.return_value = SponsorExtractionResult(
+        sponsors=[SponsorInfo(brand_name="Test Sponsor")],
+        confidence=0.95,
+        reasoning="Extracted successfully on retry"
+    )
+    
+    # Process retry queue
+    await discovery_service_with_llm._process_retry_queue()
+    
+    # Verify LLM was called for each queued item
+    assert mock_llm.extract_sponsors_from_name.call_count == 2
+    
+    # Verify queue is cleared
+    assert len(discovery_service_with_llm._retry_queue) == 0
+
