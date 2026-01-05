@@ -52,8 +52,8 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       ADMIN_EMAILS: ${ADMIN_EMAILS}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    env_file:
+      - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy
