@@ -24,7 +24,7 @@ async def test_get_checkpoint_empty(client: AsyncClient, admin_token_headers):
     # Since we can't easily mock inner dependency of API without Dependency Injection override or patching,
     # we will rely on patching 'app.api.admin.scraper.CheckpointManager' or relying on file path config.
     # Let's verify with 404.
-    response = await client.get("/api/admin/scraper/checkpoint", headers=admin_token_headers)
+    response = await client.get("/api/v1/admin/scraper/checkpoint", headers=admin_token_headers)
     assert response.status_code == 404
 
 @pytest.mark.asyncio
@@ -37,7 +37,7 @@ async def test_start_scraper_run(client: AsyncClient, admin_token_headers, db_se
         "start_year": 2024,
         "end_year": 2024
     }
-    response = await client.post("/api/admin/scraper/start", json=payload, headers=admin_token_headers)
+    response = await client.post("/api/v1/admin/scraper/start", json=payload, headers=admin_token_headers)
     assert response.status_code == 202
     data = response.json()
     assert "task_id" in data
@@ -66,7 +66,7 @@ async def test_list_scraper_runs(client: AsyncClient, admin_token_headers, db_se
     db_session.add(run)
     await db_session.commit()
     
-    response = await client.get("/api/admin/scraper/runs", headers=admin_token_headers)
+    response = await client.get("/api/v1/admin/scraper/runs", headers=admin_token_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] >= 1

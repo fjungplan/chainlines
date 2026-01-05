@@ -30,7 +30,8 @@ def test_parse_team_detail_extracts_data():
     assert data.uci_code == "TJV"
     assert data.tier_level == 1
     assert data.country_code == "NED"
-    assert data.sponsors == ["Visma", "Lease a Bike"]
+    # Title sponsors (Visma, Lease a Bike) + Equipment sponsors (Visma, Lease a Bike, Cervelo) -> Deduplicated
+    assert data.sponsors == ["Visma", "Lease a Bike", "Cervelo"]
     assert data.previous_season_url == "/team/team-jumbo-visma-2023"
     assert data.season_year == 2024
 

@@ -38,12 +38,13 @@ def extract_title_sponsors(team_name: str) -> List[str]:
     
     name = team_name.strip()
     
-    # Remove common prefixes
+    # Remove common prefixes (case-insensitive, order matters - longest first)
     name_lower = name.lower()
-    for prefix in TEAM_PREFIXES:
+    for prefix in sorted(TEAM_PREFIXES, key=len, reverse=True):
         if name_lower.startswith(prefix + " "):
             name = name[len(prefix) + 1:].strip()
             name_lower = name.lower()
+            break  # Only remove one prefix
     
     # Split by delimiters
     parts = DELIMITER_PATTERN.split(name)
