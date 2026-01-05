@@ -124,9 +124,25 @@ class DiscoveryService:
                         # Title sponsors go first (more prominent)
                         all_sponsors = title_sponsors.copy()
                         for eq_sponsor in data.sponsors:
-                            # Avoid duplicates (case-insensitive check) and exclude team name itself
-                            if (not any(s.brand_name.lower() == eq_sponsor.brand_name.lower() for s in all_sponsors) and
-                                eq_sponsor.brand_name.lower() != data.name.lower()):
+                            eq_name_lower = eq_sponsor.brand_name.lower()
+                            
+                            # Check redundancy
+                            is_redundant = False
+                            if eq_name_lower == data.name.lower():
+                                is_redundant = True
+                            else:
+                                for s in all_sponsors:
+                                    s_name_lower = s.brand_name.lower()
+                                    # specific check: if 'Uno' is substring of 'Uno-X Mobility', drop 'Uno'
+                                    if eq_name_lower == s_name_lower:
+                                        is_redundant = True
+                                        break
+                                    # Only filter substrings if they are reasonably long to avoid false positives (e.g. 'A' in 'Team A')
+                                    if len(eq_name_lower) > 3 and eq_name_lower in s_name_lower:
+                                         is_redundant = True
+                                         break
+                            
+                            if not is_redundant:
                                 all_sponsors.append(eq_sponsor)
                         
                         # Update team data with merged sponsors
@@ -210,7 +226,10 @@ class DiscoveryService:
                 )
                 
                 # Detailed logging of LLM output
-                log_msg = [f"    - Reasoning: {llm_result.reasoning}"]
+                log_msg = [
+                    f"    - Confidence: {llm_result.confidence:.2f}",
+                    f"    - Reasoning: {llm_result.reasoning}"
+                ]
                 
                 sponsors_str = []
                 for s in llm_result.sponsors:
