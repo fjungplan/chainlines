@@ -80,7 +80,6 @@ async def test_team_assembly_creates_edit():
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Environmental issue with Greenlet/AsyncIO in this test suite")
 async def test_assembly_creates_sponsor_with_parent(db_session):
     """Test Phase 2 creates sponsor brand with parent company."""
     from unittest.mock import AsyncMock
@@ -110,6 +109,18 @@ async def test_assembly_creates_sponsor_with_parent(db_session):
     assembly_service = TeamAssemblyService(session=db_session, audit_service=audit_service, system_user_id=SMART_SCRAPER_USER_ID)
     team_era = await assembly_service.assemble_team(team_data)
     
+    # Re-fetch with eager loading to avoid MissingGreenlet error
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    from app.models.team import TeamEra
+    from app.models.sponsor import TeamSponsorLink, SponsorBrand
+
+    stmt = select(TeamEra).options(
+        joinedload(TeamEra.sponsor_links).joinedload(TeamSponsorLink.brand).joinedload(SponsorBrand.master)
+    ).where(TeamEra.era_id == team_era.era_id)
+    result = await db_session.execute(stmt)
+    team_era = result.unique().scalar_one()
+
     # Verify sponsor brand created
     assert len(team_era.sponsor_links) == 1
     assert team_era.sponsor_links[0].brand.brand_name == "Ineos Grenadier"
@@ -119,7 +130,6 @@ async def test_assembly_creates_sponsor_with_parent(db_session):
     assert team_era.sponsor_links[0].brand.master.legal_name == "INEOS Group"
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Environmental issue with Greenlet/AsyncIO in this test suite")
 async def test_assembly_handles_sponsor_without_parent(db_session):
     """Test Phase 2 handles sponsors without parent company."""
     from unittest.mock import AsyncMock
@@ -145,6 +155,18 @@ async def test_assembly_handles_sponsor_without_parent(db_session):
     assembly_service = TeamAssemblyService(session=db_session, audit_service=audit_service, system_user_id=SMART_SCRAPER_USER_ID)
     team_era = await assembly_service.assemble_team(team_data)
     
+    # Re-fetch with eager loading
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+    from app.models.team import TeamEra
+    from app.models.sponsor import TeamSponsorLink, SponsorBrand
+
+    stmt = select(TeamEra).options(
+        joinedload(TeamEra.sponsor_links).joinedload(TeamSponsorLink.brand).joinedload(SponsorBrand.master)
+    ).where(TeamEra.era_id == team_era.era_id)
+    result = await db_session.execute(stmt)
+    team_era = result.unique().scalar_one()
+
     # Verify sponsor created without parent
     assert len(team_era.sponsor_links) == 1
     assert team_era.sponsor_links[0].brand.brand_name == "Bahrain"
