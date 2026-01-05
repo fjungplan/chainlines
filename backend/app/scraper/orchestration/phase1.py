@@ -143,6 +143,8 @@ class DiscoveryService:
                                          break
                             
                             if not is_redundant:
+                                # Mark as equipment sponsor
+                                eq_sponsor.type = "EQUIPMENT"
                                 all_sponsors.append(eq_sponsor)
                         
                         # Update team data with merged sponsors

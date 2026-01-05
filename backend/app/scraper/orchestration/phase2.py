@@ -84,11 +84,24 @@ class TeamAssemblyService:
             else EditStatus.PENDING
         )
         
-        # Extract brand names for prominence calculation
-        brand_names = [s.brand_name for s in data.sponsors]
-        prominence_values = ProminenceCalculator.calculate(brand_names)
-
-        # Build the edit payload
+        # Extract brand names for prominence calculation (ONLY TITLE sponsors)
+        # Assuming sponsors without 'type' are TITLE (backward capability)
+        title_sponsors = [
+            s for s in data.sponsors 
+            if getattr(s, "type", "TITLE") == "TITLE"
+        ]
+        title_names = [s.brand_name for s in title_sponsors]
+        
+        # Calculate prominence only for title sponsors
+        title_prominence = ProminenceCalculator.calculate(title_names)
+        
+        # Build full prominence map
+        # Title sponsors get their calculated share
+        # Equipment sponsors get 0
+        prominence_map = {}
+        for s, p in zip(title_sponsors, title_prominence):
+            prominence_map[s.brand_name] = p
+            
         new_data = {
             "registered_name": data.name,
             "season_year": data.season_year,
@@ -96,8 +109,11 @@ class TeamAssemblyService:
             "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
             "sponsors": [
-                {"name": s_info.brand_name, "prominence": p}
-                for s_info, p in zip(data.sponsors, prominence_values)
+                {
+                    "name": s_info.brand_name, 
+                    "prominence": prominence_map.get(s_info.brand_name, 0)
+                }
+                for s_info in data.sponsors
             ]
         }
         

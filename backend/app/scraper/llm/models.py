@@ -8,6 +8,10 @@ class SponsorInfo(BaseModel):
         default=None,
         description="Parent company (e.g., 'INEOS Group')"
     )
+    type: str = Field(
+        default="TITLE",
+        description="Sponsor type: 'TITLE' or 'EQUIPMENT'"
+    )
 
 class SponsorExtractionResult(BaseModel):
     """LLM response for sponsor extraction."""
