@@ -50,11 +50,8 @@ class ScraperService:
         self.db.add(node)
         await self.db.flush()  # Get node_id
         
-        # Convert tier string to tier_level integer
-        tier_level = None
-        if data.tier:
-            tier_map = {"WT": 1, "PT": 2, "CT": 3}
-            tier_level = tier_map.get(data.tier)
+        # Use tier_level directly
+        tier_level = data.tier_level
         
         era = TeamEra(
             node_id=node.node_id,

@@ -33,6 +33,7 @@ ChainLines is a non-commercial, open-source personal project that tracks the lin
 - **Database**: PostgreSQL 15 (asyncpg driver)
 - **ORM**: SQLAlchemy 2.0 (async mode)
 - **Migrations**: Alembic
+- **Intelligence**: `instructor` (Gemini & Deepseek fallback)
 - **Testing**: pytest, pytest-asyncio, httpx
 - **Web Scraping**: Beautiful Soup 4
 - **Authentication**: Google OAuth 2.0, python-jose (JWT)

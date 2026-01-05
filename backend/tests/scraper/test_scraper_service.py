@@ -17,7 +17,7 @@ async def test_upsert_new_team(db_session: AsyncSession):
         source="procyclingstats",
         team_name="Test Team",
         uci_code="TST",
-        tier="WT",
+        tier_level=1,
         sponsors=["Test Sponsor"]
     )
     
@@ -40,7 +40,7 @@ async def test_upsert_with_proteam_tier(db_session: AsyncSession):
         source="procyclingstats",
         team_name="ProTeam Test",
         uci_code="PTT",
-        tier="PT",
+        tier_level=2,
         sponsors=[]
     )
     
@@ -58,7 +58,7 @@ async def test_upsert_with_continental_tier(db_session: AsyncSession):
         source="procyclingstats",
         team_name="Continental Test",
         uci_code="CTT",
-        tier="CT",
+        tier_level=3,
         sponsors=[]
     )
     
@@ -76,7 +76,7 @@ async def test_upsert_without_team_name(db_session: AsyncSession):
         source="procyclingstats",
         team_name="",
         uci_code="TST",
-        tier=None,
+        tier_level=None,
         sponsors=[]
     )
     
@@ -93,7 +93,7 @@ async def test_upsert_without_uci_code(db_session: AsyncSession):
         source="procyclingstats",
         team_name="No Code Team",
         uci_code=None,
-        tier="CT",
+        tier_level=3,
         sponsors=[]
     )
     
@@ -112,7 +112,7 @@ async def test_upsert_without_tier(db_session: AsyncSession):
         source="procyclingstats",
         team_name="No Tier Team",
         uci_code="NTT",
-        tier=None,
+        tier_level=None,
         sponsors=[]
     )
     

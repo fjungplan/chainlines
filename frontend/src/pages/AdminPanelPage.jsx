@@ -29,13 +29,13 @@ export default function AdminPanelPage() {
             </div>
           </Link>
 
-          <div className="btn btn-tile disabled">
+          <Link to="/admin/scraper" className="btn btn-tile">
             <span className="tile-icon"><i className="bi bi-arrow-repeat"></i></span>
             <div className="tile-content">
               <h3>Scraper Status</h3>
-              <p>Check scraper health (Coming soon).</p>
+              <p>Scraper execution and logs.</p>
             </div>
-          </div>
+          </Link>
 
           <div className="btn btn-tile disabled">
             <span className="tile-icon"><i className="bi bi-heart-pulse"></i></span>

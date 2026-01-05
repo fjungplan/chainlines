@@ -39,38 +39,93 @@ This project tracks the evolutionary history of professional cycling teams.
     * `SPLIT`: One node becoming two.
 * `is_protected` (Boolean): If True, only `MODERATOR`/`ADMIN` can edit.
 
-### C. Sponsor System (Many-to-Many)
-**`SponsorMaster`** (The Corporation)
-* `master_id` (UUID, PK)
-* `legal_name` (String): e.g., "Soudal Holding NV".
-* `industry_sector` (String): e.g., "Adhesives".
-* `is_protected` (Boolean): Access control flag.
+### Chainlines Data Model & Architecture
 
-**`SponsorBrand`** (The Marketing Name)
-* `brand_id` (UUID, PK)
-* `master_id` (UUID, FK): Parent company.
-* `brand_name` (String): e.g., "Soudal" (or "Fix ALL" for specific races).
-* `default_hex_color` (String): e.g., "#FF0000".
-* `is_protected` (Boolean): Access control flag.
+## 1. Domain Overview (The "Source of Truth")
 
-**`TeamSponsorLink`** (The Connection)
-* `link_id` (UUID, PK)
-* `era_id` (UUID, FK -> TeamEra)
-* `brand_id` (UUID, FK -> SponsorBrand)
-* `rank_order` (Int): 1 for Title Sponsor, 2 for Secondary.
-* `prominence_percent` (Int): Visual weight for the "Jersey Slice" graph (0-100).
+The system follows a **Node/Era/Event** architecture to handle the complex, non-linear history of professional cycling teams.
 
-### D. User & Moderation
-**`User`**
-* `role` (Enum): `GUEST`, `EDITOR`, `TRUSTED_EDITOR` (auto-approves edits), `MODERATOR`, `ADMIN`.
+### A. TeamNode (The "Paying Agent")
+The persistent legal/financial entity. While a team's name (era) changes every year based on sponsors, the `TeamNode` represents the underlying license holder and continuity.
+*   *Key Fields:* `legal_name`, `display_name`, `founding_year`, `dissolution_year`.
 
-**`Edit`** (Moderation Queue)
-* `edit_type`: `METADATA`, `MERGE`, `SPLIT`.
-* `changes` (JSON): The payload of proposed changes.
-* `status`: `PENDING`, `APPROVED`, `REJECTED`.
+### B. TeamEra (The "Season Snapshot")
+A snapshot of a team's identity for a specific period (usually one season).
+*   *Key Fields:* `registered_name`, `uci_code`, `season_year`, `tier_level`.
+*   *Links:* Associated with multiple `SponsorBrand` entities via `TeamSponsorLink`.
+
+### C. Lineage Event (The "Bridge")
+Expresses how one `TeamNode` relates to another over time.
+*   *Types:* `LEGAL_TRANSFER`, `SPIRITUAL_SUCCESSION`, `MERGE`, `SPLIT`.
+
+---
+
+## 2. Database Schema (SQLAlchemy Ground Truth)
+
+### A. Team Management
+**`TeamNode`**
+* `node_id` (UUID, PK)
+* `legal_name` (String, Unique) - The official license holder name.
+* `display_name` (String) - Human-readable preferred name.
+* `founding_year` (Integer)
+* `dissolution_year` (Integer, Nullable)
+* `latest_team_name` (String) - Cached current name.
+* `latest_uci_code` (String, 3) - Cached current UCI code.
+* `current_tier` (Integer) - 1 (WorldTeam), 2 (ProTeam), 3 (Continental).
+* `is_active` (Boolean) - Computed: `dissolution_year IS NULL`.
+* `is_protected` (Boolean) - Admin-only modification.
+* `source_url` / `source_notes` (Metadata)
+
+**`TeamEra`**
+* `era_id` (UUID, PK)
+* `node_id` (FK -> TeamNode)
+* `season_year` (Integer)
+* `registered_name` (String) - The full sponsor-name for that year.
+* `uci_code` (String, 3)
+* `country_code` (String, 3) - ISO alpha-3.
+* `tier_level` (Integer) - 1, 2, or 3.
+* `valid_from` / `valid_until` (Date)
+* `has_license` (Boolean)
+* `is_auto_filled` / `is_manual_override` (Flags)
+* `source_origin` (e.g., "CyclingFlash")
+
+### B. Sponsor System
+**`SponsorMaster`**
+* `legal_name` (Unique) - e.g., "Volkswagen AG".
+* `display_name` - e.g., "Volkswagen".
+* `industry_sector` - e.g., "Automotive".
+
+**`SponsorBrand`**
+* `brand_name` - e.g., "Skoda".
+* `default_hex_color` - Primary brand color.
+
+**`TeamSponsorLink`**
+* `rank_order` - 1 (Title Sponsor), 2 (Secondary), etc.
+* `prominence_percent` - Contribution to total team identity (1-100).
+* `hex_color_override` - Kit-specific color.
+
+### C. Moderation & Audit Log
+**`EditHistory`** (Table: `edit_history`)
+* `edit_id` (UUID, PK)
+* `entity_type` (String) - e.g., "team_node", "sponsor_brand".
+* `entity_id` (UUID) - Target of the change.
+* `user_id` (FK -> User) - Submitter.
+* `action` (Enum) - `CREATE`, `UPDATE`, `DELETE`.
+* `status` (Enum) - `PENDING`, `APPROVED`, `REJECTED`, `REVERTED`.
+* `snapshot_before` (JSON) - State before change.
+* `snapshot_after` (JSON) - State after change.
+* `reverted_by` / `reverted_at` (Revert tracking).
+* **Intelligence Metadata**:
+    * `confidence_score` (0.0 - 1.0) - For automated/LLM edits.
+    * **Auto-Approval Threshold**: Changes with `confidence_score` ≥ 0.90 are auto-approved by the "Smart Scraper" System User.
+
+### D. User Management
+**`User`** (Table: `users`)
+* `role`: `EDITOR`, `TRUSTED_EDITOR`, `MODERATOR`, `ADMIN`.
+* **Smart Scraper Bot**: UUID `00000000-0000-0000-0000-000000000001`.
 
 ## 3. Key Constraints
-1.  **Strict Typing:** Backend uses Python 3.11+ type hints.
-2.  **Async:** All DB operations use `sqlalchemy.ext.asyncio` (`await session.execute(...)`).
-3.  **No Lazy Loading:** Relationships must be eagerly loaded (`options(selectinload(...))`) to prevent async errors.
+1.  **Strict Async**: All DB access MUST use the `AsyncSession`.
+2.  **Immutability**: Approved IDs (`node_id`, `era_id`, `master_id`) never change.
+3.  **Audit First**: Any non-trivial mutation should generate an `EditHistory` entry.
 4.  **Immutability:** Once a `TeamNode` is dissolved, it cannot have new `TeamEra` entries added after the dissolution year.

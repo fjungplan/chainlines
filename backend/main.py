@@ -14,6 +14,7 @@ from app.api.v1.sponsors import router as sponsors_router
 from app.api.v1.lineage import router as lineage_router
 from app.api.v1.moderation import router as moderation_router
 from app.api.v1.audit_log import router as audit_log_router
+from app.api.admin.scraper import router as scraper_router
 
 from app.core.exceptions import (
     NodeNotFoundException,
@@ -129,6 +130,7 @@ app.include_router(sponsors_router)
 app.include_router(lineage_router)
 app.include_router(moderation_router)
 app.include_router(audit_log_router)
+app.include_router(scraper_router, prefix="/api/v1/admin/scraper")
 
 
 
