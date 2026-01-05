@@ -96,20 +96,39 @@ async def run_scraper(
     # Unified imports for core services
     from app.scraper.llm.service import LLMService
     from app.scraper.llm.gemini import GeminiClient
+    from app.scraper.llm.deepseek import DeepseekClient
     from app.scraper.llm.prompts import ScraperPrompts
     from app.db.database import async_session_maker
+    from dotenv import load_dotenv
     import os
+
+    # Load environment variables (for local execution)
+    load_dotenv()
 
     # Initialize LLM infrastructure (Shared across phases)
     gemini_key = os.getenv("GEMINI_API_KEY")
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+    
+    clients = {}
+    
+    if gemini_key:
+        clients["gemini-2.5-flash"] = GeminiClient(api_key=gemini_key, model="gemini-2.5-flash")
+        clients["gemini-2.5-pro"] = GeminiClient(api_key=gemini_key, model="gemini-2.5-pro")
+        
+    if deepseek_key:
+        clients["deepseek-chat"] = DeepseekClient(api_key=deepseek_key, model="deepseek-chat")
+        clients["deepseek-reasoner"] = DeepseekClient(api_key=deepseek_key, model="deepseek-reasoner")
+
     llm_service = None
     llm_prompts = None
-    if gemini_key:
-        llm_client = GeminiClient(api_key=gemini_key)
-        llm_service = LLMService(primary=llm_client)
+    
+    if clients:
+        # Initialize service with all available clients
+        llm_service = LLMService(clients=clients)
         llm_prompts = ScraperPrompts(llm_service=llm_service)
+        logger.info(f"LLM Service initialized with models: {', '.join(clients.keys())}")
     else:
-        logger.warning("GEMINI_API_KEY not found. LLM-based operations will be disabled or limited.")
+        logger.warning("No LLM API keys found (GEMINI_API_KEY or DEEPSEEK_API_KEY). LLM-based operations will be disabled.")
 
     async with async_session_maker() as session:
         if phase == 1:
