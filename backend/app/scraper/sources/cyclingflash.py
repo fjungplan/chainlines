@@ -23,9 +23,9 @@ class CyclingFlashParser:
     
     # Tier section headers as they appear on CyclingFlash
     TIER_HEADERS = {
-        1: ["worldtour", "world tour", "uci worldtour", "gs1", "trade team i"],
-        2: ["proteam", "pro team", "uci proteam", "pro continental", "gs2", "trade team ii"],
-        3: ["continental", "uci continental", "gs3", "trade team iii"],
+        1: ["trade team 1", "uci proteam", "uci worldteam"],
+        2: ["trade team 2", "uci professional continental team", "uci proteam"],
+        3: ["trade team 3", "uci continental team"],
     }
     
     def parse_team_list(self, html: str, target_tier: int = None) -> list[str]:
