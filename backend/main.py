@@ -36,9 +36,21 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting up application...")
-    # Note: We use Alembic migrations, so we don't call create_tables() here
-    # Tables are created via: docker-compose run backend alembic upgrade head
-    logger.info("Application startup complete - using Alembic migrations")
+    
+    # Ensure system user exists for audit logging
+    from app.db.database import async_session_maker
+    from app.db.seed_smart_scraper_user import seed_smart_scraper_user
+    
+    try:
+        async with async_session_maker() as session:
+             async with session.begin():
+                user = await seed_smart_scraper_user(session)
+                logger.info(f"System user verified/seeded: {user.display_name} ({user.user_id})")
+    except Exception as e:
+        logger.error(f"Failed to seed system user: {e}")
+        # We don't raise here to allow app to start, though scraper might fail later
+    
+    logger.info("Application startup complete")
     
     yield
     
