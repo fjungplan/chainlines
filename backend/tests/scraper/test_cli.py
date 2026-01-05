@@ -47,3 +47,30 @@ async def test_cli_runner_executes_phase1():
             end_year=1990,
             tier_level=1
         )
+@pytest.mark.asyncio
+async def test_cli_scraper_wires_llm_and_db():
+    """Test CLI wires LLM extraction and DB session correctly for Phase 1."""
+    from app.scraper.cli import run_scraper
+    
+    with patch('app.scraper.orchestration.phase1.DiscoveryService') as mock_discovery, \
+         patch('app.db.database.async_session_maker') as mock_session_maker, \
+         patch('app.scraper.llm.gemini.GeminiClient'), \
+         patch('app.scraper.llm.service.LLMService'), \
+         patch('app.scraper.llm.prompts.ScraperPrompts'), \
+         patch('os.getenv', return_value="test-key"):
+        
+        mock_instance = AsyncMock()
+        mock_instance.discover_teams = AsyncMock(return_value=AsyncMock(team_urls=[], sponsor_names=[]))
+        mock_discovery.return_value = mock_instance
+        
+        # Mock session context manager
+        mock_session = AsyncMock()
+        mock_session_maker.return_value.__aenter__.return_value = mock_session
+        
+        await run_scraper(phase=1, tier="1", resume=False, dry_run=True)
+        
+        # Verify DiscoveryService receives session and prompts
+        mock_discovery.assert_called_once()
+        _, kwargs = mock_discovery.call_args
+        assert kwargs.get('session') == mock_session
+        assert kwargs.get('llm_prompts') is not None

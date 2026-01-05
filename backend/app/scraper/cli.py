@@ -92,39 +92,58 @@ async def run_scraper(
         logger.info("Fresh run - cleared checkpoint")
     else:
         logger.info("Resuming from last checkpoint")
-    
-    if phase == 1:
-        from app.scraper.sources.cyclingflash import CyclingFlashScraper
-        from app.scraper.orchestration.phase1 import DiscoveryService
+
+    # Unified imports for core services
+    from app.scraper.llm.service import LLMService
+    from app.scraper.llm.gemini import GeminiClient
+    from app.scraper.llm.prompts import ScraperPrompts
+    from app.db.database import async_session_maker
+    import os
+
+    # Initialize LLM infrastructure (Shared across phases)
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    llm_service = None
+    llm_prompts = None
+    if gemini_key:
+        llm_client = GeminiClient(api_key=gemini_key)
+        llm_service = LLMService(primary=llm_client)
+        llm_prompts = ScraperPrompts(llm_service=llm_service)
+    else:
+        logger.warning("GEMINI_API_KEY not found. LLM-based operations will be disabled or limited.")
+
+    async with async_session_maker() as session:
+        if phase == 1:
+            from app.scraper.sources.cyclingflash import CyclingFlashScraper
+            from app.scraper.orchestration.phase1 import DiscoveryService
+            
+            logger.info("--- Starting Phase 1: Discovery ---")
+            scraper = CyclingFlashScraper()
+            service = DiscoveryService(
+                scraper=scraper,
+                checkpoint_manager=checkpoint_manager,
+                monitor=monitor,
+                session=session,
+                llm_prompts=llm_prompts
+            )
+            
+            # Convert string tier to level if not "all"
+            target_tier = int(tier) if tier != "all" else None
+            
+            result = await service.discover_teams(
+                start_year=start_year,
+                end_year=end_year,
+                tier_level=target_tier
+            )
+            
+            logger.info(f"Phase 1 Complete: Discovered {len(result.team_urls)} teams")
+            logger.info(f"Collected {len(result.sponsor_names)} unique sponsors for resolution")
         
-        logger.info("--- Starting Phase 1: Discovery ---")
-        scraper = CyclingFlashScraper()
-        service = DiscoveryService(
-            scraper=scraper,
-            checkpoint_manager=checkpoint_manager,
-            monitor=monitor
-        )
-        
-        # Convert string tier to level if not "all"
-        target_tier = int(tier) if tier != "all" else None
-        
-        result = await service.discover_teams(
-            start_year=start_year,
-            end_year=end_year,
-            tier_level=target_tier
-        )
-        
-        logger.info(f"Phase 1 Complete: Discovered {len(result.team_urls)} teams")
-        logger.info(f"Collected {len(result.sponsor_names)} unique sponsors for resolution")
-    
-    elif phase == 2:
-        from app.scraper.orchestration.phase2 import TeamAssemblyService, AssemblyOrchestrator
-        from app.services.audit_log_service import AuditLogService
-        from app.db.database import async_session_maker
-        from app.scraper.sources.cyclingflash import CyclingFlashScraper
-        
-        logger.info("--- Starting Phase 2: Team Assembly ---")
-        async with async_session_maker() as session:
+        elif phase == 2:
+            from app.scraper.orchestration.phase2 import TeamAssemblyService, AssemblyOrchestrator
+            from app.services.audit_log_service import AuditLogService
+            from app.scraper.sources.cyclingflash import CyclingFlashScraper
+            
+            logger.info("--- Starting Phase 2: Team Assembly ---")
             service = TeamAssemblyService(
                 audit_service=AuditLogService(),
                 session=session,
@@ -138,31 +157,19 @@ async def run_scraper(
             )
             # For now, process the start_year
             await orchestrator.run(years=[start_year])
-    
-    elif phase == 3:
-        from app.scraper.orchestration.phase3 import LineageConnectionService, LineageOrchestrator, OrphanDetector
-        from app.services.audit_log_service import AuditLogService
-        from app.scraper.llm.service import LLMService
-        from app.scraper.llm.gemini import GeminiClient
-        from app.scraper.llm.prompts import ScraperPrompts
-        from app.db.database import async_session_maker
-        import os
         
-        logger.info("--- Starting Phase 3: Lineage Connection ---")
-        
-        # Initialize LLM infrastructure
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_key:
-            logger.error("GEMINI_API_KEY not found in environment. Lineage analysis aborted.")
-            return
+        elif phase == 3:
+            from app.scraper.orchestration.phase3 import LineageConnectionService, LineageOrchestrator, OrphanDetector
+            from app.services.audit_log_service import AuditLogService
+            
+            logger.info("--- Starting Phase 3: Lineage Connection ---")
+            
+            if not llm_prompts:
+                logger.error("LLM prompts not initialized (missing API key). Lineage analysis aborted.")
+                return
 
-        llm_client = GeminiClient(api_key=gemini_key)
-        llm_service = LLMService(primary=llm_client)
-        prompts = ScraperPrompts(llm_service=llm_service)
-        
-        async with async_session_maker() as session:
             service = LineageConnectionService(
-                prompts=prompts,
+                prompts=llm_prompts,
                 audit_service=AuditLogService(),
                 session=session,
                 system_user_id=SYSTEM_USER_ID
