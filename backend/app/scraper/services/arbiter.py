@@ -9,12 +9,12 @@ from typing import Optional, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
-from app.scraper.sources.cyclingflash import ScrapedTeamData
-from app.scraper.orchestration.workers import SourceData
 from app.scraper.llm.model_config import PromptType
 
 if TYPE_CHECKING:
     from app.scraper.llm.service import LLMService
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.orchestration.workers import SourceData
 
 
 class ArbitrationDecision(Enum):
@@ -87,8 +87,8 @@ class ConflictArbiter:
     
     async def decide(
         self,
-        cf_data: ScrapedTeamData,
-        cr_data: Optional[SourceData],
+        cf_data: "ScrapedTeamData",
+        cr_data: Optional["SourceData"],
         wp_history: Optional[str]
     ) -> ArbitrationResult:
         """Decide if CF and CR data represent the same entity or a split.
@@ -130,8 +130,8 @@ class ConflictArbiter:
     
     def _has_conflict(
         self,
-        cf_data: ScrapedTeamData,
-        cr_data: Optional[SourceData]
+        cf_data: "ScrapedTeamData",
+        cr_data: Optional["SourceData"]
     ) -> bool:
         """Check if there's a conflict between CF and CR data.
         
@@ -158,8 +158,8 @@ class ConflictArbiter:
     
     def _build_prompt(
         self,
-        cf_data: ScrapedTeamData,
-        cr_data: Optional[SourceData],
+        cf_data: "ScrapedTeamData",
+        cr_data: Optional["SourceData"],
         wp_history: Optional[str]
     ) -> str:
         """Build the prompt for conflict arbitration.
