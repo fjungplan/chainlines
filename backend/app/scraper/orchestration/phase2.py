@@ -15,6 +15,7 @@ from app.services.audit_log_service import AuditLogService
 from app.models.enums import EditAction, EditStatus
 from app.scraper.orchestration.workers import SourceWorker, SourceData
 from app.scraper.services.wikidata import WikidataResolver, WikidataResult
+from app.scraper.services.arbiter import ConflictArbiter, ArbitrationDecision, ArbitrationResult
 
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
@@ -278,6 +279,7 @@ class AssemblyOrchestrator:
         enricher: Optional["TeamEnrichmentService"] = None,
         wikidata_resolver: Optional[WikidataResolver] = None,
         workers: Optional[list[SourceWorker]] = None,
+        arbiter: Optional[ConflictArbiter] = None,
     ):
         self._service = service
         self._scraper = scraper
@@ -286,6 +288,64 @@ class AssemblyOrchestrator:
         self._enricher = enricher
         self._resolver = wikidata_resolver
         self._workers = workers or []
+        self._arbiter = arbiter
+
+    def _has_date_conflict(self, base_data: ScrapedTeamData, cr_data: SourceData) -> bool:
+        """Check for significant date conflicts."""
+        if not cr_data or not cr_data.dissolved_year:
+            return False
+        
+        # Conflict if dissolved year is more than 1 year away from season year
+        # e.g. Scraped 2024, but CR says dissolved 2020 -> Conflict
+        if abs(base_data.season_year - cr_data.dissolved_year) > 1:
+            return True
+            
+        return False
+
+    async def _create_pending_edit(self, enriched: EnrichedTeamData, decision: ArbitrationResult):
+        """Create a PENDING edit for human review."""
+        logger.warning(f"Creating PENDING edit for {enriched.base_data.name}: {decision.reasoning}")
+        
+        # Use existing service to create edit but force PENDING status via low confidence
+        await self._service.create_team_era(enriched.base_data, confidence=decision.confidence)
+
+    async def _handle_split(self, enriched: EnrichedTeamData, decision: ArbitrationResult):
+        """Handle strict split decision."""
+        logger.info(f"Split detected for {enriched.base_data.name}: {decision.suggested_lineage_type}")
+        # TODO: Implement full split logic (creating new Node/LineageEvent)
+        # For now, we Log and do NOT assemble the era on the old node.
+        pass
+
+    async def _process_team(self, enriched: EnrichedTeamData):
+        """Process a single enriched team, handling conflicts."""
+        cr_data = enriched.cycling_ranking_data
+        
+        if self._arbiter and cr_data and self._has_date_conflict(enriched.base_data, cr_data):
+            logger.info(f"Conflict detected for {enriched.base_data.name}. Invoking arbiter...")
+            
+            history_text = enriched.wikipedia_data.history_text if enriched.wikipedia_data else None
+            decision = await self._arbiter.decide(
+                enriched.base_data,
+                cr_data,
+                history_text
+            )
+            
+            logger.info(f"Arbiter decision: {decision.decision.value} (Confidence: {decision.confidence})")
+            
+            # Hook for monitoring/testing if needed
+            if self._monitor and hasattr(self._monitor, 'emit_decision'):
+                 await self._monitor.emit_decision(decision)
+            
+            if decision.decision == ArbitrationDecision.PENDING:
+                await self._create_pending_edit(enriched, decision)
+                return
+            
+            if decision.decision == ArbitrationDecision.SPLIT:
+                await self._handle_split(enriched, decision)
+                return
+                
+        # MERGE or No Conflict -> Proceed to assembly
+        await self._service.create_team_era(enriched.base_data, confidence=enriched.base_data.extraction_confidence or 0.95)
 
     def _get_url_for_worker(
         self, 
@@ -405,7 +465,17 @@ class AssemblyOrchestrator:
                 # LLM Confidence is simulated here or retrieved if we stored it
                 # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
                 # or we would have used an LLM-assisted parser.
-                await self._service.create_team_era(data, confidence=data.extraction_confidence or 0.95)
+                
+                # Wrap base data in EnrichedTeamData if not enriched
+                if not isinstance(data, EnrichedTeamData):
+                     # Temporarily create wrapper if enricher didn't run or return one
+                     # If enricher ran, 'data' should be EnrichedTeamData
+                     # But current enricher code in _run only calls self._enricher.enrich_team_data(data)
+                     # Let's assume enrich_team_data returns EnrichedTeamData
+                     if not isinstance(data, EnrichedTeamData):
+                        data = EnrichedTeamData(base_data=data)
+                
+                await self._process_team(data)
             except Exception as e:
                 logger.error(f"    - Failed to assemble {url}: {e}")
                 continue

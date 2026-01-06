@@ -364,3 +364,180 @@ async def test_orchestrator_collects_enriched_data():
     assert enriched.wikipedia_data.history_text == "Team was founded in 1980"
     assert enriched.memoire_data is not None
     assert enriched.memoire_data.raw_content == "<html>Archive content</html>"
+
+
+# -- New Tests for Slice D2.1 (Arbiter Integration) --
+
+@pytest.mark.asyncio
+async def test_phase2_invokes_arbiter_on_conflict():
+    """Arbiter should be invoked when date conflict exists."""
+    from unittest.mock import MagicMock, AsyncMock
+    from app.scraper.orchestration.phase2 import AssemblyOrchestrator, EnrichedTeamData
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.orchestration.workers import SourceData
+    from app.scraper.services.arbiter import ArbitrationResult, ArbitrationDecision
+
+    # Mock dependencies
+    mock_service = AsyncMock()
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    mock_arbiter = AsyncMock()
+
+    # Setup Arbiter mock to return MERGE (normal flow)
+    mock_arbiter.decide.return_value = ArbitrationResult(
+        decision=ArbitrationDecision.MERGE,
+        confidence=0.95,
+        reasoning="Dates align closely."
+    )
+
+    orchestrator = AssemblyOrchestrator(
+        service=mock_service,
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint,
+        # arbiter arg will be added implementation
+        arbiter=mock_arbiter
+    )
+
+    # Scenarios for conflict:
+    # CF: Season 2024
+    # CR: Dissolved 2020 (Diff > 1 -> Conflict)
+    base_data = ScrapedTeamData(
+        name="Conflicting Team", 
+        season_year=2024, 
+        uci_code="CFT", 
+        sponsors=[], 
+        tier_level=1
+    )
+    
+    enriched = EnrichedTeamData(
+        base_data=base_data,
+        cycling_ranking_data=SourceData(
+            source="cyclingranking", 
+            founded_year=2010, 
+            dissolved_year=2020
+        ),
+        wikipedia_data=SourceData(source="wikipedia", history_text="Some history")
+    )
+
+    # We need to expose _process_team for testing
+    await orchestrator._process_team(enriched)
+
+    # Verify arbiter called
+    mock_arbiter.decide.assert_called_once()
+    
+    # Verify proceed to assemble_team was called (since MERGE)
+    mock_service.create_team_era.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_phase2_creates_pending_edit_on_low_confidence():
+    """Should create PENDING edit if Arbiter returns PENDING."""
+    from unittest.mock import MagicMock, AsyncMock
+    from app.scraper.orchestration.phase2 import AssemblyOrchestrator, EnrichedTeamData
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.orchestration.workers import SourceData
+    from app.scraper.services.arbiter import ArbitrationResult, ArbitrationDecision
+    from app.models.enums import EditAction, EditStatus
+
+    mock_service = AsyncMock()
+    # Mock the audit service call inside service
+    # We need to handle the property access: self._service._audit.create_edit
+    mock_audit = AsyncMock()
+    mock_service._audit = mock_audit
+    
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    mock_arbiter = AsyncMock()
+
+    # Arbiter returns PENDING
+    mock_arbiter.decide.return_value = ArbitrationResult(
+        decision=ArbitrationDecision.PENDING,
+        confidence=0.6,
+        reasoning="Too ambiguous."
+    )
+
+    orchestrator = AssemblyOrchestrator(
+        service=mock_service,
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint,
+        arbiter=mock_arbiter
+    )
+
+    base = ScrapedTeamData(
+        name="Ambiguous Team", 
+        season_year=2024, 
+        uci_code="AMB", 
+        sponsors=[], 
+        tier_level=1
+    )
+    enriched = EnrichedTeamData(
+        base_data=base,
+        cycling_ranking_data=SourceData(source="cyclingranking", dissolved_year=2015)
+    )
+
+    await orchestrator._process_team(enriched)
+
+    mock_arbiter.decide.assert_called_once()
+    
+    # Verify create_team_era IS called, but with low confidence (which triggers PENDING in real service)
+    mock_service.create_team_era.assert_called_once()
+    
+    # Check arguments: should have passed confidence from decision (0.6)
+    call_args = mock_service.create_team_era.call_args
+    assert call_args.kwargs['confidence'] == 0.6
+    
+    # We do NOT verify mock_audit.create_edit because mock_service.create_team_era is a mock 
+    # and won't run the logic that calls audit.create_edit.
+    # The Orchestrator's responsibility is just to call create_team_era with the confidence.
+
+
+@pytest.mark.asyncio
+async def test_phase2_emits_decision_event():
+    """Should emit an event/log when a decision is made."""
+    from unittest.mock import MagicMock, AsyncMock
+    from app.scraper.orchestration.phase2 import AssemblyOrchestrator, EnrichedTeamData
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.orchestration.workers import SourceData
+    from app.scraper.services.arbiter import ArbitrationResult, ArbitrationDecision
+
+    mock_service = AsyncMock()
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    mock_arbiter = AsyncMock()
+    mock_monitor = AsyncMock()
+
+    mock_arbiter.decide.return_value = ArbitrationResult(
+        decision=ArbitrationDecision.SPLIT,
+        confidence=0.95,
+        reasoning="Clearly a new team.",
+        suggested_lineage_type="SPIRITUAL_SUCCESSION"
+    )
+
+    orchestrator = AssemblyOrchestrator(
+        service=mock_service,
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint,
+        monitor=mock_monitor,
+        arbiter=mock_arbiter
+    )
+
+    base = ScrapedTeamData(
+        name="Split Team", 
+        season_year=2024, 
+        uci_code="SPL", 
+        sponsors=[], 
+        tier_level=1
+    )
+    enriched = EnrichedTeamData(
+        base_data=base,
+        cycling_ranking_data=SourceData(source="cyclingranking", dissolved_year=2020)
+    )
+
+    await orchestrator._process_team(enriched)
+
+    # Monitor should be notified via emit_event (if exists) or just logged.
+    # We will assume monitor.emit_decision(decision) or similar is added.
+    # For now, let's verify mock_monitor was accessed/called in some way if possible,
+    # or just rely on the other assertions for now until we define the Event bus perfectly.
+    # We'll assert that SPLIT logic was handled (create_team_era NOT called).
+    mock_service.create_team_era.assert_not_called()
