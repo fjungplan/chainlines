@@ -2,7 +2,8 @@ import uuid
 from datetime import date, datetime
 from typing import Optional, List, TYPE_CHECKING
 
-from sqlalchemy import String, Integer, ForeignKey, CheckConstraint, UniqueConstraint, Boolean, Text, TIMESTAMP, Date
+from sqlalchemy import String, Integer, ForeignKey, CheckConstraint, UniqueConstraint, Boolean, Text, TIMESTAMP, Date, JSON
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from app.db.base import Base, utc_now
 from app.db.types import GUID
@@ -39,6 +40,8 @@ class TeamNode(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, onupdate=utc_now, nullable=False)
     
+    external_ids: Mapped[Optional[dict]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True, comment="External source IDs: {wikidata: Q123, ...}")
+
     # Relationships
     eras: Mapped[List["TeamEra"]] = relationship("TeamEra", back_populates="node", cascade="all, delete-orphan")
     
@@ -100,6 +103,8 @@ class TeamEra(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, onupdate=utc_now, nullable=False)
     
+    wikipedia_history_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Cached Wikipedia History section text")
+
     node: Mapped["TeamNode"] = relationship("TeamNode", back_populates="eras")
     sponsor_links: Mapped[List["TeamSponsorLink"]] = relationship("TeamSponsorLink", back_populates="era", cascade="all, delete-orphan")
     
