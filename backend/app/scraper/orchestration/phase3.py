@@ -143,9 +143,11 @@ class LineageOrchestrator:
     def __init__(
         self,
         service: LineageConnectionService,
+        session: AsyncSession,
         monitor: Optional[ScraperStatusMonitor] = None
     ):
         self._service = service
+        self._session = session
         self._monitor = monitor
         self._run_id = str(monitor.run_id) if monitor else None
 
@@ -188,6 +190,8 @@ class LineageOrchestrator:
                 )
             except Exception as e:
                 logger.error(f"    - Error analyzing pair: {e}")
+                # Rollback the session to clear error state and allow next pair to process
+                await self._session.rollback()
                 continue
 
         logger.info("Phase 3: Lineage analysis complete.")

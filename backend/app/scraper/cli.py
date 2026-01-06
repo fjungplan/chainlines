@@ -207,10 +207,11 @@ async def run_scraper(
             orchestrator = AssemblyOrchestrator(
                 service=service,
                 scraper=CyclingFlashScraper(cache=cache),
+                checkpoint_manager=checkpoint_manager,
+                session=session,
                 wikidata_resolver=wikidata_resolver,
                 workers=workers,
                 arbiter=arbiter,
-                checkpoint_manager=checkpoint_manager,
                 monitor=monitor,
                 enricher=enricher
             )
@@ -238,6 +239,7 @@ async def run_scraper(
             )
             orchestrator = LineageOrchestrator(
                 service=service,
+                session=session,
                 monitor=monitor
             )
 

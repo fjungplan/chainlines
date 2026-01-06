@@ -277,6 +277,7 @@ class AssemblyOrchestrator:
         service: TeamAssemblyService,
         scraper: CyclingFlashScraper,
         checkpoint_manager: CheckpointManager,
+        session: AsyncSession,
         monitor: Optional[ScraperStatusMonitor] = None,
         enricher: Optional["TeamEnrichmentService"] = None,
         wikidata_resolver: Optional[WikidataResolver] = None,
@@ -286,6 +287,7 @@ class AssemblyOrchestrator:
         self._service = service
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
+        self._session = session
         self._monitor = monitor
         self._enricher = enricher
         self._resolver = wikidata_resolver
@@ -509,6 +511,8 @@ class AssemblyOrchestrator:
                 await self._process_team(data)
             except Exception as e:
                 logger.error(f"    - Failed to assemble {url}: {e}")
+                # Rollback the session to clear error state and allow next team to process
+                await self._session.rollback()
                 continue
 
         logger.info("Phase 2: Assembly complete.")
