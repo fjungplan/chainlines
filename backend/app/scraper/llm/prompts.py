@@ -27,14 +27,17 @@ Extract the following information:
 Return the data in the specified JSON format.
 """
 
+
 DECIDE_LINEAGE_PROMPT = """
 Analyze the relationship between these cycling teams and determine the lineage type.
 
 PREDECESSOR TEAM:
 {predecessor_info}
+{predecessor_history}
 
 SUCCESSOR TEAM:
 {successor_info}
+{successor_history}
 
 Determine the relationship type:
 - LEGAL_TRANSFER: Same legal entity, continuous UCI license (the standard season-to-season continuation)
@@ -141,7 +144,9 @@ class ScraperPrompts:
     async def decide_lineage(
         self,
         predecessor_info: str,
-        successor_info: str
+        successor_info: str,
+        predecessor_history: Optional[str] = None,
+        successor_history: Optional[str] = None
     ) -> LineageDecision:
         """Decide lineage relationship between teams.
         
@@ -151,13 +156,21 @@ class ScraperPrompts:
         Args:
             predecessor_info: Description of the predecessor team.
             successor_info: Description of the successor team.
+            predecessor_history: Wikipedia history content for predecessor.
+            successor_history: Wikipedia history content for successor.
             
         Returns:
             LineageDecision with event type, confidence, and reasoning.
         """
+        # Format history sections if content exists
+        pred_hist_block = f"TEAM A HISTORY:\n{predecessor_history}" if predecessor_history else ""
+        succ_hist_block = f"TEAM B HISTORY:\n{successor_history}" if successor_history else ""
+        
         prompt = DECIDE_LINEAGE_PROMPT.format(
             predecessor_info=predecessor_info,
-            successor_info=successor_info
+            predecessor_history=pred_hist_block,
+            successor_info=successor_info,
+            successor_history=succ_hist_block
         )
         
         return await self._llm.generate_structured(

@@ -60,12 +60,16 @@ class LineageConnectionService:
     async def connect(
         self,
         predecessor_info: str,
-        successor_info: str
+        successor_info: str,
+        predecessor_history: Optional[str] = None,
+        successor_history: Optional[str] = None
     ) -> None:
         """Analyze and create lineage connection."""
         decision = await self._prompts.decide_lineage(
             predecessor_info=predecessor_info,
-            successor_info=successor_info
+            successor_info=successor_info,
+            predecessor_history=predecessor_history,
+            successor_history=successor_history
         )
         
         if decision.event_type is None:
@@ -129,7 +133,9 @@ class LineageOrchestrator:
             try:
                 await self._service.connect(
                     predecessor_info=f"Team: {pred['name']}, UCI: {pred.get('uci')}, Year: {pred['end_year']}",
-                    successor_info=f"Team: {succ['name']}, UCI: {succ.get('uci')}, Year: {succ['start_year']}"
+                    successor_info=f"Team: {succ['name']}, UCI: {succ.get('uci')}, Year: {succ['start_year']}",
+                    predecessor_history=pred.get("wikipedia_history_content"),
+                    successor_history=succ.get("wikipedia_history_content")
                 )
             except Exception as e:
                 logger.error(f"    - Error analyzing pair: {e}")
