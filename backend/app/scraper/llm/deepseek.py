@@ -14,7 +14,10 @@ class DeepseekClient:
             api_key=api_key,
             base_url="https://api.deepseek.com"
         )
-        self._client = instructor.from_openai(self._openai)
+        self._client = instructor.from_openai(
+            self._openai,
+            mode=instructor.Mode.JSON
+        )
         self._model = model
     
     async def generate_structured(
