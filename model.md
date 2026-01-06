@@ -88,6 +88,21 @@ Expresses how one `TeamNode` relates to another over time.
 * `has_license` (Boolean)
 * `is_auto_filled` / `is_manual_override` (Flags)
 * `source_origin` (e.g., "CyclingFlash")
+* `wikipedia_history_content` (TEXT, Nullable) - Cached Wikipedia "History" section for lineage decisions.
+
+**`TeamNode`**
+* `node_id` (UUID, PK)
+* `legal_name` (String, Unique) - The official license holder name.
+* `display_name` (String) - Human-readable preferred name.
+* `founding_year` (Integer)
+* `dissolution_year` (Integer, Nullable)
+* `latest_team_name` (String) - Cached current name.
+* `latest_uci_code` (String, 3) - Cached current UCI code.
+* `current_tier` (Integer) - 1 (WorldTeam), 2 (ProTeam), 3 (Continental).
+* `is_active` (Boolean) - Computed: `dissolution_year IS NULL`.
+* `is_protected` (Boolean) - Admin-only modification.
+* `external_ids` (JSONB, Nullable) - Cross-source IDs: `{"wikidata": "Q123", "cyclingranking": "...", "memoire": "..."}`.
+* `source_url` / `source_notes` (Metadata)
 
 ### B. Sponsor System
 **`SponsorMaster`**
