@@ -201,6 +201,7 @@ async def test_orchestrator_calls_wikidata_resolver():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         wikidata_resolver=mock_resolver,
         workers=[]
     )
@@ -268,6 +269,7 @@ async def test_orchestrator_fans_out_to_workers():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         wikidata_resolver=mock_resolver,
         workers=workers
     )
@@ -341,6 +343,7 @@ async def test_orchestrator_collects_enriched_data():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         wikidata_resolver=mock_resolver,
         workers=workers
     )
@@ -394,6 +397,7 @@ async def test_phase2_invokes_arbiter_on_conflict():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         # arbiter arg will be added implementation
         arbiter=mock_arbiter
     )
@@ -460,6 +464,7 @@ async def test_phase2_creates_pending_edit_on_low_confidence():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         arbiter=mock_arbiter
     )
 
@@ -517,6 +522,7 @@ async def test_phase2_emits_decision_event():
         service=mock_service,
         scraper=mock_scraper,
         checkpoint_manager=mock_checkpoint,
+        session=AsyncMock(),
         monitor=mock_monitor,
         arbiter=mock_arbiter
     )

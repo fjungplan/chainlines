@@ -3,16 +3,17 @@ import time
 from app.scraper.sources.firstcycling import FirstCyclingScraper
 
 @pytest.mark.asyncio
-async def test_firstcycling_scraper_respects_rate_limit(mocker):
+async def test_firstcycling_scraper_respects_rate_limit():
     """Verify 10s delay between requests."""
+    from unittest.mock import patch
+    
     # Mocking RateLimiter.wait to avoid actual 10s sleep in tests
-    mock_wait = mocker.patch("app.scraper.base.rate_limiter.RateLimiter.wait")
-    
-    scraper = FirstCyclingScraper()
-    assert scraper.RATE_LIMIT_SECONDS == 10.0
-    
-    # Verify rate limiter was initialized with 10s
-    assert scraper._rate_limiter.min_delay == 10.0
+    with patch("app.scraper.base.rate_limiter.RateLimiter.wait") as mock_wait:
+        scraper = FirstCyclingScraper()
+        assert scraper.RATE_LIMIT_SECONDS == 10.0
+        
+        # Verify rate limiter was initialized with 10s
+        assert scraper._rate_limiter.min_delay == 10.0
 
 def test_get_gt_url_giro():
     """Verify correct URL generation for Giro."""

@@ -7,12 +7,12 @@ def test_orphan_detector_finds_gaps():
     from app.scraper.orchestration.phase3 import OrphanDetector
     
     teams = [
-        {"node_id": "a", "name": "Team A", "end_year": 2022},
-        {"node_id": "b", "name": "Team B", "start_year": 2023},
-        {"node_id": "c", "name": "Team C", "end_year": 2020},
+        {"id": "a", "name": "Team A", "end_year": 2022},
+        {"id": "b", "name": "Team B", "start_year": 2023},
+        {"id": "c", "name": "Team C", "end_year": 2020},
     ]
     
-    detector = OrphanDetector()
+    detector = OrphanDetector(session=AsyncMock())
     candidates = detector.find_candidates(teams)
     
     # Should match Team A (ended 2022) with Team B (started 2023)
@@ -24,11 +24,11 @@ def test_orphan_detector_ignores_large_gaps():
     from app.scraper.orchestration.phase3 import OrphanDetector
     
     teams = [
-        {"node_id": "a", "name": "Team A", "end_year": 2018},
-        {"node_id": "b", "name": "Team B", "start_year": 2023},
+        {"id": "a", "name": "Team A", "end_year": 2018},
+        {"id": "b", "name": "Team B", "start_year": 2023},
     ]
     
-    detector = OrphanDetector(max_gap_years=2)
+    detector = OrphanDetector(session=AsyncMock(), max_gap_years=2)
     candidates = detector.find_candidates(teams)
     
     assert len(candidates) == 0
