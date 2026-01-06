@@ -2,11 +2,12 @@
 import uuid
 import logging
 import asyncio
+import json
 from typing import Optional, List
 from pathlib import Path
 from datetime import datetime
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from app.api.dependencies import require_admin as get_current_admin_user, get_db
 from app.scraper.checkpoint import CheckpointManager
 from app.models.run_log import ScraperRun, ScraperRunStatus
+from app.scraper.utils.sse import sse_manager
 
 logger = logging.getLogger(__name__)
 
@@ -281,3 +283,35 @@ async def abort_scraper(
     run.error_message = "Aborted by user"
     await db.commit()
     return {"message": "Scraper signaled to abort", "run_id": run.run_id}
+
+@router.get("/runs/{run_id}/stream")
+async def stream_run_events(
+    run_id: uuid.UUID,
+    current_user = Depends(get_current_admin_user)
+):
+    """Stream real-time events for a specific scraper run via Server-Sent Events (SSE).
+    
+    This endpoint provides live updates on scraper progress, logs, and decisions.
+    Clients should use EventSource API to consume the stream.
+    
+    Events include:
+    - 'progress': Items processed, current status
+    - 'log': Log messages from scraper operations
+    - 'decision': LLM arbitration decisions with confidence scores
+    """
+    async def event_generator():
+        """Generate SSE-formatted events from the subscription queue."""
+        queue = sse_manager.subscribe(str(run_id))
+        try:
+            while True:
+                event = await queue.get()
+                # Format as SSE protocol: event type and JSON data
+                yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
+        finally:
+            # Clean up subscription when client disconnects
+            sse_manager.unsubscribe(str(run_id))
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )

@@ -7,12 +7,12 @@ def test_orphan_detector_finds_gaps():
     from app.scraper.orchestration.phase3 import OrphanDetector
     
     teams = [
-        {"node_id": "a", "name": "Team A", "end_year": 2022},
-        {"node_id": "b", "name": "Team B", "start_year": 2023},
-        {"node_id": "c", "name": "Team C", "end_year": 2020},
+        {"id": "a", "name": "Team A", "end_year": 2022},
+        {"id": "b", "name": "Team B", "start_year": 2023},
+        {"id": "c", "name": "Team C", "end_year": 2020},
     ]
     
-    detector = OrphanDetector()
+    detector = OrphanDetector(session=AsyncMock())
     candidates = detector.find_candidates(teams)
     
     # Should match Team A (ended 2022) with Team B (started 2023)
@@ -24,11 +24,11 @@ def test_orphan_detector_ignores_large_gaps():
     from app.scraper.orchestration.phase3 import OrphanDetector
     
     teams = [
-        {"node_id": "a", "name": "Team A", "end_year": 2018},
-        {"node_id": "b", "name": "Team B", "start_year": 2023},
+        {"id": "a", "name": "Team A", "end_year": 2018},
+        {"id": "b", "name": "Team B", "start_year": 2023},
     ]
     
-    detector = OrphanDetector(max_gap_years=2)
+    detector = OrphanDetector(session=AsyncMock(), max_gap_years=2)
     candidates = detector.find_candidates(teams)
     
     assert len(candidates) == 0
@@ -108,3 +108,45 @@ async def test_lineage_service_handles_no_connection():
     # Should check with LLM but NOT create an edit
     mock_prompts.decide_lineage.assert_called_once()
     mock_audit.create_edit.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_lineage_prompt_includes_wiki_history():
+    """LineageConnectionService should pass history to prompt."""
+    from app.scraper.orchestration.phase3 import LineageConnectionService
+    from app.scraper.llm.lineage import LineageDecision
+    from app.models.enums import LineageEventType
+    
+    mock_prompts = AsyncMock()
+    # Configure return value to avoid TypeError during confidence check
+    mock_prompts.decide_lineage = AsyncMock(
+        return_value=LineageDecision(
+            event_type=LineageEventType.LEGAL_TRANSFER,
+            confidence=0.95,
+            reasoning="Test reasoning",
+            predecessor_ids=[],
+            successor_ids=[]
+        )
+    )
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    
+    service = LineageConnectionService(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    await service.connect(
+        predecessor_info="Team A",
+        successor_info="Team B",
+        predecessor_history="Had financial issues.",
+        successor_history="Founded by ex-Team A staff."
+    )
+    
+    mock_prompts.decide_lineage.assert_called_once_with(
+        predecessor_info="Team A",
+        successor_info="Team B",
+        predecessor_history="Had financial issues.",
+        successor_history="Founded by ex-Team A staff."
+    )

@@ -47,3 +47,6 @@ docker-compose.override.yml
 htmlcov/
 backups/
 repomix-output.xml
+# Scraper Cache
+cache/
+scraper_checkpoint.json

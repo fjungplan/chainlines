@@ -15,6 +15,7 @@ class TeamNodeBase(BaseModel):
     is_protected: bool = False
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
+    external_ids: Optional[dict] = None
 
     model_config = {
         "from_attributes": True,
@@ -33,6 +34,7 @@ class TeamNodeUpdate(BaseModel):
     is_protected: Optional[bool] = None
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
+    external_ids: Optional[dict] = None
 
 
 class TeamNodeResponse(TeamNodeBase):
@@ -60,6 +62,7 @@ class TeamEraBase(BaseModel):
     source_origin: Optional[str] = None
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
+    wikipedia_history_content: Optional[str] = None
 
     model_config = {
         "from_attributes": True,
@@ -85,6 +88,7 @@ class TeamEraUpdate(BaseModel):
     source_origin: Optional[str] = None
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
+    wikipedia_history_content: Optional[str] = None
 
 
 class TeamEraResponse(TeamEraBase):

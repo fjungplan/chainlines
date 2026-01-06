@@ -24,13 +24,15 @@ async def test_full_phase1_flow_mocked(isolated_session):
             name="Team A",
             season_year=2024,
             sponsors=[SponsorInfo(brand_name="Sponsor1"), SponsorInfo(brand_name="Sponsor2")],
-            previous_season_url=None
+            previous_season_url=None,
+            tier_level=1
         ),
         ScrapedTeamData(
             name="Team B",
             season_year=2024,
             sponsors=[SponsorInfo(brand_name="Sponsor2"), SponsorInfo(brand_name="Sponsor3")],
-            previous_season_url=None
+            previous_season_url=None,
+            tier_level=1
         )
     ])
     

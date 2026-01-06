@@ -1,71 +1,175 @@
-"""Test concurrent source workers."""
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
+from pydantic import ValidationError
+from app.scraper.orchestration.workers import SourceWorker, SourceData, WikipediaWorker, CyclingRankingWorker, MemoireWorker
+from unittest.mock import AsyncMock, MagicMock
+
+
+def test_source_data_model_validates():
+    """SourceData model accepts valid data."""
+    data = SourceData(
+        source="test",
+        raw_content="<html></html>",
+        founded_year=1990,
+        dissolved_year=2000,
+        history_text="Some history.",
+        extra={"meta": "data"}
+    )
+    assert data.source == "test"
+    assert data.founded_year == 1990
+    assert data.extra["meta"] == "data"
+
+def test_source_worker_is_abstract():
+    """Cannot instantiate SourceWorker directly."""
+    with pytest.raises(TypeError):
+        SourceWorker()
+
+@pytest.fixture
+def mock_scraper():
+    scraper = MagicMock()
+    scraper.fetch = AsyncMock()
+    return scraper
 
 @pytest.mark.asyncio
-async def test_worker_pool_runs_parallel():
-    """WorkerPool should run tasks in parallel."""
-    from app.scraper.workers import WorkerPool
+async def test_wikipedia_worker_extracts_history(mock_scraper):
+    """Worker extracts text between History header and next header."""
+    html = """
+        <html>
+        <body>
+            <h1>Team Name</h1>
+            <h2 id="History">History</h2>
+            <p>The team was founded in 1990.</p>
+            <p>It won many races.</p>
+            <h2>2020 Season</h2>
+            <p>This should not be included.</p>
+        </body>
+    </html>
+    """
+    mock_scraper.fetch.return_value = html
     
-    results = []
+    worker = WikipediaWorker(mock_scraper)
+    result = await worker.fetch("http://wiki.com/Team")
     
-    async def task(item):
-        await asyncio.sleep(0.01)
-        results.append(item)
-        return item
-    
-    pool = WorkerPool(max_workers=3)
-    items = [1, 2, 3, 4, 5]
-    
-    await pool.run(items, task)
-    
-    assert len(results) == 5
-    assert set(results) == {1, 2, 3, 4, 5}
+    assert result.source == "wikipedia"
+    assert "The team was founded in 1990." in result.history_text
+    assert "It won many races." in result.history_text
+    assert "This should not be included" not in result.history_text
 
 @pytest.mark.asyncio
-async def test_worker_pool_limits_concurrency():
-    """WorkerPool should respect max_workers limit."""
-    from app.scraper.workers import WorkerPool
+async def test_wikipedia_worker_handles_no_history(mock_scraper):
+    """Worker returns None for history_text if no History section found."""
+    html = """
+    <html>
+        <body>
+            <h1>Team Name</h1>
+            <p>No history section here.</p>
+        </body>
+    </html>
+    """
+    mock_scraper.fetch.return_value = html
     
-    active = []
-    max_active = 0
+    worker = WikipediaWorker(mock_scraper)
+    result = await worker.fetch("http://wiki.com/Team")
     
-    async def task(item):
-        nonlocal max_active
-        active.append(item)
-        max_active = max(max_active, len(active))
-        await asyncio.sleep(0.05)
-        active.remove(item)
-        return item
-    
-    pool = WorkerPool(max_workers=2)
-    await pool.run([1, 2, 3, 4], task)
-    
-    assert max_active <= 2
+    assert result.history_text is None
 
 @pytest.mark.asyncio
-async def test_multi_source_coordinator():
-    """MultiSourceCoordinator should run workers per source."""
-    from app.scraper.workers import MultiSourceCoordinator
+async def test_wikipedia_worker_extracts_founded_year(mock_scraper):
+    """Worker extracts founded year from infobox."""
+    html = """
+    <html>
+        <body>
+            <table class="infobox">
+                <tr>
+                    <th>Founded</th>
+                    <td>1995; 29 years ago</td>
+                </tr>
+            </table>
+            <h2>History</h2>
+            <p>Content.</p>
+        </body>
+    </html>
+    """
+    mock_scraper.fetch.return_value = html
     
-    results = {"source_a": [], "source_b": []}
+    worker = WikipediaWorker(mock_scraper)
+    result = await worker.fetch("http://wiki.com/Team")
     
-    async def fetch_a(url):
-        results["source_a"].append(url)
+    assert result.founded_year == 1995
+
+@pytest.mark.asyncio
+async def test_cycling_ranking_worker_extracts_years(mock_scraper):
+    """Worker extracts founded and dissolved years from page."""
+    html = """
+    <html>
+        <body>
+            <div class="main">
+                <h1>Team Name</h1>
+                <dl>
+                   <dt>Founded</dt>
+                   <dd class="founded">1998</dd>
+                   <dt>Dissolved</dt>
+                   <dd class="dissolved">2010</dd>
+                </dl>
+            </div>
+        </body>
+    </html>
+    """
+    mock_scraper.fetch.return_value = html
     
-    async def fetch_b(url):
-        results["source_b"].append(url)
+    worker = CyclingRankingWorker(mock_scraper)
+    result = await worker.fetch("http://cyclingranking.com/team/123")
     
-    coordinator = MultiSourceCoordinator()
-    coordinator.add_source("source_a", fetch_a, max_workers=2)
-    coordinator.add_source("source_b", fetch_b, max_workers=1)
+    assert result.source == "cyclingranking"
+    assert result.founded_year == 1998
+    assert result.dissolved_year == 2010
+
+@pytest.mark.asyncio
+async def test_cycling_ranking_worker_handles_active_team(mock_scraper):
+    """Worker handles active teams (no dissolved year)."""
+    html = """
+    <html>
+        <body>
+             <div class="main">
+                <h1>Team Name</h1>
+                <dl>
+                   <dt>Founded</dt>
+                   <dd class="founded">2005</dd>
+                </dl>
+            </div>
+        </body>
+    </html>
+    """
+    mock_scraper.fetch.return_value = html
     
-    await coordinator.enqueue("source_a", "url1")
-    await coordinator.enqueue("source_a", "url2")
-    await coordinator.enqueue("source_b", "url3")
+    worker = CyclingRankingWorker(mock_scraper)
+    result = await worker.fetch("http://cyclingranking.com/team/456")
     
-    await coordinator.run_all()
+    assert result.founded_year == 2005
+    assert result.dissolved_year is None
+
+
+@pytest.mark.asyncio
+async def test_memoire_worker_uses_wayback(mock_scraper):
+    """Worker prepends Wayback prefix to URL."""
+    html = "<html><body>Archived content</body></html>"
+    mock_scraper.fetch.return_value = html
     
-    assert len(results["source_a"]) == 2
-    assert len(results["source_b"]) == 1
+    worker = MemoireWorker(mock_scraper)
+    url = "http://memoire-du-cyclisme.eu/equipes/team.php"
+    result = await worker.fetch(url)
+    
+    expected_wayback_url = f"https://web.archive.org/web/2020/{url}"
+    mock_scraper.fetch.assert_called_with(expected_wayback_url)
+    assert result.source == "memoire"
+    assert result.raw_content == html
+
+
+@pytest.mark.asyncio
+async def test_memoire_worker_handles_no_archive(mock_scraper):
+    """Worker returns None if Wayback fetch fails."""
+    mock_scraper.fetch.side_effect = Exception("Wayback error")
+    
+    worker = MemoireWorker(mock_scraper)
+    result = await worker.fetch("http://memoire.com/missing")
+    
+    assert result is None

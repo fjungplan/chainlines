@@ -38,6 +38,7 @@ class DiscoveryResult:
     sponsor_names: set[str]
 
 from app.scraper.monitor import ScraperStatusMonitor
+from app.scraper.services.gt_relevance import GTRelevanceIndex
 
 class DiscoveryService:
     """Orchestrates Phase 1: Team discovery and sponsor collection."""
@@ -48,7 +49,8 @@ class DiscoveryService:
         checkpoint_manager: CheckpointManager,
         monitor: Optional[ScraperStatusMonitor] = None,
         session: Optional[AsyncSession] = None,
-        llm_prompts: Optional["ScraperPrompts"] = None
+        llm_prompts: Optional["ScraperPrompts"] = None,
+        gt_index: Optional[GTRelevanceIndex] = None
     ):
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
@@ -56,6 +58,7 @@ class DiscoveryService:
         self._monitor = monitor
         self._session = session
         self._llm_prompts = llm_prompts
+        self._gt_index = gt_index or GTRelevanceIndex()
         self._retry_queue: List[Tuple[str, dict]] = []  # (team_name, context)
         
         # Initialize brand matcher if session available
@@ -105,8 +108,15 @@ class DiscoveryService:
                     data = await self._scraper.get_team(url, year)
                     
                     prefix = f"Team {i}/{len(urls)} [{year}]"
+
+                    # 1. First apply tier targeting if manually requested
                     if tier_level and data.tier_level != tier_level:
                         logger.info(f"{prefix}: SKIPPING '{data.name}' - Target Tier {tier_level} vs Found {data.tier_level}")
+                        continue
+
+                    # 2. Then apply relevance rules (Dual Seeding)
+                    if not self._is_relevant(data.name, data.tier_level, year):
+                        logger.info(f"{prefix}: SKIPPING '{data.name}' - Irrelevant via rules (Tier {data.tier_level} in {year})")
                         continue
                         
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
@@ -145,6 +155,24 @@ class DiscoveryService:
             sponsor_names=self._collector.get_all()
         )
     
+    def _is_relevant(self, team_name: str, tier: int, year: int) -> bool:
+        """
+        Apply relevance filtering rules.
+        - Post-1999: Keep Tier 1 and 2 only.
+        - 1991-1998: Keep Tier 1. Keep Tier 2 ONLY if in GT index.
+        - Pre-1991: Keep ONLY if in GT index.
+        """
+        if year >= 1999:
+            return tier in (1, 2)
+        elif year >= 1991:
+            if tier == 1:
+                return True
+            elif tier == 2:
+                return self._gt_index.is_relevant(team_name, year)
+            return False
+        else:  # Pre-1991
+            return self._gt_index.is_relevant(team_name, year)
+
     def _save_checkpoint(self, team_urls: list[str]) -> None:
         """Save current progress."""
         self._checkpoint.save(CheckpointData(

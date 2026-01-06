@@ -27,5 +27,5 @@ class GeminiClient:
         return await self._client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             response_model=response_model,
-            temperature=temperature
+            generation_config={"temperature": temperature}
         )

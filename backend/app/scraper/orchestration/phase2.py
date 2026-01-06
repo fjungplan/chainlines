@@ -1,16 +1,23 @@
 """Phase 2: Team Node Assembly."""
+import asyncio
 import logging
 from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID
 from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.team import TeamNode, TeamEra
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.models import SponsorInfo
 from app.services.audit_log_service import AuditLogService
 from app.models.enums import EditAction, EditStatus
+from app.scraper.orchestration.workers import SourceWorker, SourceData
+from app.scraper.services.wikidata import WikidataResolver, WikidataResult
+from app.scraper.services.arbiter import ConflictArbiter, ArbitrationDecision, ArbitrationResult
+
+from app.scraper.utils.sse import sse_manager
 
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
@@ -18,6 +25,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CONFIDENCE_THRESHOLD = 0.90
+
+
+class EnrichedTeamData(BaseModel):
+    """Enriched team data from multiple sources."""
+    base_data: ScrapedTeamData
+    wikidata_result: Optional[WikidataResult] = None
+    wikipedia_data: Optional[SourceData] = None
+    cycling_ranking_data: Optional[SourceData] = None
+    memoire_data: Optional[SourceData] = None
 
 
 class ProminenceCalculator:
@@ -261,14 +277,192 @@ class AssemblyOrchestrator:
         service: TeamAssemblyService,
         scraper: CyclingFlashScraper,
         checkpoint_manager: CheckpointManager,
+        session: AsyncSession,
         monitor: Optional[ScraperStatusMonitor] = None,
-        enricher: Optional["TeamEnrichmentService"] = None
+        enricher: Optional["TeamEnrichmentService"] = None,
+        wikidata_resolver: Optional[WikidataResolver] = None,
+        workers: Optional[list[SourceWorker]] = None,
+        arbiter: Optional[ConflictArbiter] = None,
     ):
         self._service = service
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
+        self._session = session
         self._monitor = monitor
         self._enricher = enricher
+        self._resolver = wikidata_resolver
+        self._workers = workers or []
+        self._arbiter = arbiter
+        self._run_id = str(monitor.run_id) if monitor else None
+
+    async def _emit_progress(self, current: int, total: int):
+        """Emit progress event via SSE."""
+        if not self._run_id:
+            return
+        await sse_manager.emit(self._run_id, "progress", {
+            "phase": 2,
+            "current": current,
+            "total": total,
+            "percent": round(current / total * 100, 1)
+        })
+
+    async def _emit_decision(self, team_name: str, decision: ArbitrationResult):
+        """Emit arbitration decision event via SSE."""
+        if not self._run_id:
+            return
+        await sse_manager.emit(self._run_id, "decision", {
+            "type": "CONFLICT_RESOLUTION",
+            "subject": team_name,
+            "outcome": decision.decision.value,
+            "confidence": decision.confidence,
+            "reasoning": decision.reasoning
+        })
+
+    def _has_date_conflict(self, base_data: ScrapedTeamData, cr_data: SourceData) -> bool:
+        """Check for significant date conflicts."""
+        if not cr_data or not cr_data.dissolved_year:
+            return False
+        
+        # Conflict if dissolved year is more than 1 year away from season year
+        # e.g. Scraped 2024, but CR says dissolved 2020 -> Conflict
+        if abs(base_data.season_year - cr_data.dissolved_year) > 1:
+            return True
+            
+        return False
+
+    async def _create_pending_edit(self, enriched: EnrichedTeamData, decision: ArbitrationResult):
+        """Create a PENDING edit for human review."""
+        logger.warning(f"Creating PENDING edit for {enriched.base_data.name}: {decision.reasoning}")
+        
+        # Use existing service to create edit but force PENDING status via low confidence
+        await self._service.create_team_era(enriched.base_data, confidence=decision.confidence)
+
+    async def _handle_split(self, enriched: EnrichedTeamData, decision: ArbitrationResult):
+        """Handle strict split decision."""
+        logger.info(f"Split detected for {enriched.base_data.name}: {decision.suggested_lineage_type}")
+        # TODO: Implement full split logic (creating new Node/LineageEvent)
+        # For now, we Log and do NOT assemble the era on the old node.
+        pass
+
+    async def _process_team(self, enriched: EnrichedTeamData):
+        """Process a single enriched team, handling conflicts."""
+        cr_data = enriched.cycling_ranking_data
+        
+        if self._arbiter and cr_data and self._has_date_conflict(enriched.base_data, cr_data):
+            logger.info(f"Conflict detected for {enriched.base_data.name}. Invoking arbiter...")
+            
+            history_text = enriched.wikipedia_data.history_text if enriched.wikipedia_data else None
+            decision = await self._arbiter.decide(
+                enriched.base_data,
+                cr_data,
+                history_text
+            )
+            
+            logger.info(f"Arbiter decision: {decision.decision.value} (Confidence: {decision.confidence})")
+            
+            # Hook for monitoring/testing if needed
+            if self._monitor and hasattr(self._monitor, 'emit_decision'):
+                 await self._monitor.emit_decision(decision)
+            
+            # Emit SSE event
+            await self._emit_decision(enriched.base_data.name, decision)
+            
+            if decision.decision == ArbitrationDecision.PENDING:
+                await self._create_pending_edit(enriched, decision)
+                return
+            
+            if decision.decision == ArbitrationDecision.SPLIT:
+                await self._handle_split(enriched, decision)
+                return
+                
+        # MERGE or No Conflict -> Proceed to assembly
+        await self._service.create_team_era(enriched.base_data, confidence=enriched.base_data.extraction_confidence or 0.95)
+
+    def _get_url_for_worker(
+        self, 
+        source_name: str, 
+        wd_result: Optional[WikidataResult]
+    ) -> Optional[str]:
+        """Extract appropriate URL for a worker from Wikidata result.
+        
+        Args:
+            source_name: Name of the source worker
+            wd_result: WikidataResult containing sitelinks
+            
+        Returns:
+            URL string if available, None otherwise
+        """
+        if not wd_result:
+            return None
+        
+        # Map worker source names to Wikidata sitelink codes
+        if source_name == "wikipedia":
+            return wd_result.sitelinks.get("en")  # EN Wikipedia
+        elif source_name == "cyclingranking":
+            # CyclingRanking URL resolution needs more logic
+            # For now, returning None as it requires QID->URL mapping
+            return None
+        elif source_name == "memoire":
+            # Memoire URLs would come from sitelinks if available
+            return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
+        
+        return None
+    
+    async def _enrich_team(
+        self, 
+        base_data: ScrapedTeamData
+    ) -> EnrichedTeamData:
+        """Enrich team data by calling Wikidata and fanning out to workers.
+        
+        Args:
+            base_data: Base scraped team data from CyclingFlash
+            
+        Returns:
+            EnrichedTeamData with results from all sources
+        """
+        
+        # Step 1: Resolve via Wikidata
+        wd_result = None
+        if self._resolver:
+            wd_result = await self._resolver.resolve(base_data.name)
+        
+        # Step 2: Fan out to workers in parallel
+        tasks = []
+        worker_map = {}  # Track which task corresponds to which worker
+        
+        for worker in self._workers:
+            url = self._get_url_for_worker(worker.source_name, wd_result)
+            if url:
+                task = worker.fetch(url)
+                tasks.append(task)
+                worker_map[len(tasks) - 1] = worker.source_name
+        
+        # Execute all worker fetches in parallel
+        results = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Step 3: Collect results into EnrichedTeamData
+        enriched = EnrichedTeamData(
+            base_data=base_data,
+            wikidata_result=wd_result
+        )
+        
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning(f"Worker {worker_map.get(idx)} failed: {result}")
+                continue
+            
+            source_name = worker_map.get(idx)
+            if source_name == "wikipedia":
+                enriched.wikipedia_data = result
+            elif source_name == "cyclingranking":
+                enriched.cycling_ranking_data = result
+            elif source_name == "memoire":
+                enriched.memoire_data = result
+        
+        return enriched
+
 
     async def run(self, years: List[int]) -> None:
         """Process the team queue for specified years."""
@@ -283,6 +477,8 @@ class AssemblyOrchestrator:
         for i, url in enumerate(queue, 1):
             if self._monitor:
                 await self._monitor.check_status()
+            
+            await self._emit_progress(i, len(queue))
             
             # For each team, we may need to fetch detail for multiple years 
             # if we want a complete history, but for now we follow the simple 
@@ -302,9 +498,21 @@ class AssemblyOrchestrator:
                 # LLM Confidence is simulated here or retrieved if we stored it
                 # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
                 # or we would have used an LLM-assisted parser.
-                await self._service.create_team_era(data, confidence=data.extraction_confidence or 0.95)
+                
+                # Wrap base data in EnrichedTeamData if not enriched
+                if not isinstance(data, EnrichedTeamData):
+                     # Temporarily create wrapper if enricher didn't run or return one
+                     # If enricher ran, 'data' should be EnrichedTeamData
+                     # But current enricher code in _run only calls self._enricher.enrich_team_data(data)
+                     # Let's assume enrich_team_data returns EnrichedTeamData
+                     if not isinstance(data, EnrichedTeamData):
+                        data = EnrichedTeamData(base_data=data)
+                
+                await self._process_team(data)
             except Exception as e:
                 logger.error(f"    - Failed to assemble {url}: {e}")
+                # Rollback the session to clear error state and allow next team to process
+                await self._session.rollback()
                 continue
 
         logger.info("Phase 2: Assembly complete.")
