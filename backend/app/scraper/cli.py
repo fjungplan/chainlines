@@ -16,11 +16,11 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--phase",
         type=int,
-        choices=[1, 2, 3],
+        choices=[0, 1, 2, 3],
         default=1,
-        help="Phase to run (1=Discovery, 2=Assembly, 3=Lineage)"
+        help="Phase to run (0=All, 1=Discovery, 2=Assembly, 3=Lineage)"
     )
-    
+
     parser.add_argument(
         "--tier",
         type=str,
@@ -28,33 +28,33 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         default="1",
         help="Team tier level to process (1=WorldTour/GS1, 2=ProTeam/GS2, 3=Continental/GS3)"
     )
-    
+
     parser.add_argument(
         "--resume",
         action="store_true",
         help="Resume from last checkpoint"
     )
-    
+
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Simulate without writing to database"
     )
-    
+
     parser.add_argument(
         "--start-year",
         type=int,
         default=2025,
         help="Start year for scraping (default: current year)"
     )
-    
+
     parser.add_argument(
         "--end-year",
         type=int,
         default=1990,
         help="End year for scraping (default: 1990)"
     )
-    
+
     return parser.parse_args(args)
 
 
@@ -73,20 +73,20 @@ async def run_scraper(
     run_id: Optional[uuid.UUID] = None
 ) -> None:
     """Run the scraper for specified phase."""
-    logger.info(f"Starting Phase {phase} for tier {tier}")
-    
+    logger.info(f"Starting Scraper (Phase: {phase}, Tier: {tier}, Range: {start_year}-{end_year})")
+
     if dry_run:
         logger.info("DRY RUN - no database writes")
-    
+
     checkpoint_path = Path("./scraper_checkpoint.json")
     checkpoint_manager = CheckpointManager(checkpoint_path)
-    
+
     # Static system user ID
     SYSTEM_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-    
+
     # Initialize monitor if run_id provided
     monitor = ScraperStatusMonitor(run_id) if run_id else None
-    
+
     if not resume:
         checkpoint_manager.clear()
         logger.info("Fresh run - cleared checkpoint")
@@ -99,29 +99,52 @@ async def run_scraper(
     from app.scraper.llm.deepseek import DeepseekClient
     from app.scraper.llm.prompts import ScraperPrompts
     from app.db.database import async_session_maker
+    from app.scraper.utils.cache import CacheManager
+    from app.scraper.services.gt_relevance import GTRelevanceIndex
+    from app.scraper.services.wikidata import WikidataResolver
+    from app.scraper.base.scraper import BaseScraper
+    from app.scraper.orchestration.workers import WikipediaWorker, CyclingRankingWorker, MemoireWorker
+    from app.scraper.services.arbiter import ConflictArbiter
     from dotenv import load_dotenv
     import os
 
     # Load environment variables (for local execution)
     load_dotenv()
 
+    # Initialize Cache
+    cache = CacheManager()
+
+    # Initialize GT Index
+    gt_index = GTRelevanceIndex()
+
+    # Initialize Wikidata Resolver
+    wikidata_resolver = WikidataResolver(cache=cache)
+
+    # Initialize Workers
+    base_scraper = BaseScraper(cache=cache)
+    workers = [
+        WikipediaWorker(base_scraper),
+        CyclingRankingWorker(base_scraper),
+        MemoireWorker(base_scraper),
+    ]
+
     # Initialize LLM infrastructure (Shared across phases)
     gemini_key = os.getenv("GEMINI_API_KEY")
     deepseek_key = os.getenv("DEEPSEEK_API_KEY")
-    
+
     clients = {}
-    
+
     if gemini_key:
         clients["gemini-2.5-flash"] = GeminiClient(api_key=gemini_key, model="gemini-2.5-flash")
         clients["gemini-2.5-pro"] = GeminiClient(api_key=gemini_key, model="gemini-2.5-pro")
-        
+
     if deepseek_key:
         clients["deepseek-chat"] = DeepseekClient(api_key=deepseek_key, model="deepseek-chat")
         clients["deepseek-reasoner"] = DeepseekClient(api_key=deepseek_key, model="deepseek-reasoner")
 
     llm_service = None
     llm_prompts = None
-    
+
     if clients:
         # Initialize service with all available clients
         llm_service = LLMService(clients=clients)
@@ -130,46 +153,52 @@ async def run_scraper(
     else:
         logger.warning("No LLM API keys found (GEMINI_API_KEY or DEEPSEEK_API_KEY). LLM-based operations will be disabled.")
 
+    # Initialize Arbiter
+    arbiter = ConflictArbiter(llm_service) if llm_service else None
+
     async with async_session_maker() as session:
-        if phase == 1:
+        # Phase 1: Discovery
+        if phase in (0, 1):
             from app.scraper.sources.cyclingflash import CyclingFlashScraper
             from app.scraper.orchestration.phase1 import DiscoveryService
-            
+
             logger.info("--- Starting Phase 1: Discovery ---")
-            scraper = CyclingFlashScraper()
+            scraper = CyclingFlashScraper(cache=cache)
             service = DiscoveryService(
                 scraper=scraper,
+                gt_index=gt_index,
                 checkpoint_manager=checkpoint_manager,
                 monitor=monitor,
                 session=session,
                 llm_prompts=llm_prompts
             )
-            
+
             # Convert string tier to level if not "all"
             target_tier = int(tier) if tier != "all" else None
-            
+
             result = await service.discover_teams(
                 start_year=start_year,
                 end_year=end_year,
                 tier_level=target_tier
             )
-            
+
             logger.info(f"Phase 1 Complete: Discovered {len(result.team_urls)} teams")
             logger.info(f"Collected {len(result.sponsor_names)} unique sponsors for resolution")
-        
-        elif phase == 2:
+
+        # Phase 2: Assembly
+        if phase in (0, 2):
             from app.scraper.orchestration.phase2 import TeamAssemblyService, AssemblyOrchestrator
             from app.services.audit_log_service import AuditLogService
             from app.scraper.sources.cyclingflash import CyclingFlashScraper
-            
+
             from app.scraper.services.enrichment import TeamEnrichmentService
-            
+
             logger.info("--- Starting Phase 2: Team Assembly ---")
-            
+
             enricher = None
             if llm_prompts:
                 enricher = TeamEnrichmentService(session, llm_prompts)
-                
+
             service = TeamAssemblyService(
                 audit_service=AuditLogService(),
                 session=session,
@@ -177,20 +206,26 @@ async def run_scraper(
             )
             orchestrator = AssemblyOrchestrator(
                 service=service,
-                scraper=CyclingFlashScraper(),
+                scraper=CyclingFlashScraper(cache=cache),
+                wikidata_resolver=wikidata_resolver,
+                workers=workers,
+                arbiter=arbiter,
                 checkpoint_manager=checkpoint_manager,
                 monitor=monitor,
                 enricher=enricher
             )
-            # For now, process the start_year
-            await orchestrator.run(years=[start_year])
-        
-        elif phase == 3:
+            
+            # Process the year range
+            years = list(range(start_year, end_year - 1, -1))
+            await orchestrator.run(years=years)
+
+        # Phase 3: Lineage
+        if phase in (0, 3):
             from app.scraper.orchestration.phase3 import LineageConnectionService, LineageOrchestrator, OrphanDetector
             from app.services.audit_log_service import AuditLogService
-            
+
             logger.info("--- Starting Phase 3: Lineage Connection ---")
-            
+
             if not llm_prompts:
                 logger.error("LLM prompts not initialized (missing API key). Lineage analysis aborted.")
                 return
@@ -205,11 +240,10 @@ async def run_scraper(
                 service=service,
                 monitor=monitor
             )
-            
-            # Simple candidate detection for now (demo mode)
-            detector = OrphanDetector()
-            # In real run, we'd fetch actual teams from DB here
-            candidates = [] 
+
+            # Detect candidates
+            detector = OrphanDetector(session=session)
+            candidates = await detector.get_orphan_candidates()
             await orchestrator.run(candidates=candidates)
 
 
