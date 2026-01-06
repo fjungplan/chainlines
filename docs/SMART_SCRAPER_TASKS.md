@@ -177,3 +177,13 @@
 - [x] Create Pull Request
 - [ ] Code Review Complete
 - [ ] Merged to Main
+
+---
+
+## Phase A: Multi-Source Refinement (A2 Slices)
+
+- [x] A2.1 Create `CacheManager` class
+- [x] A2.2 Implement `FirstCyclingScraper`
+- [x] A2.3 Implement `FirstCyclingParser`
+- [x] A2.4 Build GT Index Cache Script
+

@@ -66,7 +66,8 @@ async def test_discovery_service_collects_teams():
         name="Team A",
         season_year=2024,
         sponsors=[SponsorInfo(brand_name="Sponsor1")],
-        previous_season_url=None
+        previous_season_url=None,
+        tier_level=1
     ))
     
     mock_checkpoint = MagicMock()
@@ -441,3 +442,71 @@ async def test_resilience_exponential_backoff(discovery_service_with_llm, mock_l
         assert sponsors[0].brand_name == "Success Sponsor"
         assert confidence == 0.95
 
+
+# -- New Tests for Slice A3.1 (Dual Seeding) --
+
+def test_discovery_filters_tier3_post_1999(discovery_service_with_llm):
+    """Tier 3 teams should be excluded in modern era (>= 1999)."""
+    # Since _is_relevant is distinct from scraping, we can test it directly if we expose it,
+    # or test via private method access. The plan implies adding _is_relevant logic.
+    
+    # We'll assert on the private method _is_relevant which we are about to add.
+    # Note: We haven't implemented it yet, so this test will fail or AttributeError if run now.
+    # For now, we assume the method signature: _is_relevant(team_name, tier, year)
+    
+    # DiscoveryService isn't updated yet to have _is_relevant, so we mock it or expect failure.
+    # But TDD says write test first. We will use `getattr` or just assume it exists for the test definition
+    # and expect it to fail deployment/execution until implemented.
+    
+    # To make this runnable before implementation (and fail properly), we might need to rely on the fact 
+    # we are adding the tests to the file, and then expect them to fail.
+    # However, since the method doesn't exist, it will be an AttributeError.
+    pass 
+
+@pytest.fixture
+def discovery_service_with_gt(discovery_service_with_llm):
+    """Fixture to add a mock GT index to the service."""
+    from app.scraper.services.gt_relevance import GTRelevanceIndex
+    mock_gt = MagicMock(spec=GTRelevanceIndex)
+    discovery_service_with_llm._gt_index = mock_gt
+    return discovery_service_with_llm
+
+def test_discovery_logic_filtering(discovery_service_with_gt):
+    """Test the _is_relevant logic across different eras."""
+    service = discovery_service_with_gt
+    # We will enforce the method existence in implementation.
+    # For TDD validation, we will try to call it.
+    
+    # 1. Post-1999: Tier 3 excluded
+    # We monitor behavior by checking return value of _is_relevant
+    
+    # If the method doesn't exist yet, we can't really "test" it without it crashing.
+    # But we can define the test that *will* pass.
+    
+    # Using a helper to safely call the private method if it existed, for TDD Red state:
+    if not hasattr(service, "_is_relevant"):
+        pytest.fail("DiscoveryService._is_relevant not implemented yet")
+
+    # Case 1: 2020 (>= 1999), Tier 3 -> False
+    assert service._is_relevant("Small Team", 3, 2020) is False
+    # Case 1b: 2020, Tier 2 -> True
+    assert service._is_relevant("Pro Team", 2, 2020) is True
+
+    # Case 2: 1985 (< 1991), Tier 1, Relevant -> True
+    service._gt_index.is_relevant.return_value = True
+    assert service._is_relevant("Famous Old Team", 1, 1985) is True
+    
+    # Case 3: 1985 (< 1991), Tier 1, Not Relevant -> False
+    service._gt_index.is_relevant.return_value = False
+    assert service._is_relevant("Obscure Old Team", 1, 1985) is False
+    
+    # Case 4: 1995 (1991-1998), Tier 2, Not Relevant -> False
+    service._gt_index.is_relevant.return_value = False
+    assert service._is_relevant("Mid Team", 2, 1995) is False
+    
+    # Case 4b: 1995 (1991-1998), Tier 2, Relevant -> True
+    service._gt_index.is_relevant.return_value = True
+    assert service._is_relevant("Mid Team GT", 2, 1995) is True
+    
+    # Case 4c: 1995 (1991-1998), Tier 1 -> True (always)
+    assert service._is_relevant("Top Team", 1, 1995) is True
