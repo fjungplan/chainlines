@@ -13,6 +13,7 @@ class PromptType(Enum):
     EXTRACT_TEAM_DATA = "extract_team_data"
     DECIDE_LINEAGE = "decide_lineage"
     SPONSOR_EXTRACTION = "sponsor_extraction"
+    CONFLICT_ARBITRATION = "conflict_arbitration"
 
 
 @dataclass(frozen=True)
@@ -39,5 +40,10 @@ MODEL_ROUTING: Dict[PromptType, ModelPair] = {
     PromptType.SPONSOR_EXTRACTION: ModelPair(
         primary_model="deepseek-chat",
         fallback_model="gemini-2.5-flash"
+    ),
+    # Conflict arbitration requires deep reasoning (same as lineage)
+    PromptType.CONFLICT_ARBITRATION: ModelPair(
+        primary_model="deepseek-reasoner",
+        fallback_model="gemini-2.5-pro"
     ),
 }
