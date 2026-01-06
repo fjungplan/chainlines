@@ -45,6 +45,9 @@ class CyclingFlashParser:
         
         # Simple extraction: all team links
         for link in soup.find_all('a', href=True):
+            # Filter out sidebar/nav links (li parents)
+            if link.find_parent('li'):
+                continue
             href = link.get('href')
             if href and '/team/' in href and not href.endswith('/teams'):
                 if href not in urls:
@@ -78,6 +81,9 @@ class CyclingFlashParser:
             
             # If it's a team link and we know the tier, add it
             if element.name == 'a':
+                # Filter out sidebar/nav links (li parents)
+                if element.find_parent('li'):
+                    continue
                 href = element.get('href', '')
                 if '/team/' in href and not href.endswith('/teams'):
                     if current_tier and href not in result[current_tier]:

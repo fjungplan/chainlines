@@ -55,3 +55,40 @@ async def test_cyclingflash_scraper_gets_team():
         
         assert data.name == "Team Visma | Lease a Bike"
         mock_fetch.assert_called_once()
+
+def test_parse_team_list_ignores_sidebar_links():
+    """Parser should ignore team links in list items (li), which are usually sidebar/nav."""
+    from app.scraper.sources.cyclingflash import CyclingFlashParser
+    
+    html = """
+    <div class="container">
+        <!-- Tier 1 Header -->
+        <h3>UCI WorldTeam</h3>
+        <div class="grid">
+            <!-- Valid Div Team -->
+            <div><a href="/team/valid-team-1">Valid Team 1</a></div>
+        </div>
+        
+        <!-- Tier 2 Header -->
+        <h3>UCI ProTeam</h3>
+        <table>
+            <!-- Valid Table Team -->
+            <tr><td><a href="/team/valid-team-2">Valid Team 2</a></td></tr>
+        </table>
+        
+        <!-- Sidebar / Random List -->
+        <div class="sidebar">
+            <h3>Latest Transfers</h3>
+            <ul>
+                <li><a href="/team/invalid-sidebar-team">Invalid Team</a></li>
+            </ul>
+        </div>
+    </div>
+    """
+    
+    parser = CyclingFlashParser()
+    urls = parser.parse_team_list(html)
+    
+    assert "/team/valid-team-1" in urls
+    assert "/team/valid-team-2" in urls
+    assert "/team/invalid-sidebar-team" not in urls
