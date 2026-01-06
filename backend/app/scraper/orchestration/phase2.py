@@ -1,16 +1,20 @@
 """Phase 2: Team Node Assembly."""
+import asyncio
 import logging
 from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID
 from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.team import TeamNode, TeamEra
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.models import SponsorInfo
 from app.services.audit_log_service import AuditLogService
 from app.models.enums import EditAction, EditStatus
+from app.scraper.orchestration.workers import SourceWorker, SourceData
+from app.scraper.services.wikidata import WikidataResolver, WikidataResult
 
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
@@ -18,6 +22,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 CONFIDENCE_THRESHOLD = 0.90
+
+
+class EnrichedTeamData(BaseModel):
+    """Enriched team data from multiple sources."""
+    base_data: ScrapedTeamData
+    wikidata_result: Optional[WikidataResult] = None
+    wikipedia_data: Optional[SourceData] = None
+    cycling_ranking_data: Optional[SourceData] = None
+    memoire_data: Optional[SourceData] = None
 
 
 class ProminenceCalculator:
@@ -262,13 +275,103 @@ class AssemblyOrchestrator:
         scraper: CyclingFlashScraper,
         checkpoint_manager: CheckpointManager,
         monitor: Optional[ScraperStatusMonitor] = None,
-        enricher: Optional["TeamEnrichmentService"] = None
+        enricher: Optional["TeamEnrichmentService"] = None,
+        wikidata_resolver: Optional[WikidataResolver] = None,
+        workers: Optional[list[SourceWorker]] = None,
     ):
         self._service = service
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
         self._monitor = monitor
         self._enricher = enricher
+        self._resolver = wikidata_resolver
+        self._workers = workers or []
+
+    def _get_url_for_worker(
+        self, 
+        source_name: str, 
+        wd_result: Optional[WikidataResult]
+    ) -> Optional[str]:
+        """Extract appropriate URL for a worker from Wikidata result.
+        
+        Args:
+            source_name: Name of the source worker
+            wd_result: WikidataResult containing sitelinks
+            
+        Returns:
+            URL string if available, None otherwise
+        """
+        if not wd_result:
+            return None
+        
+        # Map worker source names to Wikidata sitelink codes
+        if source_name == "wikipedia":
+            return wd_result.sitelinks.get("en")  # EN Wikipedia
+        elif source_name == "cyclingranking":
+            # CyclingRanking URL resolution needs more logic
+            # For now, returning None as it requires QID->URL mapping
+            return None
+        elif source_name == "memoire":
+            # Memoire URLs would come from sitelinks if available
+            return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
+        
+        return None
+    
+    async def _enrich_team(
+        self, 
+        base_data: ScrapedTeamData
+    ) -> EnrichedTeamData:
+        """Enrich team data by calling Wikidata and fanning out to workers.
+        
+        Args:
+            base_data: Base scraped team data from CyclingFlash
+            
+        Returns:
+            EnrichedTeamData with results from all sources
+        """
+        
+        # Step 1: Resolve via Wikidata
+        wd_result = None
+        if self._resolver:
+            wd_result = await self._resolver.resolve(base_data.name)
+        
+        # Step 2: Fan out to workers in parallel
+        tasks = []
+        worker_map = {}  # Track which task corresponds to which worker
+        
+        for worker in self._workers:
+            url = self._get_url_for_worker(worker.source_name, wd_result)
+            if url:
+                task = worker.fetch(url)
+                tasks.append(task)
+                worker_map[len(tasks) - 1] = worker.source_name
+        
+        # Execute all worker fetches in parallel
+        results = []
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Step 3: Collect results into EnrichedTeamData
+        enriched = EnrichedTeamData(
+            base_data=base_data,
+            wikidata_result=wd_result
+        )
+        
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.warning(f"Worker {worker_map.get(idx)} failed: {result}")
+                continue
+            
+            source_name = worker_map.get(idx)
+            if source_name == "wikipedia":
+                enriched.wikipedia_data = result
+            elif source_name == "cyclingranking":
+                enriched.cycling_ranking_data = result
+            elif source_name == "memoire":
+                enriched.memoire_data = result
+        
+        return enriched
+
 
     async def run(self, years: List[int]) -> None:
         """Process the team queue for specified years."""
