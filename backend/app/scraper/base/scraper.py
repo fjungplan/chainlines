@@ -38,10 +38,29 @@ class BaseScraper:
 
         await self._rate_limiter.wait()
         
-        headers = {"User-Agent": self._user_agent.get()}
+        ua = self._user_agent.get()
+        headers = {
+            "User-Agent": ua,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+        }
         
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(url, headers=headers, follow_redirects=True)
+        # Add Sec-CH-UA headers if it's Chrome
+        if "Chrome" in ua:
+            headers["Sec-CH-UA"] = '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"'
+            headers["Sec-CH-UA-Mobile"] = "?0"
+            headers["Sec-CH-UA-Platform"] = '"Windows"'
+        
+        async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+            response = await client.get(url, headers=headers)
             response.raise_for_status()
             content = response.text
             
