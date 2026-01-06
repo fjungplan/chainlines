@@ -17,6 +17,8 @@ from app.scraper.orchestration.workers import SourceWorker, SourceData
 from app.scraper.services.wikidata import WikidataResolver, WikidataResult
 from app.scraper.services.arbiter import ConflictArbiter, ArbitrationDecision, ArbitrationResult
 
+from app.scraper.utils.sse import sse_manager
+
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
 
@@ -289,6 +291,30 @@ class AssemblyOrchestrator:
         self._resolver = wikidata_resolver
         self._workers = workers or []
         self._arbiter = arbiter
+        self._run_id = str(monitor.run_id) if monitor else None
+
+    async def _emit_progress(self, current: int, total: int):
+        """Emit progress event via SSE."""
+        if not self._run_id:
+            return
+        await sse_manager.emit(self._run_id, "progress", {
+            "phase": 2,
+            "current": current,
+            "total": total,
+            "percent": round(current / total * 100, 1)
+        })
+
+    async def _emit_decision(self, team_name: str, decision: ArbitrationResult):
+        """Emit arbitration decision event via SSE."""
+        if not self._run_id:
+            return
+        await sse_manager.emit(self._run_id, "decision", {
+            "type": "CONFLICT_RESOLUTION",
+            "subject": team_name,
+            "outcome": decision.decision.value,
+            "confidence": decision.confidence,
+            "reasoning": decision.reasoning
+        })
 
     def _has_date_conflict(self, base_data: ScrapedTeamData, cr_data: SourceData) -> bool:
         """Check for significant date conflicts."""
@@ -335,6 +361,9 @@ class AssemblyOrchestrator:
             # Hook for monitoring/testing if needed
             if self._monitor and hasattr(self._monitor, 'emit_decision'):
                  await self._monitor.emit_decision(decision)
+            
+            # Emit SSE event
+            await self._emit_decision(enriched.base_data.name, decision)
             
             if decision.decision == ArbitrationDecision.PENDING:
                 await self._create_pending_edit(enriched, decision)
@@ -446,6 +475,8 @@ class AssemblyOrchestrator:
         for i, url in enumerate(queue, 1):
             if self._monitor:
                 await self._monitor.check_status()
+            
+            await self._emit_progress(i, len(queue))
             
             # For each team, we may need to fetch detail for multiple years 
             # if we want a complete history, but for now we follow the simple 

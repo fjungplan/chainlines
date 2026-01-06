@@ -8,6 +8,8 @@ from app.services.audit_log_service import AuditLogService
 from app.models.enums import EditAction, EditStatus
 from app.scraper.monitor import ScraperStatusMonitor
 
+from app.scraper.utils.sse import sse_manager
+
 logger = logging.getLogger(__name__)
 CONFIDENCE_THRESHOLD = 0.90
 
@@ -112,6 +114,18 @@ class LineageOrchestrator:
     ):
         self._service = service
         self._monitor = monitor
+        self._run_id = str(monitor.run_id) if monitor else None
+
+    async def _emit_progress(self, current: int, total: int):
+        """Emit progress event via SSE."""
+        if not self._run_id:
+            return
+        await sse_manager.emit(self._run_id, "progress", {
+            "phase": 3,
+            "current": current,
+            "total": total,
+            "percent": round(current / total * 100, 1)
+        })
 
     async def run(self, candidates: List[Dict[str, Any]]) -> None:
         """Process candidate pairs for lineage connections."""
@@ -124,6 +138,8 @@ class LineageOrchestrator:
         for i, pair in enumerate(candidates, 1):
             if self._monitor:
                 await self._monitor.check_status()
+            
+            await self._emit_progress(i, len(candidates))
             
             pred = pair["predecessor"]
             succ = pair["successor"]
