@@ -1,6 +1,6 @@
 import pytest
 from pydantic import ValidationError
-from app.scraper.orchestration.workers import SourceWorker, SourceData, WikipediaWorker, CyclingRankingWorker
+from app.scraper.orchestration.workers import SourceWorker, SourceData, WikipediaWorker, CyclingRankingWorker, MemoireWorker
 from unittest.mock import AsyncMock, MagicMock
 
 
@@ -146,3 +146,30 @@ async def test_cycling_ranking_worker_handles_active_team(mock_scraper):
     
     assert result.founded_year == 2005
     assert result.dissolved_year is None
+
+
+@pytest.mark.asyncio
+async def test_memoire_worker_uses_wayback(mock_scraper):
+    """Worker prepends Wayback prefix to URL."""
+    html = "<html><body>Archived content</body></html>"
+    mock_scraper.fetch.return_value = html
+    
+    worker = MemoireWorker(mock_scraper)
+    url = "http://memoire-du-cyclisme.eu/equipes/team.php"
+    result = await worker.fetch(url)
+    
+    expected_wayback_url = f"https://web.archive.org/web/2020/{url}"
+    mock_scraper.fetch.assert_called_with(expected_wayback_url)
+    assert result.source == "memoire"
+    assert result.raw_content == html
+
+
+@pytest.mark.asyncio
+async def test_memoire_worker_handles_no_archive(mock_scraper):
+    """Worker returns None if Wayback fetch fails."""
+    mock_scraper.fetch.side_effect = Exception("Wayback error")
+    
+    worker = MemoireWorker(mock_scraper)
+    result = await worker.fetch("http://memoire.com/missing")
+    
+    assert result is None

@@ -137,3 +137,25 @@ class CyclingRankingWorker(SourceWorker):
                 return int(match.group(0))
         return None
 
+class MemoireWorker(SourceWorker):
+    source_name = "memoire"
+    WAYBACK_PREFIX = "https://web.archive.org/web/2020/"
+    
+    def __init__(self, scraper: "BaseScraper"):
+        self._scraper = scraper
+    
+    async def fetch(self, original_url: str) -> Optional[SourceData]:
+        wayback_url = f"{self.WAYBACK_PREFIX}{original_url}"
+        try:
+            html = await self._scraper.fetch(wayback_url)
+            return self._parse(html)
+        except Exception as e:
+            logger.warning(f"Memoire fetch failed: {e}")
+            return None
+
+    def _parse(self, html: str) -> SourceData:
+        return SourceData(
+            source=self.source_name,
+            raw_content=html
+        )
+
