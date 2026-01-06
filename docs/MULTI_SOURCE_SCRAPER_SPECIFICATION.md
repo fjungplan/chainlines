@@ -135,16 +135,7 @@ flowchart TD
 | **Wayback Machine** | Slow / Downtime | **Fail-Soft**: If Memoire fetch fails, log warning but proceed with other sources. |
 | **LLM** | Hallucination / Timeout | **Confidence Threshold**: Reject if < 90%. Fallback to CyclingFlash-only if API down. |
 
-## 5. Data Caching Strategy (Result Re-use)
-**Goal**: Avoid re-scraping or re-asking LLMs on failure.
-*   **Request Cache**: Store raw HTML responses in `cache/requests/{domain}/{hash}.html`.
-*   **LLM Cache**: Store LLM responses in `cache/llm/{model}/{prompt_hash}.json`.
-*   **Policy**:
-    *   **Read**: Always check cache first.
-    *   **Write**: Save on success.
-    *   **Invalidate**: Manual deletion (or `force_refresh=True` flag).
-
-## 6. Testing Plan
+## 5. Testing Plan
 
 ### 5.1 Automated Tests
 *   **`test_firstcycling_validator.py`**: Mock the JSON cache. Verify "Peugeot 1980" passes and "Velo Club de Paris" fails.

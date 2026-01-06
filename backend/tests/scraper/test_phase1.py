@@ -267,9 +267,10 @@ async def test_discover_teams_extracts_sponsors(discovery_service_with_llm, mock
     discovery_service_with_llm._scraper.get_team_list_by_tier.return_value = ["/team/lotto-jumbo"]
     discovery_service_with_llm._scraper.get_team.return_value = mock_team_data
     
-    # Setup brand matcher mock (part of discovery_service_with_llm fixture)
-    discovery_service_with_llm._brand_matcher.check_team_name.return_value = None
-    discovery_service_with_llm._brand_matcher.analyze_words.return_value.needs_llm = True
+    # Setup database session mock to return None for TeamEra queries (cache miss)
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    discovery_service_with_llm._session.execute = AsyncMock(return_value=mock_result)
     
     # Mock LLM to add title sponsors
     mock_llm.extract_sponsors_from_name.return_value = SponsorExtractionResult(
