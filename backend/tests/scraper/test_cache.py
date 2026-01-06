@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 from app.scraper.utils.cache import CacheManager
+from app.scraper.base.scraper import BaseScraper
 
 @pytest.fixture
 def cache_dir(tmp_path):
@@ -60,3 +62,70 @@ def test_force_refresh_bypasses_cache(cache_manager):
     
     # Get with force_refresh returns None
     assert cache_manager.get(key, force_refresh=True) is None
+
+@pytest.mark.asyncio
+async def test_base_scraper_fetch_caches_response(cache_manager):
+    """First fetch hits network, second fetch returns cached"""
+    # Use zero delay for testing
+    scraper = BaseScraper(min_delay=0, max_delay=0, cache=cache_manager)
+    
+    url = "https://example.com/page"
+    content = "<html>network_content</html>"
+    
+    with patch('app.scraper.base.scraper.httpx.AsyncClient') as mock_client_class:
+        mock_client = AsyncMock()
+        mock_response = AsyncMock()
+        mock_response.text = content
+        mock_response.status_code = 200
+        mock_response.raise_for_status = lambda: None
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+        
+        # First call - hits network
+        res1 = await scraper.fetch(url)
+        assert res1 == content
+        assert mock_client.get.call_count == 1
+        
+        # Second call - hits cache
+        res2 = await scraper.fetch(url)
+        assert res2 == content
+        # Still 1 because second hit was from cache
+        assert mock_client.get.call_count == 1
+
+@pytest.mark.asyncio
+async def test_base_scraper_fetch_force_refresh(cache_manager):
+    """With force_refresh=True, always hits network"""
+    scraper = BaseScraper(min_delay=0, max_delay=0, cache=cache_manager)
+    
+    url = "https://example.com/refresh"
+    content1 = "<html>content1</html>"
+    content2 = "<html>content2</html>"
+    
+    with patch('app.scraper.base.scraper.httpx.AsyncClient') as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+        
+        # First call works normally
+        mock_response1 = AsyncMock()
+        mock_response1.text = content1
+        mock_response1.status_code = 200
+        mock_response1.raise_for_status = lambda: None
+        
+        mock_client.get.return_value = mock_response1
+        await scraper.fetch(url)
+        assert mock_client.get.call_count == 1
+        
+        # Second call with force_refresh=True hits network again
+        mock_response2 = AsyncMock()
+        mock_response2.text = content2
+        mock_response2.status_code = 200
+        mock_response2.raise_for_status = lambda: None
+        mock_client.get.return_value = mock_response2
+        
+        res2 = await scraper.fetch(url, force_refresh=True)
+        assert res2 == content2
+        assert mock_client.get.call_count == 2
