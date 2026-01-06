@@ -14,8 +14,13 @@ class BaseScraper:
         min_delay: float = 3.0,
         max_delay: float = 6.0,
         timeout: float = 30.0,
-        cache: Optional[CacheManager] = None
+        cache: Optional[CacheManager] = None,
+        rate_limit: Optional[float] = None
     ):
+        if rate_limit is not None:
+            min_delay = rate_limit
+            max_delay = rate_limit + 1.0  # Add small jitter range
+            
         self._rate_limiter = RateLimiter(min_delay, max_delay)
         self._user_agent = UserAgentRotator()
         self._timeout = timeout
