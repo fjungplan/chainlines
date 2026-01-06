@@ -1,4 +1,19 @@
+from bs4 import BeautifulSoup
 from app.scraper.base.scraper import BaseScraper
+
+class FirstCyclingParser:
+    def parse_gt_start_list(self, html: str) -> list[str]:
+        """Extract team names from GT start list HTML."""
+        soup = BeautifulSoup(html, 'html.parser')
+        teams = []
+        # Look for team links or cells in the table
+        for row in soup.select('table tr'):
+            team_cell = row.select_one('td:nth-child(2)')
+            if team_cell:
+                name = team_cell.get_text(strip=True)
+                if name:
+                    teams.append(name)
+        return teams
 
 class FirstCyclingScraper(BaseScraper):
     """Scraper for FirstCycling.com."""
