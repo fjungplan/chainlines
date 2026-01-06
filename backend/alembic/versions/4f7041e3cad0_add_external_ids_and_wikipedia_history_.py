@@ -25,7 +25,7 @@ def upgrade() -> None:
     # op.drop_index('idx_staging_status', table_name='scraped_data_staging')
     op.execute("DROP TABLE IF EXISTS scraped_data_staging CASCADE")
     op.add_column('team_era', sa.Column('wikipedia_history_content', sa.Text(), nullable=True, comment='Cached Wikipedia History section text'))
-    op.drop_column('team_era', 'external_ids')
+    op.execute("ALTER TABLE team_era DROP COLUMN IF EXISTS external_ids")
     op.add_column('team_node', sa.Column('external_ids', postgresql.JSONB(astext_type=sa.Text()), nullable=True, comment='External source IDs: {wikidata: Q123, ...}'))
     # ### end Alembic commands ###
 
