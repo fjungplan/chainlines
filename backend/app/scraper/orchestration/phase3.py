@@ -16,9 +16,38 @@ CONFIDENCE_THRESHOLD = 0.90
 class OrphanDetector:
     """Detects orphan nodes that may need lineage connections."""
     
-    def __init__(self, max_gap_years: int = 2):
+    def __init__(self, session: AsyncSession, max_gap_years: int = 2):
+        self._session = session
         self._max_gap = max_gap_years
     
+    async def get_orphan_candidates(self) -> List[Dict[str, Any]]:
+        """Fetch teams from DB and find candidates."""
+        from sqlalchemy import select
+        from app.models.team import TeamNode
+        
+        stmt = select(TeamNode)
+        result = await self._session.execute(stmt)
+        nodes = result.scalars().all()
+        
+        # Convert to dict format expected by find_candidates
+        teams_data = []
+        for node in nodes:
+            data = {
+                "id": node.node_id,
+                "name": node.legal_name,
+                "start_year": node.founding_year,
+                "uci": node.latest_uci_code,
+                # Note: history content ideally comes from specific TeamEras
+                # For now we leave it None to avoid complex joins in this detector
+                "wikipedia_history_content": None 
+            }
+            if node.dissolution_year:
+                data["end_year"] = node.dissolution_year
+            
+            teams_data.append(data)
+            
+        return self.find_candidates(teams_data)
+
     def find_candidates(
         self,
         teams: List[Dict[str, Any]]
@@ -31,6 +60,10 @@ class OrphanDetector:
         
         for ended in ended_teams:
             for started in started_teams:
+                # Skip self-matches or nonsense
+                if ended["id"] == started["id"]:
+                    continue
+
                 # Calculate gap: Start year of successor - End year of predecessor
                 gap = started["start_year"] - ended["end_year"]
                 
