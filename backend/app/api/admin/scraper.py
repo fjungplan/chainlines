@@ -106,12 +106,18 @@ async def run_scraper_with_logging(run_id: uuid.UUID, request: ScraperStartReque
         else:
             phases_to_run = [request.phase]
             
-        for phase in phases_to_run:
+        for i, phase in enumerate(phases_to_run):
             local_logger.info(f"--- Starting Phase {phase} ---")
+            
+            # For multi-phase runs, only the first phase should respect the initial 'resume' flag.
+            # Subsequent phases MUST resume to pick up the data from the previous phase.
+            is_first_phase = (i == 0)
+            should_resume = request.resume if is_first_phase else True
+            
             await run_scraper(
                 phase=phase,
                 tier=request.tier,
-                resume=request.resume,
+                resume=should_resume,
                 dry_run=request.dry_run,
                 start_year=request.start_year,
                 end_year=request.end_year,

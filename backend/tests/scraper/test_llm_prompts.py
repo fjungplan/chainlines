@@ -2,6 +2,7 @@
 import pytest
 from pydantic import ValidationError
 from unittest.mock import AsyncMock, patch
+from app.scraper.llm.models import SponsorInfo
 
 
 def test_scraped_team_data_validates():
@@ -11,10 +12,14 @@ def test_scraped_team_data_validates():
     data = ScrapedTeamData(
         name="Team Visma",
         season_year=2024,
-        sponsors=["Visma", "Lease a Bike"]
+        sponsors=[
+            SponsorInfo(brand_name="Visma"),
+            SponsorInfo(brand_name="Lease a Bike")
+        ]
     )
     assert data.name == "Team Visma"
     assert len(data.sponsors) == 2
+    assert data.sponsors[0].brand_name == "Visma"
 
 
 def test_scraped_team_data_requires_name():
@@ -38,7 +43,10 @@ async def test_extract_team_data_prompt():
             uci_code="UAD",
             tier="WorldTour",
             country_code="UAE",
-            sponsors=["Emirates", "Colnago"],
+            sponsors=[
+                SponsorInfo(brand_name="Emirates"),
+                SponsorInfo(brand_name="Colnago")
+            ],
             season_year=2024
         )
     )
@@ -53,3 +61,4 @@ async def test_extract_team_data_prompt():
     assert result.name == "UAE Team Emirates"
     assert result.uci_code == "UAD"
     mock_service.generate_structured.assert_called_once()
+

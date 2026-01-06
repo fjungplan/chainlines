@@ -442,4 +442,112 @@ class AuditLogService:
             
         session.add(edit)
         await session.flush()
+        
+        # If auto-approved, apply changes immediately
+        if status == EditStatus.APPROVED:
+            await AuditLogService.apply_edit(session, edit)
+            
         return edit
+
+    @staticmethod
+    async def apply_edit(session: AsyncSession, edit: EditHistory) -> None:
+        """Apply approved edit to the domain model."""
+        if edit.status != EditStatus.APPROVED:
+            return
+
+        if edit.action == EditAction.CREATE:
+            await AuditLogService._apply_create(session, edit)
+        # TODO: Implement UPDATE and DELETE logic
+
+    @staticmethod
+    async def _apply_create(session: AsyncSession, edit: EditHistory) -> None:
+        """Apply CREATE action."""
+        data = edit.snapshot_after
+        
+        if edit.entity_type == "TeamEra":
+            # Check if Node exists
+            stmt = select(TeamNode).where(TeamNode.legal_name == data["registered_name"])
+            result = await session.execute(stmt)
+            node = result.scalar_one_or_none()
+            
+            if not node:
+                node = TeamNode(
+                    node_id=edit.entity_id, # Using same ID for simplicity if 1:1, but usually distinct. 
+                    # Actually, TeamEra is the entity. Node is separate.
+                    # We need to find or create the Node.
+                    legal_name=data["registered_name"],
+                    founding_year=data["season_year"]
+                )
+                session.add(node)
+                await session.flush()
+            
+            # Create Era
+            era = TeamEra(
+                era_id=edit.entity_id,
+                node_id=node.node_id,
+                season_year=data["season_year"],
+                valid_from=datetime.strptime(data["valid_from"], "%Y-%m-%d").date(),
+                registered_name=data["registered_name"],
+                uci_code=data.get("uci_code"),
+                country_code=data.get("country_code"),
+                tier_level=data.get("tier_level")
+            )
+            session.add(era)
+            await session.flush()
+            
+            # Create Sponsor Links
+            sponsors_data = data.get("sponsors", [])
+            for idx, s_data in enumerate(sponsors_data):
+                brand_name = s_data["name"]
+                prominence = s_data.get("prominence", 0)
+                parent_name = s_data.get("parent_company") # Will be added to payload in phase2.py
+                
+                # 1. Resolve/Create Master
+                master = None
+                if parent_name:
+                    stmt = select(SponsorMaster).where(SponsorMaster.legal_name == parent_name)
+                    result = await session.execute(stmt)
+                    master = result.scalar_one_or_none()
+                    if not master:
+                        master = SponsorMaster(legal_name=parent_name)
+                        session.add(master)
+                        await session.flush()
+                
+                # 2. Resolve/Create Brand
+                # Try simple match first
+                stmt = select(SponsorBrand).where(SponsorBrand.brand_name == brand_name)
+                if master:
+                    stmt = stmt.where(SponsorBrand.master_id == master.master_id)
+                
+                result = await session.execute(stmt)
+                brand = result.scalar_one_or_none()
+                
+                if not brand:
+                    # If no master but we need one for the brand schema?
+                    # Schema implies master_id is FK.
+                    if not master:
+                        # Implicit self-master
+                        stmt = select(SponsorMaster).where(SponsorMaster.legal_name == brand_name)
+                        result = await session.execute(stmt)
+                        master = result.scalar_one_or_none()
+                        if not master:
+                            master = SponsorMaster(legal_name=brand_name)
+                            session.add(master)
+                            await session.flush()
+            
+                    brand = SponsorBrand(
+                        brand_name=brand_name,
+                        master_id=master.master_id,
+                        default_hex_color="#000000"
+                    )
+                    session.add(brand)
+                    await session.flush()
+
+                # 3. Create Link
+                link = TeamSponsorLink(
+                    era_id=era.era_id,
+                    brand_id=brand.brand_id,
+                    prominence_percent=prominence,
+                    rank_order=idx + 1
+                )
+                session.add(link)

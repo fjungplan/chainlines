@@ -4,28 +4,30 @@ from typing import Optional
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
+from app.scraper.llm.models import SponsorInfo
 
 class ScrapedTeamData(BaseModel):
-    """Data extracted from a team page."""
+    """Data scraped from a team's detail page."""
     name: str
     uci_code: Optional[str] = None
     tier_level: Optional[int] = None
-    country_code: Optional[str] = Field(
-        default=None,
-        description="3-letter IOC/UCI country code (e.g., NED, GER, ITA, FRA)"
-    )
-    sponsors: list[str] = []
+    country_code: Optional[str] = Field(default=None, description="3-letter IOC/UCI code")
+    sponsors: list[SponsorInfo] = Field(default_factory=list)
     previous_season_url: Optional[str] = None
     season_year: int
+    extraction_confidence: Optional[float] = Field(
+        default=None,
+        description="Confidence of sponsor extraction (if LLM was used)"
+    )
 
 class CyclingFlashParser:
     """Parser for CyclingFlash HTML."""
     
     # Tier section headers as they appear on CyclingFlash
     TIER_HEADERS = {
-        1: ["worldtour", "world tour", "uci worldtour", "gs1", "trade team i"],
-        2: ["proteam", "pro team", "uci proteam", "pro continental", "gs2", "trade team ii"],
-        3: ["continental", "uci continental", "gs3", "trade team iii"],
+        1: ["trade team 1", "uci proteam", "uci worldteam"],
+        2: ["trade team 2", "uci professional continental team", "uci proteam"],
+        3: ["trade team 3", "uci continental team"],
     }
     
     def parse_team_list(self, html: str, target_tier: int = None) -> list[str]:
@@ -132,10 +134,13 @@ class CyclingFlashParser:
                 equipment_sponsors.append(sponsor_name)
         
         # Combine: Title sponsors first (primary), then equipment sponsors
-        sponsors = title_sponsors.copy()
+        combined_sponsors = title_sponsors.copy()
         for s in equipment_sponsors:
-            if s not in sponsors:  # Avoid duplicates
-                sponsors.append(s)
+            if s not in combined_sponsors:  # Avoid duplicates
+                combined_sponsors.append(s)
+        
+        # Convert to SponsorInfo (without parent company at parse time)
+        sponsors = [SponsorInfo(brand_name=s) for s in combined_sponsors]
         
         # Extract previous season link (if any)
         # Search for links containing "Season" or similar patterns

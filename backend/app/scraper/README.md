@@ -37,12 +37,52 @@ curl http://localhost:8000/api/admin/scraper/status/{task_id} \
 2. **Assembly**: Create TeamNodes, TeamEras, link sponsors
 3. **Lineage**: Detect orphans, create LineageEvents
 
-## Configuration
+## Sponsor Extraction
 
-Environment variables:
+The scraper uses LLM-based intelligent sponsor extraction with:
 
-- `GEMINI_API_KEY`: Google Gemini API key
-- `DEEPSEEK_API_KEY`: Deepseek API key (fallback)
+- **Two-level caching**: Team name cache + brand word matching
+- **LLM integration**: Gemini (primary) + Deepseek (fallback)
+- **Multi-tier resilience**: Exponential backoff + retry queue
+- **Parent company tracking**: Links brands to sponsor masters
+
+### How It Works
+
+1. **Phase 1** (Discovery):
+   - Parse team name from HTML
+   - Check cache: exact team name match?
+   - Check brands: all words known?
+   - Call LLM if needed with context
+   - Store SponsorInfo with parent companies
+
+2. **Phase 2** (Assembly):
+   - Create/update SponsorBrand records
+   - Link to SponsorMaster (parent companies)
+   - Create TeamSponsorLink with prominence
+
+### Configuration
+
+Set these environment variables:
+
+```bash
+GEMINI_API_KEY=your_gemini_key
+DEEPSEEK_API_KEY=your_deepseek_key
+```
+
+### Testing
+
+Run unit tests:
+```bash
+pytest backend/tests/scraper/test_brand_matcher.py -v
+pytest backend/tests/scraper/test_sponsor_prompts.py -v
+```
+
+Run integration tests:
+```bash
+pytest backend/tests/integration/test_sponsor_extraction_e2e.py -v -m integration
+```
+
+See `docs/SPONSOR_EXTRACTION_MANUAL_VERIFICATION.md` for manual testing guide.
 
 ## Architecture
 
