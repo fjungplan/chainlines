@@ -1,4 +1,4 @@
-x"""Model configuration for prompt-specific LLM routing.
+"""Model configuration for prompt-specific LLM routing.
 
 This module defines which LLM models should be used for each prompt type,
 enabling cost optimization by using cheaper models for simpler tasks.
