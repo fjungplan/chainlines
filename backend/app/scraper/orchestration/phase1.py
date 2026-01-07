@@ -1,5 +1,5 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List, Optional, Union, Tuple, TYPE_CHECKING
+from typing import Set, List, Optional, Union, Tuple, Dict, TYPE_CHECKING
 from app.scraper.llm.models import SponsorInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.scraper.services.brand_matcher import BrandMatcherService
@@ -70,6 +70,11 @@ class DiscoveryService:
         if session and llm_prompts:
             from app.scraper.services.enrichment import TeamEnrichmentService
             self._enricher = TeamEnrichmentService(session, llm_prompts)
+        
+        # Team history tracking for gap backfill
+        self._team_histories: Dict[str, List[int]] = {}  # team_name -> available_years from dropdown
+        self._scraped_teams: Dict[str, Set[int]] = {}     # team_name -> years already scraped
+        self._url_by_team: Dict[str, str] = {}            # team_name -> base URL for backfilling
         
         logger.info(
             f"DiscoveryService initialized with "
@@ -142,6 +147,12 @@ class DiscoveryService:
                         team_urls.append(url_year_pair)
                         self._collector.add(data.sponsors)
                         
+                        # Track for backfill: store available_years and scraped year
+                        if data.available_years:
+                            self._team_histories[data.name] = data.available_years
+                        self._scraped_teams.setdefault(data.name, set()).add(year)
+                        self._url_by_team[data.name] = url.rsplit('-', 1)[0]  # Base URL without year
+                        
                         # Save checkpoint periodically
                         if i % 10 == 0 or i == len(urls):
                             self._save_checkpoint(team_urls)
@@ -151,6 +162,9 @@ class DiscoveryService:
                 logger.error(f"Error in year {year}: {e}")
                 self._save_checkpoint(team_urls)
                 raise
+        
+        # Backfill gaps in team history (PASS 2)
+        team_urls = await self._backfill_gaps(team_urls)
         
         # Process retry queue at end of all years
         await self._process_retry_queue()
@@ -184,6 +198,66 @@ class DiscoveryService:
             phase=1,
             team_queue=team_urls,
         ))
+    
+    async def _backfill_gaps(
+        self,
+        team_urls: list[tuple[str, int]]
+    ) -> list[tuple[str, int]]:
+        """
+        Backfill missing years to preserve lineage continuity (PASS 2).
+        
+        Uses team history dropdown data to identify gaps in scraped years
+        and adds missing years to the queue if they close a gap.
+        """
+        if not self._team_histories:
+            logger.debug("No team histories collected, skipping backfill")
+            return team_urls
+        
+        backfilled = 0
+        for team_name, available_years in self._team_histories.items():
+            scraped_years = self._scraped_teams.get(team_name, set())
+            base_url = self._url_by_team.get(team_name)
+            
+            if not base_url or not scraped_years:
+                continue
+            
+            # Find gaps: years in dropdown but not scraped
+            missing_years = set(available_years) - scraped_years
+            
+            for year in sorted(missing_years, reverse=True):
+                # Only backfill if it closes a gap (has adjacent scraped years)
+                if self._closes_gap(year, scraped_years):
+                    url_for_year = f"{base_url}-{year}"
+                    url_year_pair = (url_for_year, year)
+                    
+                    if url_year_pair not in team_urls:
+                        team_urls.append(url_year_pair)
+                        backfilled += 1
+                        logger.info(f"Backfilling '{team_name}' ({year}) to close gap")
+        
+        if backfilled > 0:
+            logger.info(f"Backfill complete: added {backfilled} team-year pairs")
+            self._save_checkpoint(team_urls)
+        
+        return team_urls
+    
+    def _closes_gap(self, year: int, scraped_years: Set[int]) -> bool:
+        """
+        Check if year is between two scraped years (closes a gap).
+        
+        Args:
+            year: The year to check
+            scraped_years: Set of already scraped years for this team
+            
+        Returns:
+            True if this year closes a gap, False otherwise
+        """
+        if not scraped_years or len(scraped_years) < 2:
+            return False
+        
+        sorted_years = sorted(scraped_years)
+        # Check if year falls between min and max scraped years
+        return min(sorted_years) < year < max(sorted_years)
     
     async def _extract_with_resilience(
         self,
