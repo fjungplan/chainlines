@@ -21,6 +21,7 @@ from app.scraper.services.wikidata import WikidataResolver, WikidataResult
 from app.scraper.services.arbiter import ConflictArbiter, ArbitrationDecision, ArbitrationResult
 
 from app.scraper.utils.sse import sse_manager
+from app.scraper.utils.sponsor_normalizer import normalize_sponsor_name
 
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
@@ -207,11 +208,16 @@ class TeamAssemblyService:
     
     async def _get_or_create_brand(
         self,
-        sponsor_info: SponsorInfo
+        sponsor_info: SponsorInfo,
+        country_code: Optional[str] = None
     ) -> SponsorBrand:
         """Get or create sponsor brand with parent company via EditService.
         
         Creates audit log entries for both master and brand.
+        
+        Args:
+            sponsor_info: Sponsor information from LLM extraction
+            country_code: Optional country code for abbreviation normalization (BEL, ITA, etc.)
         """
         # Handle parent company first
         master = None
@@ -237,10 +243,16 @@ class TeamAssemblyService:
         
         # Need a master for the brand
         if not master:
-            # Fallback: Create master with same name as brand
-            logger.info(f"Creating self-master for brand: {sponsor_info.brand_name}")
+            # Apply sponsor normalization to get correct parent company
+            # e.g., "FDJ United" -> parent: "Française des Jeux"
+            # e.g., "Lotto" with country_code="BEL" -> parent: "Nationale Loterij"
+            normalized_master_name, _ = normalize_sponsor_name(
+                sponsor_info.brand_name, country_code
+            )
+            
+            logger.info(f"Creating master for brand '{sponsor_info.brand_name}' -> '{normalized_master_name}'")
             master = await self._get_or_create_sponsor_master(
-                legal_name=sponsor_info.brand_name,
+                legal_name=normalized_master_name,
                 industry_sector=sponsor_info.industry_sector,
                 source_url=sponsor_info.source_url
             )
@@ -283,11 +295,12 @@ class TeamAssemblyService:
     async def _create_sponsor_links(
         self,
         team_era: TeamEra,
-        sponsors: List[SponsorInfo]
+        sponsors: List[SponsorInfo],
+        country_code: Optional[str] = None
     ):
         """Create sponsor links for team era."""
         for idx, sponsor_info in enumerate(sponsors):
-            brand = await self._get_or_create_brand(sponsor_info)
+            brand = await self._get_or_create_brand(sponsor_info, country_code)
             
             # Create link with prominence (title sponsors higher)
             prominence = 100 - (idx * 10)  # 100%, 90%, 80%, etc.
@@ -327,7 +340,7 @@ class TeamAssemblyService:
         self._session.add(era)
 
 
-        await self._create_sponsor_links(era, data.sponsors)
+        await self._create_sponsor_links(era, data.sponsors, data.country_code)
         return era
 
 
