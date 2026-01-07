@@ -315,18 +315,42 @@ class TeamAssemblyService:
             self._session.add(link)
 
     async def assemble_team(self, data: ScrapedTeamData) -> TeamEra:
-        """Assemble team era from scraped data (Direct Creation)."""
-        # Create Node (needed for Era)
-        stmt = select(TeamNode).where(TeamNode.legal_name == data.name)
-        result = await self._session.execute(stmt)
-        node = result.scalar_one_or_none()
+        """Assemble team era from scraped data.
+        
+        Node matching priority:
+        1. Match by team_identity_id (stable across name changes)
+        2. Fall back to legal_name match
+        3. Create new node if not found
+        """
+        node = None
+        
+        # Step 1: Try to find existing node by team_identity_id
+        if data.team_identity_id:
+            stmt = select(TeamNode).where(
+                TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
+            )
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 2: Fall back to legal_name match (for teams without identity)
         if not node:
-             node = TeamNode(
-                 legal_name=data.name,
-                 founding_year=data.season_year,
-              )
-             self._session.add(node)
- 
+            stmt = select(TeamNode).where(TeamNode.legal_name == data.name)
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 3: Create new node if not found
+        if not node:
+            external_ids = {}
+            if data.team_identity_id:
+                external_ids["cyclingflash_identity"] = data.team_identity_id
+            
+            node = TeamNode(
+                legal_name=data.name,
+                founding_year=data.season_year,
+                external_ids=external_ids if external_ids else None
+            )
+            self._session.add(node)
+            await self._session.flush()  # Get node_id assigned
 
         era = TeamEra(
             node=node,
@@ -338,7 +362,6 @@ class TeamAssemblyService:
             tier_level=data.tier_level,
         )
         self._session.add(era)
-
 
         await self._create_sponsor_links(era, data.sponsors, data.country_code)
         return era

@@ -25,7 +25,8 @@ class OrphanDetector:
         from sqlalchemy import select
         from app.models.team import TeamNode
         
-        stmt = select(TeamNode)
+        from sqlalchemy.orm import selectinload
+        stmt = select(TeamNode).options(selectinload(TeamNode.eras))
         result = await self._session.execute(stmt)
         nodes = result.scalars().all()
         
