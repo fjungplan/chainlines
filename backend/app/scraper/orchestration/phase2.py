@@ -366,6 +366,66 @@ class TeamAssemblyService:
         await self._create_sponsor_links(era, data.sponsors, data.country_code)
         return era
 
+    async def assemble_team_enriched(self, enriched: "EnrichedTeamData") -> TeamEra:
+        """Assemble team era from enriched data, including Wikipedia history.
+        
+        Args:
+            enriched: EnrichedTeamData containing base_data and optional wikipedia_data
+            
+        Returns:
+            Created TeamEra with Wikipedia history stored
+        """
+        data = enriched.base_data
+        node = None
+        
+        # Step 1: Try to find existing node by team_identity_id
+        if data.team_identity_id:
+            stmt = select(TeamNode).where(
+                TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
+            )
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 2: Fall back to legal_name match
+        if not node:
+            stmt = select(TeamNode).where(TeamNode.legal_name == data.name)
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 3: Create new node if not found
+        if not node:
+            external_ids = {}
+            if data.team_identity_id:
+                external_ids["cyclingflash_identity"] = data.team_identity_id
+            
+            node = TeamNode(
+                legal_name=data.name,
+                founding_year=data.season_year,
+                external_ids=external_ids if external_ids else None
+            )
+            self._session.add(node)
+            await self._session.flush()
+
+        # Extract Wikipedia history if available
+        wiki_history = None
+        if enriched.wikipedia_data:
+            wiki_history = enriched.wikipedia_data.history_text
+
+        era = TeamEra(
+            node=node,
+            season_year=data.season_year,
+            valid_from=date(data.season_year, 1, 1),
+            registered_name=data.name,
+            uci_code=data.uci_code,
+            country_code=data.country_code,
+            tier_level=data.tier_level,
+            wikipedia_history_content=wiki_history  # Store Wikipedia history
+        )
+        self._session.add(era)
+
+        await self._create_sponsor_links(era, data.sponsors, data.country_code)
+        return era
+
 
 from app.scraper.monitor import ScraperStatusMonitor
 from app.scraper.checkpoint import CheckpointManager
@@ -477,8 +537,8 @@ class AssemblyOrchestrator:
                 await self._handle_split(enriched, decision)
                 return
                 
-        # MERGE or No Conflict -> Proceed to assembly
-        await self._service.create_team_era(enriched.base_data, confidence=enriched.base_data.extraction_confidence or 0.95)
+        # MERGE or No Conflict -> Proceed to assembly with enriched data
+        await self._service.assemble_team_enriched(enriched)
 
     def _get_url_for_worker(
         self, 
