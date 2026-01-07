@@ -27,7 +27,7 @@ async def test_orchestrator_rollback_on_team_failure(db_session):
         checkpoint_manager = CheckpointManager(checkpoint_path)
         checkpoint_manager.save(CheckpointData(
             phase=1,
-            team_queue=["/team/team1-2024", "/team/team2-2024", "/team/team3-2024"]
+            team_queue=[("/team/team1-2024", 2024), ("/team/team2-2024", 2024), ("/team/team3-2024", 2024)]
         ))
         
         # Create real service
