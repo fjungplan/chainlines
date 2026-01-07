@@ -1,6 +1,7 @@
 """CyclingFlash scraper implementation."""
 import re
-from typing import Optional
+import hashlib
+from typing import Optional, List
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
@@ -18,6 +19,14 @@ class ScrapedTeamData(BaseModel):
     extraction_confidence: Optional[float] = Field(
         default=None,
         description="Confidence of sponsor extraction (if LLM was used)"
+    )
+    available_years: List[int] = Field(
+        default_factory=list,
+        description="Years available in team history dropdown (for identity matching)"
+    )
+    team_identity_id: Optional[str] = Field(
+        default=None,
+        description="Stable identity hash derived from team history dropdown"
     )
 
 class CyclingFlashParser:
@@ -155,6 +164,39 @@ class CyclingFlashParser:
         if prev_link:
             prev_url = prev_link.get('href')
         
+        # Extract team history from dropdown (Radix UI style: div[role="option"])
+        available_years = []
+        dropdown_items = soup.select('div[role="option"]')
+        for item in dropdown_items:
+            text = item.get_text(strip=True)
+            # Extract year from format "Team Name (YYYY)"
+            year_match = re.search(r'\((\d{4})\)$', text)
+            if year_match:
+                year = int(year_match.group(1))
+                if year not in available_years:
+                    available_years.append(year)
+        
+        # Sort years descending (newest first)
+        available_years = sorted(available_years, reverse=True)
+        
+        # Generate stable team identity ID from dropdown history
+        # Use hash of sorted year list to create stable identity
+        team_identity_id = None
+        if available_years:
+            # Create a stable hash from the years and oldest team name
+            oldest_name = None
+            for item in dropdown_items:
+                text = item.get_text(strip=True)
+                year_match = re.search(r'\((\d{4})\)$', text)
+                if year_match and int(year_match.group(1)) == min(available_years):
+                    oldest_name = re.sub(r'\s*\(\d{4}\)$', '', text).strip()
+                    break
+            
+            if oldest_name:
+                # Hash based on oldest name (stable identity root)
+                identity_source = f"{oldest_name}:{min(available_years)}"
+                team_identity_id = hashlib.md5(identity_source.encode()).hexdigest()[:16]
+        
         return ScrapedTeamData(
             name=name,
             uci_code=uci_code,
@@ -162,7 +204,9 @@ class CyclingFlashParser:
             country_code=country_code,
             sponsors=sponsors,
             previous_season_url=prev_url,
-            season_year=season_year
+            season_year=season_year,
+            available_years=available_years,
+            team_identity_id=team_identity_id
         )
 
     def _get_text(self, soup: BeautifulSoup, selector: str) -> Optional[str]:
