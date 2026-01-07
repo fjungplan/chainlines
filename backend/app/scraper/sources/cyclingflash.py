@@ -101,7 +101,7 @@ class CyclingFlashParser:
         return result
 
 
-    def parse_team_detail(self, html: str, season_year: int) -> ScrapedTeamData:
+    def parse_team_detail(self, html: str, season_year: int, url: str = None) -> ScrapedTeamData:
         """Extract team data from detail page."""
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -164,38 +164,47 @@ class CyclingFlashParser:
         if prev_link:
             prev_url = prev_link.get('href')
         
-        # Extract team history from dropdown (Radix UI style: div[role="option"])
-        available_years = []
-        dropdown_items = soup.select('div[role="option"]')
-        for item in dropdown_items:
-            text = item.get_text(strip=True)
-            # Extract year from format "Team Name (YYYY)"
-            year_match = re.search(r'\((\d{4})\)$', text)
-            if year_match:
-                year = int(year_match.group(1))
-                if year not in available_years:
-                    available_years.append(year)
         
-        # Sort years descending (newest first)
-        available_years = sorted(available_years, reverse=True)
-        
-        # Generate stable team identity ID from dropdown history
-        # Use hash of sorted year list to create stable identity
+        # Extract team identity from Next.js streaming data (editions object)
+        # CyclingFlash embeds team lineage in __next_f.push script tags
+        # Format: self.__next_f.push([...,"editions":{"slug-2026":"Name (2026)",...},...])
         team_identity_id = None
-        if available_years:
-            # Create a stable hash from the years and oldest team name
-            oldest_name = None
-            for item in dropdown_items:
-                text = item.get_text(strip=True)
-                year_match = re.search(r'\((\d{4})\)$', text)
-                if year_match and int(year_match.group(1)) == min(available_years):
-                    oldest_name = re.sub(r'\s*\(\d{4}\)$', '', text).strip()
-                    break
-            
-            if oldest_name:
-                # Hash based on oldest name (stable identity root)
-                identity_source = f"{oldest_name}:{min(available_years)}"
-                team_identity_id = hashlib.md5(identity_source.encode()).hexdigest()[:16]
+        
+        # Find all script tags containing __next_f.push
+        scripts = soup.find_all('script')
+        editions_slugs = []
+        
+        
+        for script in scripts:
+            script_text = script.string
+            if script_text and '\\"editions\\"' in script_text:
+                # Extract editions using regex - handles escaped quotes in script
+                import json
+                try:
+                    # Match \"editions\":{...} where {...} contains the slug mappings
+                    # The editions object is flat (no nested braces)
+                    # Note: script contains escaped quotes like \"editions\":{\"slug\":\"Name\"}
+                    match = re.search(r'\\"editions\\":\{([^}]+)\}', script_text)
+                    if match:
+                        editions_content = match.group(1)
+                        # Unescape the content and build valid JSON
+                        editions_content = editions_content.replace('\\"', '"')
+                        editions_json = '{"editions":{' + editions_content + '}}'
+                        editions_data = json.loads(editions_json)
+                        editions_slugs = list(editions_data.get('editions', {}).keys())
+                        if editions_slugs:
+                            break
+                except (json.JSONDecodeError, ValueError):
+                    continue
+        
+        # Generate identity from the sorted list of edition slugs
+        if editions_slugs:
+            # Sort slugs to ensure consistent identity across all pages
+            sorted_slugs = sorted(editions_slugs)
+            # Create hash from all slugs combined
+            identity_source = ':'.join(sorted_slugs)
+            team_identity_id = hashlib.md5(identity_source.encode()).hexdigest()[:16]
+        
         
         return ScrapedTeamData(
             name=name,
@@ -205,7 +214,7 @@ class CyclingFlashParser:
             sponsors=sponsors,
             previous_season_url=prev_url,
             season_year=season_year,
-            available_years=available_years,
+            available_years=[],  # Not using dropdown anymore
             team_identity_id=team_identity_id
         )
 
@@ -252,4 +261,4 @@ class CyclingFlashScraper(BaseScraper):
         """Get team details from a team page."""
         url = f"{self.BASE_URL}{path}" if not path.startswith("http") else path
         html = await self.fetch(url)
-        return self._parser.parse_team_detail(html, season_year)
+        return self._parser.parse_team_detail(html, season_year, path)
