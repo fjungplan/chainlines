@@ -51,7 +51,16 @@ class TeamEnrichmentService:
             # 2a. Remove if matches Team Name exactly (e.g. "Movistar Team")
             if eq_name_lower == data.name.lower():
                 is_redundant = True
-            else:
+            
+            # 2a2. NEW: Fuzzy team name filter - check if sponsor is substantial substring of team name or vice versa
+            # This catches cases like "Picnic PostNL" extracted as sponsor for "Team Picnic PostNL"
+            if not is_redundant:
+                team_name_clean = data.name.lower().replace("team ", "").strip()
+                if len(eq_name_lower) > 5 and (eq_name_lower in team_name_clean or team_name_clean in eq_name_lower):
+                    is_redundant = True
+            
+            # 2b-2e: Check against existing title sponsors
+            if not is_redundant:
                 # Count how many title sponsors are contained in this scraped sponsor
                 contained_sponsors = 0
                 
