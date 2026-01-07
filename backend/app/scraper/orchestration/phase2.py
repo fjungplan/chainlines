@@ -9,9 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.team import TeamNode, TeamEra
+from app.models.user import User
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.models import SponsorInfo
 from app.services.audit_log_service import AuditLogService
+from app.services.edit_service import EditService
+from app.schemas.edits import SponsorMasterEditRequest, SponsorBrandEditRequest
 from app.models.enums import EditAction, EditStatus
 from app.scraper.orchestration.workers import SourceWorker, SourceData
 from app.scraper.services.wikidata import WikidataResolver, WikidataResult
@@ -81,11 +84,13 @@ class TeamAssemblyService:
         self,
         audit_service: AuditLogService,
         session: AsyncSession,
-        system_user_id: UUID
+        system_user_id: UUID,
+        system_user: Optional[User] = None  # User object for EditService
     ):
         self._audit = audit_service
         self._session = session
         self._user_id = system_user_id
+        self._system_user = system_user  # For EditService calls
     
     async def create_team_era(
         self,
@@ -158,32 +163,63 @@ class TeamAssemblyService:
 
     async def _get_or_create_sponsor_master(
         self,
-        legal_name: str
+        legal_name: str,
+        industry_sector: Optional[str] = None,
+        source_url: Optional[str] = None
     ) -> SponsorMaster:
-        """Get or create sponsor master (parent company)."""
+        """Get or create sponsor master (parent company) via EditService.
+        
+        Creates an audit log entry for each new master.
+        """
         stmt = select(SponsorMaster).where(SponsorMaster.legal_name == legal_name)
         result = await self._session.execute(stmt)
         master = result.scalar_one_or_none()
         
-        if not master:
-            logger.info(f"Creating new SponsorMaster: {legal_name}")
-            master = SponsorMaster(
-                legal_name=legal_name,
-            )
-            self._session.add(master)
-
+        if master:
+            return master
         
+        # Create via EditService if we have a user
+        if self._system_user:
+            logger.info(f"Creating SponsorMaster via EditService: {legal_name}")
+            request = SponsorMasterEditRequest(
+                legal_name=legal_name,
+                industry_sector=industry_sector,
+                source_url=source_url,
+                reason="Created by Smart Scraper during team extraction"
+            )
+            await EditService.create_sponsor_master_edit(
+                session=self._session,
+                user=self._system_user,
+                request=request
+            )
+            # Re-fetch the created master
+            result = await self._session.execute(stmt)
+            master = result.scalar_one_or_none()
+            return master
+        
+        # Fallback: Direct creation (legacy path, no audit)
+        logger.info(f"Creating new SponsorMaster (direct): {legal_name}")
+        master = SponsorMaster(legal_name=legal_name)
+        self._session.add(master)
+        await self._session.flush()
         return master
     
     async def _get_or_create_brand(
         self,
         sponsor_info: SponsorInfo
     ) -> SponsorBrand:
-        """Get or create sponsor brand with parent company."""
+        """Get or create sponsor brand with parent company via EditService.
+        
+        Creates audit log entries for both master and brand.
+        """
         # Handle parent company first
         master = None
         if sponsor_info.parent_company:
-            master = await self._get_or_create_sponsor_master(sponsor_info.parent_company)
+            master = await self._get_or_create_sponsor_master(
+                legal_name=sponsor_info.parent_company,
+                industry_sector=sponsor_info.industry_sector,
+                source_url=sponsor_info.source_url
+            )
         
         # Check if brand exists
         stmt = select(SponsorBrand).where(
@@ -195,27 +231,52 @@ class TeamAssemblyService:
         result = await self._session.execute(stmt)
         brand = result.scalar_one_or_none()
         
-        if not brand:
-            # If no master but parent_company passed? (Handled above).
-            # If no master and NO parent_company passed?
-            # Model requires master_id. We must create a "Self-Master" or similar.
-            if not master:
-                # Fallback: Create master with same name as brand
-                logger.info(f"Creating default SponsorMaster for brand: {sponsor_info.brand_name}")
-                master = await self._get_or_create_sponsor_master(sponsor_info.brand_name)
-
-            logger.info(
-                f"Creating new SponsorBrand: {sponsor_info.brand_name} "
-                f"(parent: {master.legal_name})"
-            )
-            brand = SponsorBrand(
-                brand_name=sponsor_info.brand_name,
-                master=master,
-                default_hex_color=sponsor_info.brand_color or "#000000",  # Use extracted color or fallback to black
-            )
-            self._session.add(brand)
-
+        if brand:
+            return brand
         
+        # Need a master for the brand
+        if not master:
+            # Fallback: Create master with same name as brand
+            logger.info(f"Creating self-master for brand: {sponsor_info.brand_name}")
+            master = await self._get_or_create_sponsor_master(
+                legal_name=sponsor_info.brand_name,
+                industry_sector=sponsor_info.industry_sector,
+                source_url=sponsor_info.source_url
+            )
+
+        # Create brand via EditService if we have a user
+        if self._system_user:
+            logger.info(f"Creating SponsorBrand via EditService: {sponsor_info.brand_name}")
+            request = SponsorBrandEditRequest(
+                master_id=str(master.master_id),
+                brand_name=sponsor_info.brand_name,
+                default_hex_color=sponsor_info.brand_color or "#000000",
+                source_url=sponsor_info.source_url,
+                reason="Created by Smart Scraper during team extraction"
+            )
+            await EditService.create_sponsor_brand_edit(
+                session=self._session,
+                user=self._system_user,
+                request=request
+            )
+            # Re-fetch the created brand
+            stmt = select(SponsorBrand).where(
+                SponsorBrand.brand_name == sponsor_info.brand_name,
+                SponsorBrand.master_id == master.master_id
+            )
+            result = await self._session.execute(stmt)
+            brand = result.scalar_one_or_none()
+            return brand
+        
+        # Fallback: Direct creation (legacy path, no audit)
+        logger.info(f"Creating SponsorBrand (direct): {sponsor_info.brand_name}")
+        brand = SponsorBrand(
+            brand_name=sponsor_info.brand_name,
+            master=master,
+            default_hex_color=sponsor_info.brand_color or "#000000",
+        )
+        self._session.add(brand)
+        await self._session.flush()
         return brand
     
     async def _create_sponsor_links(

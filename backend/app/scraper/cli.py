@@ -190,10 +190,16 @@ async def run_scraper(
             from app.scraper.orchestration.phase2 import TeamAssemblyService, AssemblyOrchestrator
             from app.services.audit_log_service import AuditLogService
             from app.scraper.sources.cyclingflash import CyclingFlashScraper
+            from app.models.user import User
 
             from app.scraper.services.enrichment import TeamEnrichmentService
 
             logger.info("--- Starting Phase 2: Team Assembly ---")
+            
+            # Fetch the scraper User object for EditService calls
+            system_user = await session.get(User, SYSTEM_USER_ID)
+            if not system_user:
+                logger.warning("Scraper user not found, sponsor edits will not create audit entries")
 
             enricher = None
             if llm_prompts:
@@ -202,7 +208,8 @@ async def run_scraper(
             service = TeamAssemblyService(
                 audit_service=AuditLogService(),
                 session=session,
-                system_user_id=SYSTEM_USER_ID
+                system_user_id=SYSTEM_USER_ID,
+                system_user=system_user  # Pass User object for EditService
             )
             orchestrator = AssemblyOrchestrator(
                 service=service,
