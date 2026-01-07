@@ -64,6 +64,13 @@ class DiscoveryService:
         # Initialize brand matcher if session available
         self._brand_matcher = BrandMatcherService(session) if session else None
         
+        # Initialize enricher once to enable LLM caching across teams
+        # (Previously created per-team, resetting the in-memory cache)
+        self._enricher = None
+        if session and llm_prompts:
+            from app.scraper.services.enrichment import TeamEnrichmentService
+            self._enricher = TeamEnrichmentService(session, llm_prompts)
+        
         logger.info(
             f"DiscoveryService initialized with "
             f"LLM extraction: {llm_prompts is not None}, "
@@ -122,13 +129,9 @@ class DiscoveryService:
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
                     logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country_code}, Tier: {data.tier_level}")
                     
-                    # NEW: Enrich with LLM data (centralized service)
-                    if self._session and self._llm_prompts:
-                        # Initialize enricher on demand (or could be in __init__)
-                        from app.scraper.services.enrichment import TeamEnrichmentService
-                        enricher = TeamEnrichmentService(self._session, self._llm_prompts)
-                        
-                        data = await enricher.enrich_team_data(data)
+                    # Enrich with LLM data (reusing single enricher for cache benefits)
+                    if self._enricher:
+                        data = await self._enricher.enrich_team_data(data)
 
                     sponsor_names = [s.brand_name for s in data.sponsors]
                     logger.info(f"    - Sponsors: {', '.join(sponsor_names) if sponsor_names else 'None'}")
