@@ -133,6 +133,7 @@ class TeamAssemblyService:
             "country_code": data.country_code,
             "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
+            "team_identity_id": data.team_identity_id,  # For node matching across name changes
             "sponsors": [
                 {
                     "name": s_info.brand_name, 

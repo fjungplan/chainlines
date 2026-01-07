@@ -465,18 +465,37 @@ class AuditLogService:
         data = edit.snapshot_after
         
         if edit.entity_type == "TeamEra":
-            # Check if Node exists
-            stmt = select(TeamNode).where(TeamNode.legal_name == data["registered_name"])
-            result = await session.execute(stmt)
-            node = result.scalar_one_or_none()
+            node = None
+            team_identity_id = data.get("team_identity_id")
+            
+            # First, try to find node by team_identity_id (handles name changes)
+            if team_identity_id:
+                # PostgreSQL JSONB query for external_ids.cyclingflash_identity
+                stmt = select(TeamNode).where(
+                    TeamNode.external_ids["cyclingflash_identity"].astext == team_identity_id
+                )
+                result = await session.execute(stmt)
+                node = result.scalar_one_or_none()
+            
+            # Fallback: try to find by legal_name (backward compatibility)
+            if not node:
+                stmt = select(TeamNode).where(TeamNode.legal_name == data["registered_name"])
+                result = await session.execute(stmt)
+                node = result.scalar_one_or_none()
             
             if not node:
+                # Create new node with identity stored in external_ids
+                external_ids = {}
+                if team_identity_id:
+                    external_ids["cyclingflash_identity"] = team_identity_id
+                
                 node = TeamNode(
                     node_id=edit.entity_id, # Using same ID for simplicity if 1:1, but usually distinct. 
                     # Actually, TeamEra is the entity. Node is separate.
                     # We need to find or create the Node.
                     legal_name=data["registered_name"],
-                    founding_year=data["season_year"]
+                    founding_year=data["season_year"],
+                    external_ids=external_ids if external_ids else None
                 )
                 session.add(node)
                 await session.flush()
