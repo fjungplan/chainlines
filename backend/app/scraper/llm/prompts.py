@@ -112,12 +112,17 @@ CRITICAL INSTRUCTIONS:
    - Generic terms: "Team", "Pro", "Cycling", "Racing"
    - Equipment brands appearing outside the team name (handled by scraper)
 
-7. **Parent Companies:**
+7. **Parent Companies and Abbreviations:**
    - Include parent company ONLY if you're certain (e.g., "Ineos Grenadier" → INEOS Group)
    - Known abbreviations should reference full parent names:
-     * "FDJ" or "FDJ United" → "Francaise des Jeux"
-     * "UAE" → "United Arab Emirates"
-   - If uncertain, leave as null
+     * "FDJ" or "FDJ United" → parent: "Française des Jeux" (French national lottery)
+     * "UAE" → parent: "Emirates" or "United Arab Emirates"
+     * "DSM" → parent: "Royal DSM" (Dutch multinational)
+   - **COUNTRY-AWARE DISAMBIGUATION (Critical):**
+     * "Lotto" for BELGIAN teams (BEL) → parent: "Nationale Loterij" (Belgian national lottery)
+     * "Lotto" for ITALIAN teams (ITA) → "Lotto Sport Italia" (Italian sports brand)
+     * "Lotto" without clear country context → Leave parent as null, set confidence <85%
+   - If uncertain, leave parent as null
    - Don't guess at corporate structures
 
 8. **Brand Colors - BE SPECIFIC AND ACCURATE:**
