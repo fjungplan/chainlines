@@ -298,13 +298,28 @@ class TeamAssemblyService:
         sponsors: List[SponsorInfo],
         country_code: Optional[str] = None
     ):
-        """Create sponsor links for team era."""
+        """Create sponsor links for team era with proper prominence calculation."""
+        # Separate title and equipment sponsors
+        title_sponsors = [
+            s for s in sponsors 
+            if getattr(s, "type", "TITLE") == "TITLE"
+        ]
+        
+        # Calculate prominence only for title sponsors using ProminenceCalculator
+        title_names = [s.brand_name for s in title_sponsors]
+        title_prominence = ProminenceCalculator.calculate(title_names)
+        
+        # Build prominence map
+        prominence_map = {}
+        for s, p in zip(title_sponsors, title_prominence):
+            prominence_map[s.brand_name] = p
+        
+        # Create links for ALL sponsors (title + equipment)
         for idx, sponsor_info in enumerate(sponsors):
             brand = await self._get_or_create_brand(sponsor_info, country_code)
             
-            # Create link with prominence (title sponsors higher)
-            prominence = 100 - (idx * 10)  # 100%, 90%, 80%, etc.
-            prominence = max(prominence, 0)  # Min 0%
+            # Get prominence from map (0 for equipment sponsors)
+            prominence = prominence_map.get(sponsor_info.brand_name, 0)
             
             link = TeamSponsorLink(
                 era=team_era,
