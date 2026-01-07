@@ -114,16 +114,58 @@ CRITICAL INSTRUCTIONS:
 
 7. **Parent Companies:**
    - Include parent company ONLY if you're certain (e.g., "Ineos Grenadier" → INEOS Group)
+   - Known abbreviations should reference full parent names:
+     * "FDJ" or "FDJ United" → "Francaise des Jeux"
+     * "UAE" → "United Arab Emirates"
    - If uncertain, leave as null
    - Don't guess at corporate structures
 
-8. **Brand Colors:**
-   - Extract the primary brand color as a hex code if you know it (e.g., "#FF0000" for Coca-Cola red)
-   - Only include if you're confident about the brand's official color
-   - Common examples: Bahrain (#DD2A4C pink), INEOS (#1A1F5F navy), Alpecin (#009DE0 blue)
-   - If uncertain or brand uses multiple colors, leave as null
+8. **Brand Colors - BE SPECIFIC AND ACCURATE:**
+   - Research/recall the EXACT official brand color, not a generic approximation
+   - Examples of GOOD colors (specific, brand-accurate):
+     * Alpecin: #009DE0 (sky blue)
+     * Bahrain: #DD2A4C (coral pink)  
+     * INEOS: #1A1F5F (navy blue)
+     * Red Bull: #123375 (dark blue, NOT red!)
+     * Soudal: #FFD700 (gold/yellow)
+   - Examples of POOR colors to AVOID:
+     * Generic #FF0000 (pure red) - very few brands use this exact shade
+     * Generic #0000FF (pure blue) - too bright, most brands use custom blues
+     * #000000 (black) - only use if brand truly uses black as primary (rare)
+   - **CRITICAL**: If you don't know the exact official shade, leave NULL rather than guessing
+   - Generic colors reduce data quality - it's better to have no color than wrong color
 
-9. **Confidence Scoring:**
+9. **Industry Sector:**
+   - Classify the sponsor's primary business sector
+   - Use ONE of these categories:
+     * "Banking & Financial Services"
+     * "Technology"
+     * "Healthcare & Pharma"
+     * "Food & Beverage"
+     * "Automotive"
+     * "Energy & Utilities"
+     * "Retail & Consumer Goods"
+     * "Real Estate & Construction"
+     * "Telecommunications"
+     * "Tourism & Hospitality"
+     * "Government & Public"
+     * "Other"
+   - Examples:
+     * Alpecin → "Healthcare & Pharma" (hair care products)
+     * Bahrain → "Tourism & Hospitality"
+     * BORA → "Retail & Consumer Goods" (home appliances)
+     * Red Bull → "Food & Beverage"
+
+10. **Source URL:**
+    - Provide the sponsor's official website OR Wikipedia page
+    - Format: Full URL starting with https://
+    - Examples:
+      * https://www.alpecin.com
+      * https://en.wikipedia.org/wiki/Bahrain
+    - Use for manual verification and research
+    - Leave null if you cannot determine a reliable source
+
+11. **Confidence Scoring:**
    - 0.95-1.0: Extremely clear, well-known brands ("Bahrain Victorious", "UAE Emirates")
    - 0.90-0.94: Clear brands, minor ambiguity ("Alpecin - Premier Tech")
    - 0.85-0.89: Some uncertainty in brand boundaries or recognition

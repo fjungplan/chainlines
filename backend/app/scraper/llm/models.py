@@ -16,6 +16,14 @@ class SponsorInfo(BaseModel):
         default=None,
         description="Primary brand color as hex code (e.g., '#FF0000' for red). Extract from well-known brand colors."
     )
+    industry_sector: Optional[str] = Field(
+        default=None,
+        description="Business sector (e.g., 'Financial Services', 'Healthcare', 'Technology')"
+    )
+    source_url: Optional[str] = Field(
+        default=None,
+        description="Official website or Wikipedia URL for verification"
+    )
 
 class SponsorExtractionResult(BaseModel):
     """LLM response for sponsor extraction."""
