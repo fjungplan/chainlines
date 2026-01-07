@@ -52,6 +52,9 @@ class TeamEnrichmentService:
             if eq_name_lower == data.name.lower():
                 is_redundant = True
             else:
+                # Count how many title sponsors are contained in this scraped sponsor
+                contained_sponsors = 0
+                
                 for s in all_sponsors:
                     s_name_lower = s.brand_name.lower()
                     
@@ -65,6 +68,16 @@ class TeamEnrichmentService:
                     if len(eq_name_lower) > 3 and eq_name_lower in s_name_lower:
                          is_redundant = True
                          break
+                    
+                    # 2d. Count if title sponsor is contained IN scraped sponsor
+                    # (e.g., "Jayco" in "Jayco AlUla")
+                    if len(s_name_lower) > 3 and s_name_lower in eq_name_lower:
+                        contained_sponsors += 1
+                
+                # 2e. If scraped sponsor contains 2+ title sponsors, it's the full team name
+                # (e.g., "Jayco AlUla" contains both "Jayco" and "AlUla")
+                if contained_sponsors >= 2:
+                    is_redundant = True
             
             if not is_redundant:
                 # 3. Mark remaining scraper sponsors as EQUIPMENT
