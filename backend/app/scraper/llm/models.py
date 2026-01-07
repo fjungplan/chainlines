@@ -12,6 +12,10 @@ class SponsorInfo(BaseModel):
         default="TITLE",
         description="Sponsor type: 'TITLE' or 'EQUIPMENT'"
     )
+    brand_color: Optional[str] = Field(
+        default=None,
+        description="Primary brand color as hex code (e.g., '#FF0000' for red). Extract from well-known brand colors."
+    )
 
 class SponsorExtractionResult(BaseModel):
     """LLM response for sponsor extraction."""

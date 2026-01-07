@@ -125,13 +125,15 @@ class TeamAssemblyService:
             "registered_name": data.name,
             "season_year": data.season_year,
             "uci_code": data.uci_code,
+            "country_code": data.country_code,
             "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
             "sponsors": [
                 {
                     "name": s_info.brand_name, 
                     "prominence": prominence_map.get(s_info.brand_name, 0),
-                    "parent_company": s_info.parent_company
+                    "parent_company": s_info.parent_company,
+                    "brand_color": s_info.brand_color
                 }
                 for s_info in data.sponsors
             ]
@@ -207,7 +209,7 @@ class TeamAssemblyService:
             brand = SponsorBrand(
                 brand_name=sponsor_info.brand_name,
                 master=master,
-                default_hex_color="#000000",
+                default_hex_color=sponsor_info.brand_color or "#000000",  # Use extracted color or fallback to black
             )
             self._session.add(brand)
 
@@ -509,6 +511,9 @@ class AssemblyOrchestrator:
                         data = EnrichedTeamData(base_data=data)
                 
                 await self._process_team(data)
+                
+                # Commit transaction for this team
+                await self._session.commit()
             except Exception as e:
                 logger.error(f"    - Failed to assemble {url}: {e}")
                 # Rollback the session to clear error state and allow next team to process

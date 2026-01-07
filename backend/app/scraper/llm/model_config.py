@@ -36,7 +36,7 @@ MODEL_ROUTING: Dict[PromptType, ModelPair] = {
         primary_model="deepseek-reasoner",
         fallback_model="gemini-2.5-pro"
     ),
-    # Sponsor extraction: Chat is sufficient, Flash as fallback
+    # Sponsor extraction: Chat with improved prompt guidance, Flash as fallback
     PromptType.SPONSOR_EXTRACTION: ModelPair(
         primary_model="deepseek-chat",
         fallback_model="gemini-2.5-flash"

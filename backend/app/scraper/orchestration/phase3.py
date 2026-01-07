@@ -188,6 +188,9 @@ class LineageOrchestrator:
                     predecessor_history=pred.get("wikipedia_history_content"),
                     successor_history=succ.get("wikipedia_history_content")
                 )
+                
+                # Commit transaction for this lineage connection
+                await self._session.commit()
             except Exception as e:
                 logger.error(f"    - Error analyzing pair: {e}")
                 # Rollback the session to clear error state and allow next pair to process

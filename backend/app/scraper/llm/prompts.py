@@ -61,7 +61,7 @@ Return your decision with confidence score (0.0 to 1.0). If returning null for e
 
 SPONSOR_EXTRACTION_PROMPT = """You are an expert in professional cycling team sponsorship and brand identification.
 
-TASK: Extract sponsor/brand information from a professional cycling team name.
+TASK: Extract ONLY title/naming sponsor brands from a professional cycling team name.
 
 TEAM INFORMATION:
 - Team Name: {team_name}
@@ -69,39 +69,68 @@ TEAM INFORMATION:
 - Country: {country_code}
 - Partial DB Matches: {partial_matches}
 
-IMPORTANT INSTRUCTIONS:
-1. **Re-verify ALL parts independently** - The partial matches may be incorrect
-   Example: If DB matched "Lotto" but team is "Lotto NL Jumbo", "Lotto" alone is wrong
+CRITICAL INSTRUCTIONS:
 
-2. **Extract sponsors accurately:**
-   - Return ONLY actual sponsor/brand names (companies, organizations)
-   - Distinguish sponsors from team descriptors (e.g., "Victorious", "Grenadiers")
-   - **DO NOT split compound brands** (e.g., "Uno-X Mobility" is ONE brand, NOT "Uno" + "X Mobility")
-   - **DO NOT include the full team name as a sponsor** (e.g., "XDS Astana Team" is the team, "XDS" and "Astana" are the sponsors)
-   - Handle multi-word brand names correctly (e.g., "Ineos Grenadier" not "Ineos")
-   - Identify parent companies when possible
+1. **Extract ONLY Title/Naming Sponsors:**
+   - Title sponsors are companies whose names appear IN THE TEAM NAME ITSELF
+   - DO NOT extract equipment sponsors (bikes, wheels, clothing, nutrition, etc.)
+   - Equipment sponsors will be handled separately by the scraper
+   - Example: "Alpecin - Premier Tech" → Title sponsors: ["Alpecin", "Premier Tech"]
+   - Example: "Bahrain Victorious" → Title sponsor: ["Bahrain"] ("Victorious" is a descriptor)
 
-3. **Use Web Search / Current Knowledge:**
-   - Use your browsing tool or internal knowledge to verify if a brand is a single entity or a partnership.
-   - **CRITICAL:** Many teams use new 2025/2026 sponsors. Verify the *current* commercial reality.
-   - Example: "Uno-X Mobility" is a specific fuel/mobility sub-brand of Reitan, distinct from just "Uno-X".
+2. **Be Self-Critical and Conservative:**
+   - If you're uncertain whether a word is a sponsor or descriptor, mark confidence lower
+   - Don't guess - if the team name is ambiguous, reduce confidence to <85%
+   - Example uncertainties that should reduce confidence:
+     * Unclear brand boundaries ("Modern Adventure" vs "Modern" + "Adventure"?)
+     * Potential descriptors ("Pro", "Cycling", "Team", "Racing")
+     * Regional variants ("Lotto NL" vs "Lotto")
+   - Better to have a human review an 80% confidence case than auto-approve a wrong extraction
 
-4. **Examples:**
-   - "Bahrain Victorious" → sponsor: "Bahrain", descriptor: "Victorious"
-   - "Ineos Grenadiers" → sponsor: "Ineos Grenadier" (brand of INEOS Group), descriptor: "s"
-   - "Uno-X Mobility" → sponsor: "Uno-X Mobility" (Single brand)
-   - "XDS Astana Team" → sponsors: ["XDS", "Astana"], filler: "Team"
-   - "UAE Team Emirates XRG" → sponsors: ["UAE", "Emirates", "XRG"]
-   - "Lotto NL Jumbo Team" → sponsors: ["Lotto NL", "Jumbo"], filler: "Team"
+3. **Verify Partial Matches:**
+   - The partial matches from DB may be incorrect or incomplete
+   - Re-verify ALL parts independently
+   - Example: If DB matched "Lotto" but team is "Lotto NL Jumbo", "Lotto" alone is wrong
 
-5. **Parent Companies:**
-   - If you know the parent company, include it (e.g., "Ineos Grenadier" → INEOS Group)
+4. **Handle Compound Brands Correctly:**
+   - DO NOT split compound brands (e.g., "Uno-X Mobility" is ONE brand)
+   - DO NOT include the full team name as a sponsor (e.g., "XDS Astana Team" → ["XDS", "Astana"], NOT the full name)
+   - Handle multi-word brand names (e.g., "Ineos Grenadier" not just "Ineos")
+
+5. **Examples of TITLE Sponsors (what TO extract):**
+   - "Bahrain Victorious" → ["Bahrain"]
+   - "Ineos Grenadiers" → ["Ineos Grenadier"] (brand of INEOS Group)
+   - "Uno-X Mobility" → ["Uno-X Mobility"]
+   - "XDS Astana Team" → ["XDS", "Astana"]
+   - "UAE Team Emirates XRG" → ["UAE", "Emirates", "XRG"]
+   - "Alpecin - Premier Tech" → ["Alpecin", "Premier Tech"]
+   - "Soudal - Quick Step" → ["Soudal", "Quick Step"]
+   - "Modern Adventure Pro Cycling" → ["Modern Adventure"] (if certain it's a brand; otherwise confidence <85%)
+
+6. **Examples of NON-title words (what NOT to extract):**
+   - Team descriptors: "Victorious", "Grenadiers", "United", "Development"
+   - Generic terms: "Team", "Pro", "Cycling", "Racing"
+   - Equipment brands appearing outside the team name (handled by scraper)
+
+7. **Parent Companies:**
+   - Include parent company ONLY if you're certain (e.g., "Ineos Grenadier" → INEOS Group)
    - If uncertain, leave as null
+   - Don't guess at corporate structures
 
-6. **Regional Note:**
-   - "Lotto NL" and "Lotto Belgium" are SEPARATE companies, not variants
+8. **Brand Colors:**
+   - Extract the primary brand color as a hex code if you know it (e.g., "#FF0000" for Coca-Cola red)
+   - Only include if you're confident about the brand's official color
+   - Common examples: Bahrain (#DD2A4C pink), INEOS (#1A1F5F navy), Alpecin (#009DE0 blue)
+   - If uncertain or brand uses multiple colors, leave as null
 
-Provide your analysis with high confidence and clear reasoning.
+9. **Confidence Scoring:**
+   - 0.95-1.0: Extremely clear, well-known brands ("Bahrain Victorious", "UAE Emirates")
+   - 0.90-0.94: Clear brands, minor ambiguity ("Alpecin - Premier Tech")
+   - 0.85-0.89: Some uncertainty in brand boundaries or recognition
+   - <0.85: Significant uncertainty - prefer human review
+
+Provide your analysis with honest confidence assessment and clear reasoning.
+If you're not certain, SAY SO in your reasoning and lower the confidence.
 """
 
 

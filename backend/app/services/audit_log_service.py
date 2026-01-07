@@ -538,7 +538,7 @@ class AuditLogService:
                     brand = SponsorBrand(
                         brand_name=brand_name,
                         master_id=master.master_id,
-                        default_hex_color="#000000"
+                        default_hex_color=s_data.get("brand_color") or "#000000"  # Use extracted color or fallback
                     )
                     session.add(brand)
                     await session.flush()
