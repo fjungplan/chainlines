@@ -79,7 +79,7 @@ class DiscoveryService:
     ) -> DiscoveryResult:
         """Discover all teams and collect sponsor names."""
         checkpoint = self._checkpoint.load()
-        team_urls: list[str] = []
+        team_urls: list[tuple[str, int]] = []  # Changed to (URL, year) tuples
         
         if checkpoint and checkpoint.phase == 1:
             team_urls = checkpoint.team_queue.copy()
@@ -133,8 +133,10 @@ class DiscoveryService:
                     sponsor_names = [s.brand_name for s in data.sponsors]
                     logger.info(f"    - Sponsors: {', '.join(sponsor_names) if sponsor_names else 'None'}")
                     
-                    if url not in team_urls:
-                        team_urls.append(url)
+                    # Store (URL, year) tuple to ensure correct year is processed in Phase 2
+                    url_year_pair = (url, year)
+                    if url_year_pair not in team_urls:
+                        team_urls.append(url_year_pair)
                         self._collector.add(data.sponsors)
                         
                         # Save checkpoint periodically
@@ -173,7 +175,7 @@ class DiscoveryService:
         else:  # Pre-1991
             return self._gt_index.is_relevant(team_name, year)
 
-    def _save_checkpoint(self, team_urls: list[str]) -> None:
+    def _save_checkpoint(self, team_urls: list[tuple[str, int]]) -> None:
         """Save current progress."""
         self._checkpoint.save(CheckpointData(
             phase=1,

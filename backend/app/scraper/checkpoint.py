@@ -2,7 +2,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
 from pydantic import BaseModel, Field
 
 class CheckpointData(BaseModel):
@@ -11,7 +11,8 @@ class CheckpointData(BaseModel):
     current_position: Optional[str] = None
     completed_urls: list[str] = Field(default_factory=list)
     sponsor_names: set[str] = Field(default_factory=set)
-    team_queue: list[str] = Field(default_factory=list)
+    # Changed from list[str] to list[tuple[str, int]] to store (URL, year) pairs
+    team_queue: List[Tuple[str, int]] = Field(default_factory=list)
     tier: Optional[str] = None
     start_year: Optional[int] = None
     end_year: Optional[int] = None

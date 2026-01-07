@@ -538,20 +538,16 @@ class AssemblyOrchestrator:
             return
 
         queue = checkpoint.team_queue
-        logger.info(f"Phase 2: Starting Assembly for {len(queue)} teams across {years}")
+        logger.info(f"Phase 2: Starting Assembly for {len(queue)} team-year pairs")
         
-        for i, url in enumerate(queue, 1):
+        for i, (url, year) in enumerate(queue, 1):  # Unpack (URL, year) tuples
             if self._monitor:
                 await self._monitor.check_status()
             
             await self._emit_progress(i, len(queue))
             
-            # For each team, we may need to fetch detail for multiple years 
-            # if we want a complete history, but for now we follow the simple 
-            # Phase 1 -> Phase 2 flow where Phase 1 gathered the URLs.
-            
-            # We'll process the latest requested year for this URL
-            year = years[0] # Simplification for now
+            # Each queue item is now a (url, year) tuple from Phase 1
+            # so we process each URL for its specific year
             
             logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
             try:
