@@ -133,7 +133,9 @@ class TeamAssemblyService:
                     "name": s_info.brand_name, 
                     "prominence": prominence_map.get(s_info.brand_name, 0),
                     "parent_company": s_info.parent_company,
-                    "brand_color": s_info.brand_color
+                    "brand_color": s_info.brand_color,
+                    "industry_sector": s_info.industry_sector,
+                    "source_url": s_info.source_url
                 }
                 for s_info in data.sponsors
             ]
