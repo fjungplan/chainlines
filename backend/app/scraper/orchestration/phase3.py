@@ -41,7 +41,13 @@ class OrphanDetector:
                 # For now we leave it None to avoid complex joins in this detector
                 "wikipedia_history_content": None 
             }
-            if node.dissolution_year:
+            
+            # Calculate end_year dynamically from latest era (more reliable than dissolution_year)
+            # This catches teams that exist in year X but not in year X+1
+            if node.eras:
+                latest_year = max(era.season_year for era in node.eras)
+                data["end_year"] = latest_year
+            elif node.dissolution_year:
                 data["end_year"] = node.dissolution_year
             
             teams_data.append(data)
