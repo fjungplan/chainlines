@@ -587,26 +587,18 @@ class AssemblyOrchestrator:
             
             logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
             try:
-                data = await self._scraper.get_team(url, year)
+                # Step 1: Scrape base data from CyclingFlash
+                base_data = await self._scraper.get_team(url, year)
                 
-                # Enrich if service available
+                # Step 2: Enrich with multi-source data (Wikidata, Wikipedia, etc.)
+                enriched = await self._enrich_team(base_data)
+                
+                # Step 3: Apply sponsor enrichment (if available)
                 if self._enricher:
-                    data = await self._enricher.enrich_team_data(data)
+                    enriched.base_data = await self._enricher.enrich_team_data(enriched.base_data)
                 
-                # LLM Confidence is simulated here or retrieved if we stored it
-                # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
-                # or we would have used an LLM-assisted parser.
-                
-                # Wrap base data in EnrichedTeamData if not enriched
-                if not isinstance(data, EnrichedTeamData):
-                     # Temporarily create wrapper if enricher didn't run or return one
-                     # If enricher ran, 'data' should be EnrichedTeamData
-                     # But current enricher code in _run only calls self._enricher.enrich_team_data(data)
-                     # Let's assume enrich_team_data returns EnrichedTeamData
-                     if not isinstance(data, EnrichedTeamData):
-                        data = EnrichedTeamData(base_data=data)
-                
-                await self._process_team(data)
+                # Step 4: Process (handles conflicts, arbiter, assembly)
+                await self._process_team(enriched)
                 
                 # Commit transaction for this team
                 await self._session.commit()
