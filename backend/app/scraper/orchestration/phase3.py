@@ -244,8 +244,13 @@ class LineageOrchestrator:
             logger.info(f"  Analyzing ending: {node['name']}")
             events = await self._extractor.analyze_ending_node(node)
             
-            for event in events:
-                await self._extractor.create_lineage_record(node, event)
+            if events:
+                logger.info(f"    Found {len(events)} lineage event(s)")
+                for event in events:
+                    logger.info(f"      - {event.get('event_type')}: {event.get('target_name')} (conf: {event.get('confidence')})")
+                    await self._extractor.create_lineage_record(node, event)
+            else:
+                logger.info(f"    No lineage events detected by LLM")
             
             processed += 1
             await self._session.commit()
@@ -259,8 +264,13 @@ class LineageOrchestrator:
             logger.info(f"  Analyzing starting: {node['name']}")
             events = await self._extractor.analyze_starting_node(node)
             
-            for event in events:
-                await self._extractor.create_lineage_record(node, event)
+            if events:
+                logger.info(f"    Found {len(events)} lineage event(s)")
+                for event in events:
+                    logger.info(f"      - {event.get('event_type')}: {event.get('target_name')} (conf: {event.get('confidence')})")
+                    await self._extractor.create_lineage_record(node, event)
+            else:
+                logger.info(f"    No lineage events detected by LLM")
             
             processed += 1
             await self._session.commit()
