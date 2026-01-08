@@ -448,6 +448,13 @@ class TeamAssemblyService:
         if enriched.wikipedia_data:
             wiki_history = enriched.wikipedia_data.history_text
 
+        # Validate UCI code format (must be exactly 3 uppercase letters or None)
+        import re
+        uci_code = data.uci_code
+        if uci_code and not re.match(r'^[A-Z]{3}$', uci_code):
+            logger.warning(f"    - Invalid UCI code '{uci_code}' - setting to None")
+            uci_code = None
+
         # Check if era already exists for this node and year
         existing_era = next(
             (e for e in node.eras if e.season_year == data.season_year),
@@ -459,7 +466,7 @@ class TeamAssemblyService:
             era = existing_era
             # Update fields
             era.registered_name = data.name
-            era.uci_code = data.uci_code
+            era.uci_code = uci_code
             era.country_code = data.country_code
             era.tier_level = data.tier_level
             if wiki_history:
@@ -473,7 +480,7 @@ class TeamAssemblyService:
                 season_year=data.season_year,
                 valid_from=date(data.season_year, 1, 1),
                 registered_name=data.name,
-                uci_code=data.uci_code,
+                uci_code=uci_code,
                 country_code=data.country_code,
                 tier_level=data.tier_level,
                 wikipedia_history_content=wiki_history  # Store Wikipedia history
