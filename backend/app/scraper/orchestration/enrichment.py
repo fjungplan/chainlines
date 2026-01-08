@@ -166,22 +166,48 @@ class NodeEnrichmentService:
         return headers.get(lang, ["History"])
     
     def _extract_section_content(self, header_element) -> Optional[str]:
-        """Extract text content from a section until the next h2."""
+        """Extract text content from a section until the next h2.
+        
+        Wikipedia now wraps h2 headers in <div class="mw-heading mw-heading2">.
+        We need to find that wrapper and iterate its siblings, not the h2's siblings.
+        """
         content = []
         
-        # Navigate to parent h2 if header is a span
-        parent = header_element
-        while parent and parent.name != 'h2':
-            parent = parent.parent
+        # Navigate to h2 if header is a span
+        element = header_element
+        while element and element.name != 'h2':
+            element = element.parent
         
-        if not parent:
+        if not element:
             return None
-            
-        for sibling in parent.find_next_siblings():
-            if sibling.name == 'h2':
-                break
-            text = sibling.get_text(strip=True)
-            if text:
-                content.append(text)
+        
+        # Check if h2 is wrapped in mw-heading div (new Wikipedia structure)
+        parent = element.parent
+        if parent and parent.name == 'div' and 'mw-heading' in parent.get('class', []):
+            # New structure: iterate siblings of the wrapper div
+            for sibling in parent.find_next_siblings():
+                # Stop at next heading div or h2
+                if sibling.name == 'h2':
+                    break
+                if sibling.name == 'div' and 'mw-heading' in sibling.get('class', []):
+                    break
+                
+                # Skip edit sections and navigation elements
+                if sibling.name in ['span', 'style', 'script']:
+                    continue
+                
+                # Get text from paragraphs and other content elements
+                text = sibling.get_text(strip=True)
+                if text and len(text) > 10:  # Skip very short fragments like "[edit]"
+                    content.append(text)
+        else:
+            # Old structure: iterate siblings of h2 directly
+            for sibling in element.find_next_siblings():
+                if sibling.name == 'h2':
+                    break
+                text = sibling.get_text(strip=True)
+                if text and len(text) > 10:
+                    content.append(text)
         
         return '\n'.join(content) if content else None
+
