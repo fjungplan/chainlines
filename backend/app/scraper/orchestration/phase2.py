@@ -6,6 +6,7 @@ from uuid import UUID
 from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.team import TeamNode, TeamEra
@@ -354,7 +355,7 @@ class TeamAssemblyService:
         
         # Step 1: Try to find existing node by team_identity_id
         if data.team_identity_id:
-            stmt = select(TeamNode).where(
+            stmt = select(TeamNode).options(selectinload(TeamNode.eras)).where(
                 TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
             )
             result = await self._session.execute(stmt)
@@ -362,7 +363,7 @@ class TeamAssemblyService:
         
         # Step 2: Fall back to legal_name match (for teams without identity)
         if not node:
-            stmt = select(TeamNode).where(TeamNode.legal_name == data.name)
+            stmt = select(TeamNode).options(selectinload(TeamNode.eras)).where(TeamNode.legal_name == data.name)
             result = await self._session.execute(stmt)
             node = result.scalar_one_or_none()
         
