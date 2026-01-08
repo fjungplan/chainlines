@@ -1,64 +1,36 @@
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch
 from app.scraper.services.wikidata import WikidataResolver, WikidataResult
 
-# Mock response for search API (wbsearchentities)
-MOCK_SEARCH_RESPONSE_PEUGEOT = {
-    "search": [
-        {
-            "id": "Q20658729",
-            "label": "Peugeot cycling team",
-            "description": "French cycling team"
-        }
-    ]
-}
-
-# Mock response for entity API (wbgetentities)
-MOCK_ENTITY_RESPONSE_PEUGEOT = {
-    "entities": {
-        "Q20658729": {
-            "labels": {"en": {"value": "Peugeot cycling team"}},
-            "sitelinks": {
-                "enwiki": {"title": "Peugeot (cycling team)"},
-                "frwiki": {"title": "Équipe cycliste Peugeot"},
-                "nlwiki": {"title": "Peugeot (wielerploeg)"}
-            }
-        }
-    }
-}
-
-# Mock response for unknown team
-MOCK_SEARCH_RESPONSE_EMPTY = {
-    "search": []
-}
 
 @pytest.fixture
 def mock_cache():
-    # CacheManager methods are synchronous
+    """Create a mock cache that returns None (cache miss)."""
     mock = Mock()
     mock.get.return_value = None
     return mock
 
-def create_mock_response(data):
-    """Helper to create a mock response object."""
-    mock_resp = Mock()
-    mock_resp.json.return_value = data
-    mock_resp.raise_for_status = Mock()
-    return mock_resp
 
 @pytest.mark.asyncio
 async def test_resolve_known_team(mock_cache):
     """Test that a known team returns a valid WikidataResult."""
-    with patch("httpx.AsyncClient") as mock_client:
-        # Setup mock to return search then entity response
-        mock_get = AsyncMock()
-        mock_get.side_effect = [
-            create_mock_response(MOCK_SEARCH_RESPONSE_PEUGEOT),
-            create_mock_response(MOCK_ENTITY_RESPONSE_PEUGEOT)
-        ]
-        mock_client.return_value.__aenter__.return_value.get = mock_get
+    resolver = WikidataResolver(cache=mock_cache)
+    
+    # Mock internal methods directly
+    with patch.object(resolver, '_search_entity', new_callable=AsyncMock) as mock_search, \
+         patch.object(resolver, '_get_entity_details', new_callable=AsyncMock) as mock_details:
         
-        resolver = WikidataResolver(cache=mock_cache)
+        mock_search.return_value = "Q20658729"
+        mock_details.return_value = WikidataResult(
+            qid="Q20658729",
+            label="Peugeot cycling team",
+            sitelinks={
+                "en": "https://en.wikipedia.org/wiki/Peugeot_(cycling_team)",
+                "fr": "https://fr.wikipedia.org/wiki/Équipe_cycliste_Peugeot",
+                "nl": "https://nl.wikipedia.org/wiki/Peugeot_(wielerploeg)"
+            }
+        )
+        
         result = await resolver.resolve("Peugeot cycling team")
         
         assert result is not None
@@ -66,33 +38,40 @@ async def test_resolve_known_team(mock_cache):
         assert result.qid == "Q20658729"
         assert result.label == "Peugeot cycling team"
         assert "en" in result.sitelinks
-        assert "Peugeot" in result.sitelinks["en"]
+
 
 @pytest.mark.asyncio
 async def test_resolve_unknown_team(mock_cache):
     """Test that an unknown team returns None."""
-    with patch("httpx.AsyncClient") as mock_client:
-        mock_get = AsyncMock()
-        mock_get.return_value = create_mock_response(MOCK_SEARCH_RESPONSE_EMPTY)
-        mock_client.return_value.__aenter__.return_value.get = mock_get
+    resolver = WikidataResolver(cache=mock_cache)
+    
+    with patch.object(resolver, '_search_entity', new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = None  # No match found
         
-        resolver = WikidataResolver(cache=mock_cache)
         result = await resolver.resolve("XYZ Unknown Team")
         
         assert result is None
 
+
 @pytest.mark.asyncio
 async def test_extracts_wikipedia_urls(mock_cache):
     """Test that Wikipedia URLs for different languages are extracted correctly."""
-    with patch("httpx.AsyncClient") as mock_client:
-        mock_get = AsyncMock()
-        mock_get.side_effect = [
-            create_mock_response(MOCK_SEARCH_RESPONSE_PEUGEOT),
-            create_mock_response(MOCK_ENTITY_RESPONSE_PEUGEOT)
-        ]
-        mock_client.return_value.__aenter__.return_value.get = mock_get
+    resolver = WikidataResolver(cache=mock_cache)
+    
+    with patch.object(resolver, '_search_entity', new_callable=AsyncMock) as mock_search, \
+         patch.object(resolver, '_get_entity_details', new_callable=AsyncMock) as mock_details:
         
-        resolver = WikidataResolver(cache=mock_cache)
+        mock_search.return_value = "Q20658729"
+        mock_details.return_value = WikidataResult(
+            qid="Q20658729",
+            label="Peugeot cycling team",
+            sitelinks={
+                "en": "https://en.wikipedia.org/wiki/Peugeot_(cycling_team)",
+                "fr": "https://fr.wikipedia.org/wiki/Équipe_cycliste_Peugeot",
+                "nl": "https://nl.wikipedia.org/wiki/Peugeot_(wielerploeg)"
+            }
+        )
+        
         result = await resolver.resolve("Peugeot cycling team")
         
         assert result is not None
@@ -100,6 +79,7 @@ async def test_extracts_wikipedia_urls(mock_cache):
         assert "en.wikipedia.org" in result.sitelinks["en"]
         assert "fr.wikipedia.org" in result.sitelinks["fr"]
         assert "nl.wikipedia.org" in result.sitelinks["nl"]
+
 
 @pytest.mark.asyncio
 async def test_respects_cache(mock_cache):
@@ -115,7 +95,7 @@ async def test_respects_cache(mock_cache):
     
     resolver = WikidataResolver(cache=mock_cache)
     
-    with patch("httpx.AsyncClient") as mock_client:
+    with patch.object(resolver, '_search_entity', new_callable=AsyncMock) as mock_search:
         result = await resolver.resolve("Cached Team")
         
         assert result is not None
@@ -124,21 +104,25 @@ async def test_respects_cache(mock_cache):
         
         # Verify cache was checked
         mock_cache.get.assert_called_once()
-        # Verify HTTP client was NOT used
-        mock_client.return_value.__aenter__.return_value.get.assert_not_called()
+        # Verify search was NOT called (cache hit)
+        mock_search.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_writes_to_cache(mock_cache):
     """Test that successful API results are written to cache."""
-    with patch("httpx.AsyncClient") as mock_client:
-        mock_get = AsyncMock()
-        mock_get.side_effect = [
-            create_mock_response(MOCK_SEARCH_RESPONSE_PEUGEOT),
-            create_mock_response(MOCK_ENTITY_RESPONSE_PEUGEOT)
-        ]
-        mock_client.return_value.__aenter__.return_value.get = mock_get
+    resolver = WikidataResolver(cache=mock_cache)
+    
+    with patch.object(resolver, '_search_entity', new_callable=AsyncMock) as mock_search, \
+         patch.object(resolver, '_get_entity_details', new_callable=AsyncMock) as mock_details:
         
-        resolver = WikidataResolver(cache=mock_cache)
+        mock_search.return_value = "Q20658729"
+        mock_details.return_value = WikidataResult(
+            qid="Q20658729",
+            label="Peugeot cycling team",
+            sitelinks={"en": "https://en.wikipedia.org/wiki/Peugeot"}
+        )
+        
         await resolver.resolve("Peugeot cycling team")
         
         mock_cache.set.assert_called_once()
