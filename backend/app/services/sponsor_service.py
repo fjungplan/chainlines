@@ -43,10 +43,8 @@ class SponsorService:
             last_modified_by=user_id
         )
         session.add(master)
-        await session.commit()
+        await session.flush()  # Use flush instead of commit - caller will commit
         await session.refresh(master)
-        # Refresh brands to return empty list correctly modeled
-        await session.refresh(master, ['brands'])
         return master
 
     @staticmethod
