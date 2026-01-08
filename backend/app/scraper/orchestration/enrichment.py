@@ -147,6 +147,12 @@ class NodeEnrichmentService:
                             if content:
                                 return content
             
+            # Final fallback: Extract lead section (intro paragraphs before first h2)
+            # This often contains key information about the team
+            lead_content = self._extract_lead_section(soup)
+            if lead_content:
+                return lead_content
+            
             return None
         except Exception as e:
             logger.debug(f"Error fetching {url}: {e}")
@@ -211,3 +217,51 @@ class NodeEnrichmentService:
         
         return '\n'.join(content) if content else None
 
+    def _extract_lead_section(self, soup) -> Optional[str]:
+        """Extract the lead/intro section (content before first h2).
+        
+        This is useful for pages without a dedicated History section,
+        as the intro often contains key information about team origins,
+        mergers, and lineage.
+        """
+        content = []
+        
+        # Find the main content area
+        # Wikipedia uses different IDs: mw-content-text, bodyContent, etc.
+        main_content = soup.find(id='mw-content-text')
+        if not main_content:
+            main_content = soup.find(id='bodyContent')
+        if not main_content:
+            main_content = soup.body
+        
+        if not main_content:
+            return None
+        
+        # Find first mw-parser-output div (actual article content)
+        parser_output = main_content.find(class_='mw-parser-output')
+        if parser_output:
+            main_content = parser_output
+        
+        # Iterate direct children until we hit the first heading
+        for child in main_content.children:
+            # Stop at first h2 or heading div
+            if hasattr(child, 'name'):
+                if child.name == 'h2':
+                    break
+                if child.name == 'div' and 'mw-heading' in child.get('class', []):
+                    break
+                
+                # Skip navigation, tables of contents, infoboxes, etc.
+                if child.name in ['table', 'style', 'script', 'meta', 'link']:
+                    continue
+                classes = child.get('class', []) if hasattr(child, 'get') else []
+                if any(c in classes for c in ['toc', 'infobox', 'navbox', 'sidebar', 'thumb', 'mw-empty-elt']):
+                    continue
+                
+                # Extract text from paragraphs and other content
+                if child.name == 'p':
+                    text = child.get_text(strip=True)
+                    if text and len(text) > 20:  # Skip short fragments
+                        content.append(text)
+        
+        return '\n'.join(content) if content else None
