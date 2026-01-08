@@ -660,25 +660,37 @@ class AssemblyOrchestrator:
 
 
     async def run(self, years: List[int]) -> None:
-        """Process the team queue for specified years."""
+        """Process the team queue for specified years with retry support."""
+        import json
+        from pathlib import Path
+        
+        MAX_RETRIES = 3
+        
         checkpoint = self._checkpoint.load()
         if not checkpoint or not checkpoint.team_queue:
             logger.warning("Phase 2: No teams in queue to process. Run Phase 1 first.")
             return
 
-        queue = checkpoint.team_queue
-        logger.info(f"Phase 2: Starting Assembly for {len(queue)} team-year pairs")
+        # Initialize queue with attempt counts: [(url, year, attempt_count), ...]
+        queue = [(url, year, 0) for (url, year) in checkpoint.team_queue]
+        failed_assemblies = []
+        processed_count = 0
+        total_items = len(queue)
         
-        for i, (url, year) in enumerate(queue, 1):  # Unpack (URL, year) tuples
+        logger.info(f"Phase 2: Starting Assembly for {total_items} team-year pairs")
+        
+        while queue:
+            url, year, attempts = queue.pop(0)
+            processed_count += 1
+            
             if self._monitor:
                 await self._monitor.check_status()
             
-            await self._emit_progress(i, len(queue))
+            await self._emit_progress(processed_count, total_items)
             
-            # Each queue item is now a (url, year) tuple from Phase 1
-            # so we process each URL for its specific year
+            logger.info(f"Team {processed_count}/{total_items}: Assembling '{url}' for {year}" + 
+                       (f" (attempt {attempts + 1})" if attempts > 0 else ""))
             
-            logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
             try:
                 # Step 1: Scrape base data from CyclingFlash
                 base_data = await self._scraper.get_team(url, year)
@@ -695,10 +707,50 @@ class AssemblyOrchestrator:
                 
                 # Commit transaction for this team
                 await self._session.commit()
+                
             except Exception as e:
-                logger.error(f"    - Failed to assemble {url}: {e}")
-                # Rollback the session to clear error state and allow next team to process
+                error_msg = str(e)
+                logger.error(f"    - Failed to assemble {url}: {error_msg}")
+                
+                # Rollback the session to clear error state
                 await self._session.rollback()
+                
+                # Check if we should retry
+                if attempts < MAX_RETRIES - 1:
+                    # Calculate backoff: 2^attempts seconds (1, 2, 4 seconds)
+                    backoff_seconds = 2 ** attempts
+                    logger.info(f"    - Will retry in {backoff_seconds}s (attempt {attempts + 2}/{MAX_RETRIES})")
+                    
+                    # Add back to end of queue with incremented attempt count
+                    queue.append((url, year, attempts + 1))
+                    
+                    # Apply backoff delay
+                    await asyncio.sleep(backoff_seconds)
+                else:
+                    # Max retries exceeded, record failure
+                    failed_assemblies.append({
+                        "url": url,
+                        "year": year,
+                        "error": error_msg,
+                        "attempts": attempts + 1
+                    })
+                    logger.warning(f"    - Max retries exceeded for {url}. Recording failure.")
+                
                 continue
+        
+        # Log final summary
+        if failed_assemblies:
+            logger.warning(f"Phase 2: {len(failed_assemblies)} team(s) failed after {MAX_RETRIES} attempts")
+            
+            # Write failed assemblies to file for later analysis/retry
+            failed_path = Path("logs/failed_assemblies.json")
+            failed_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(failed_path, "w") as f:
+                json.dump(failed_assemblies, f, indent=2)
+            
+            logger.info(f"Phase 2: Failed assemblies logged to {failed_path}")
+        else:
+            logger.info("Phase 2: All assemblies completed successfully!")
 
         logger.info("Phase 2: Assembly complete.")
