@@ -133,7 +133,7 @@ async def run_scraper(
     workers = [
         WikipediaWorker(base_scraper),
         CyclingRankingWorker(base_scraper),
-        MemoireWorker(base_scraper),
+        # MemoireWorker(base_scraper), # Disable until logic is fixed
     ]
 
     # Initialize LLM infrastructure (Shared across phases)

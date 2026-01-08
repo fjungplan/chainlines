@@ -628,9 +628,9 @@ class AssemblyOrchestrator:
             # CyclingRanking URL resolution needs more logic
             # For now, returning None as it requires QID->URL mapping
             return None
-        elif source_name == "memoire":
-            # Memoire URLs would come from sitelinks if available
-            return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
+        # elif source_name == "memoire":
+        #    # Memoire URLs would come from sitelinks if available
+        #    return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
         
         return None
     

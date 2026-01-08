@@ -89,7 +89,7 @@ class NodeEnrichmentService:
         all_history = []
         
         for lang in WIKI_LANGUAGES:
-            wiki_url = wikidata_result.sitelinks.get(f"{lang}wiki")
+            wiki_url = wikidata_result.sitelinks.get(lang)
             if not wiki_url:
                 continue
             
