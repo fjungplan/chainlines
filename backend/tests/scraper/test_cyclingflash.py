@@ -94,41 +94,40 @@ def test_parse_team_list_ignores_sidebar_links():
     assert "/team/invalid-sidebar-team" not in urls
 
 
-def test_parse_team_detail_extracts_team_history():
-    """Parser should extract team history from dropdown for identity matching."""
-    from app.scraper.sources.cyclingflash import CyclingFlashParser
-    
-    html = (FIXTURE_DIR / "team_detail_2024.html").read_text()
-    parser = CyclingFlashParser()
-    
-    data = parser.parse_team_detail(html, season_year=2024)
-    
-    # Should extract available years from dropdown
-    assert hasattr(data, 'available_years')
-    assert 2025 in data.available_years
-    assert 2024 in data.available_years
-    assert 2023 in data.available_years
-    assert 2022 in data.available_years
-    assert 2018 in data.available_years
-    
-    # Should be sorted descending (newest first)
-    assert data.available_years == sorted(data.available_years, reverse=True)
-
 
 def test_parse_team_detail_generates_team_identity_id():
-    """Parser should generate stable team identity ID from dropdown."""
+    """Parser should generate stable team identity ID from Next.js data."""
     from app.scraper.sources.cyclingflash import CyclingFlashParser
     
+    # Base HTML
     html = (FIXTURE_DIR / "team_detail_2024.html").read_text()
-    parser = CyclingFlashParser()
     
-    data = parser.parse_team_detail(html, season_year=2024)
+    # Append Next.js script with editions data
+    # simulating escaped JSON inside a script string
+    script_content = r'self.__next_f.push([1,"editions:{\"team-2025\":\"Team 2025\",\"team-2024\":\"Team 2024\",\"team-2023\":\"Team 2023\"}"])'
+    # The parser looks for \"editions\":{...}
+    # We construct it to match the regex: \\"editions\\":\{([^}]+)\}
+    # Regex expects double backslashes for quotes in the source string
+    
+    # Let's verify the regex in python:
+    # r'\\"editions\\":\{([^}]+)\}' matches '...\"editions\":{\"slug\":\"Name\"}...'
+    
+    # We'll stick to a simple injection that satisfies the regex
+    injected_html = html + """
+    <script>
+    self.__next_f.push([1,"...\\\"editions\\\":{\\\"team-2025\\\":\\\"Team 2025\\\",\\\"team-2024\\\":\\\"Team 2024\\\"}..."])
+    </script>
+    """
+    
+    parser = CyclingFlashParser()
+    data = parser.parse_team_detail(injected_html, season_year=2024)
     
     # Should have a team identity ID
     assert hasattr(data, 'team_identity_id')
     assert data.team_identity_id is not None
     
-    # Identity should be stable (same input = same output)
-    data2 = parser.parse_team_detail(html, season_year=2024)
+    # Identity should be stable (derived from team-2024 and team-2025)
+    data2 = parser.parse_team_detail(injected_html, season_year=2024)
     assert data.team_identity_id == data2.team_identity_id
+
 

@@ -1,152 +1,121 @@
 """Test Phase 3 Lineage Connection orchestration."""
 import pytest
-from datetime import date
-
-def test_orphan_detector_finds_gaps():
-    """OrphanDetector should find teams with year gaps."""
-    from app.scraper.orchestration.phase3 import OrphanDetector
-    
-    teams = [
-        {"id": "a", "name": "Team A", "end_year": 2022},
-        {"id": "b", "name": "Team B", "start_year": 2023},
-        {"id": "c", "name": "Team C", "end_year": 2020},
-    ]
-    
-    detector = OrphanDetector(session=AsyncMock())
-    candidates = detector.find_candidates(teams)
-    
-    # Should match Team A (ended 2022) with Team B (started 2023)
-    assert len(candidates) >= 1
-    assert any(c["predecessor"]["name"] == "Team A" for c in candidates)
-
-def test_orphan_detector_ignores_large_gaps():
-    """OrphanDetector should ignore gaps > 2 years."""
-    from app.scraper.orchestration.phase3 import OrphanDetector
-    
-    teams = [
-        {"id": "a", "name": "Team A", "end_year": 2018},
-        {"id": "b", "name": "Team B", "start_year": 2023},
-    ]
-    
-    detector = OrphanDetector(session=AsyncMock(), max_gap_years=2)
-    candidates = detector.find_candidates(teams)
-    
-    assert len(candidates) == 0
-
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+from datetime import date
 
 @pytest.mark.asyncio
-async def test_lineage_service_creates_event():
-    """LineageConnectionService should create lineage events."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
+async def test_boundary_detector_finds_nodes():
+    """BoundaryNodeDetector should find teams ending/starting at transition year."""
+    from app.scraper.orchestration.phase3 import BoundaryNodeDetector
+    from app.models.team import TeamNode, TeamEra
+    
+    # Setup mock session
+    mock_session = AsyncMock()
+    
+    # Create test nodes
+    # Node A: 2024 (Ends at transition year 2024 for 2024->2025)
+    node_a = TeamNode(node_id=uuid4(), legal_name="Team A", founding_year=2024)
+    node_a.eras = [TeamEra(season_year=2024)]
+    
+    # Node B: 2025 (Starts at next year 2025)
+    node_b = TeamNode(node_id=uuid4(), legal_name="Team B", founding_year=2025)
+    node_b.eras = [TeamEra(season_year=2025)]
+    
+    # Node C: 2024, 2025 (Continuous, not a boundary)
+    node_c = TeamNode(node_id=uuid4(), legal_name="Team C", founding_year=2024)
+    node_c.eras = [TeamEra(season_year=2024), TeamEra(season_year=2025)]
+    
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_session.execute.return_value = mock_result
+    mock_result.scalars.return_value.all.return_value = [node_a, node_b, node_c]
+    
+    detector = BoundaryNodeDetector(session=mock_session)
+    # Transition year 2024 (looking for ends in 2024, starts in 2025)
+    result = await detector.get_boundary_nodes(transition_year=2024)
+    
+    # Verify ending nodes
+    assert len(result["ending"]) == 1
+    assert result["ending"][0]["name"] == "Team A"
+    assert result["ending"][0]["year"] == 2024
+    
+    # Verify starting nodes
+    assert len(result["starting"]) == 1
+    assert result["starting"][0]["name"] == "Team B"
+    assert result["starting"][0]["year"] == 2025
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_analyzes_ending_node():
+    """LineageExtractor should call LLM to analyze ending nodes."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.enums import EditAction
     
     mock_prompts = AsyncMock()
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=LineageEventType.LEGAL_TRANSFER,
-            confidence=0.95,
-            reasoning="Same team",
-            predecessor_ids=[uuid4()],
-            successor_ids=[uuid4()]
-        )
-    )
+    mock_requests = AsyncMock()
+    
+    # Mock LLM return
+    mock_prompts.extract_lineage_events.return_value = [{
+        "event_type": "SUCCEEDED_BY",
+        "target_name": "Team B",
+        "confidence": 0.95,
+        "reasoning": "Explicit mention in history"
+    }]
     
     mock_audit = AsyncMock()
     mock_session = AsyncMock()
     
-    service = LineageConnectionService(
+    extractor = LineageExtractor(
         prompts=mock_prompts,
         audit_service=mock_audit,
         session=mock_session,
         system_user_id=uuid4()
     )
     
-    await service.connect(
-        predecessor_info="Team A 2022",
-        successor_info="Team B 2023"
-    )
+    node_info = {
+        "name": "Team A",
+        "has_wikipedia": True,
+        "wikipedia_summary": "Team history here...",
+        "year": 2024
+    }
     
-    mock_prompts.decide_lineage.assert_called_once()
+    # Run analysis
+    events = await extractor.analyze_ending_node(node_info)
+    
+    # Verify events returned
+    assert len(events) == 1
+    assert events[0]["event_type"] == "SUCCEEDED_BY"
+    
+    # Create audit record
+    await extractor.create_lineage_record(node_info, events[0])
+    
+    # Verify audit call
     mock_audit.create_edit.assert_called_once()
+    call_kwargs = mock_audit.create_edit.call_args[1]
+    assert call_kwargs["action"] == EditAction.CREATE
+    assert call_kwargs["entity_type"] == "LineageEvent"
+    assert call_kwargs["new_data"]["source_team"] == "Team A"
+    assert call_kwargs["new_data"]["target_team"] == "Team B"
 
 @pytest.mark.asyncio
-async def test_lineage_service_handles_no_connection():
-    """LineageConnectionService should NOT create event for NO_CONNECTION."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
+async def test_lineage_extractor_skips_no_wikipedia():
+    """LineageExtractor should skip nodes with no Wikipedia content."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
     
     mock_prompts = AsyncMock()
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=None,
-            confidence=0.99,
-            reasoning="Totally different teams",
-            predecessor_ids=[],
-            successor_ids=[]
-        )
-    )
-    
-    mock_audit = AsyncMock()
-    mock_session = AsyncMock()
-    
-    service = LineageConnectionService(
+    extractor = LineageExtractor(
         prompts=mock_prompts,
-        audit_service=mock_audit,
-        session=mock_session,
+        audit_service=AsyncMock(),
+        session=AsyncMock(),
         system_user_id=uuid4()
     )
     
-    await service.connect(
-        predecessor_info="Team X 2010",
-        successor_info="Team Y 2025"
-    )
+    node_info = {
+        "name": "Team A",
+        "wikipedia_summary": None, # No content
+        "year": 2024
+    }
     
-    # Should check with LLM but NOT create an edit
-    mock_prompts.decide_lineage.assert_called_once()
-    mock_audit.create_edit.assert_not_called()
-
-@pytest.mark.asyncio
-async def test_lineage_prompt_includes_wiki_history():
-    """LineageConnectionService should pass history to prompt."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
-    
-    mock_prompts = AsyncMock()
-    # Configure return value to avoid TypeError during confidence check
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=LineageEventType.LEGAL_TRANSFER,
-            confidence=0.95,
-            reasoning="Test reasoning",
-            predecessor_ids=[],
-            successor_ids=[]
-        )
-    )
-    mock_audit = AsyncMock()
-    mock_session = AsyncMock()
-    
-    service = LineageConnectionService(
-        prompts=mock_prompts,
-        audit_service=mock_audit,
-        session=mock_session,
-        system_user_id=uuid4()
-    )
-    
-    await service.connect(
-        predecessor_info="Team A",
-        successor_info="Team B",
-        predecessor_history="Had financial issues.",
-        successor_history="Founded by ex-Team A staff."
-    )
-    
-    mock_prompts.decide_lineage.assert_called_once_with(
-        predecessor_info="Team A",
-        successor_info="Team B",
-        predecessor_history="Had financial issues.",
-        successor_history="Founded by ex-Team A staff."
-    )
+    events = await extractor.analyze_ending_node(node_info)
+    assert len(events) == 0
+    mock_prompts.extract_lineage_events.assert_not_called()
