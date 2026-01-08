@@ -299,11 +299,23 @@ class TeamAssemblyService:
         country_code: Optional[str] = None
     ):
         """Create sponsor links for team era with proper prominence calculation."""
-        # Separate title and equipment sponsors
-        title_sponsors = [
-            s for s in sponsors 
-            if getattr(s, "type", "TITLE") == "TITLE"
-        ]
+        # Classify sponsors as TITLE or EQUIPMENT based on team name
+        # Title sponsors = sponsors whose brand name appears in the team name
+        team_name_lower = team_era.registered_name.lower()
+        
+        title_sponsors = []
+        equipment_sponsors = []
+        
+        for sponsor in sponsors:
+            # Check if brand name appears in team name (case-insensitive, fuzzy match)
+            brand_lower = sponsor.brand_name.lower()
+            # Remove common suffixes for better matching
+            brand_clean = brand_lower.replace(' team', '').replace(' cycling', '').strip()
+            
+            if brand_clean in team_name_lower:
+                title_sponsors.append(sponsor)
+            else:
+                equipment_sponsors.append(sponsor)
         
         # Calculate prominence only for title sponsors using ProminenceCalculator
         title_names = [s.brand_name for s in title_sponsors]
@@ -315,6 +327,7 @@ class TeamAssemblyService:
             prominence_map[s.brand_name] = p
         
         # Create links for ALL sponsors (title + equipment)
+        # Maintain original order from scraper
         for idx, sponsor_info in enumerate(sponsors):
             brand = await self._get_or_create_brand(sponsor_info, country_code)
             
@@ -420,6 +433,10 @@ class TeamAssemblyService:
             )
             self._session.add(node)
             await self._session.flush()
+        else:
+            # Update founding year if this season is earlier
+            if node.founding_year is None or data.season_year < node.founding_year:
+                node.founding_year = data.season_year
 
         # Extract Wikipedia history if available
         wiki_history = None
