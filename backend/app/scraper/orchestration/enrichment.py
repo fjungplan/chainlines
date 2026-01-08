@@ -125,10 +125,27 @@ class NodeEnrichmentService:
             # Try common History header IDs across languages
             history_headers = self._get_history_header_ids(lang)
             
+            # First try exact ID match
             for header_id in history_headers:
                 history_header = soup.find(id=header_id)
                 if history_header:
-                    return self._extract_section_content(history_header)
+                    content = self._extract_section_content(history_header)
+                    if content:
+                        return content
+            
+            # Fallback: Search for partial ID matches (e.g., "Histoire_de_l'équipe")
+            for h2 in soup.find_all('h2'):
+                # Check the h2 itself
+                h2_id = h2.get('id', '')
+                
+                # Also check span children
+                for span in h2.find_all('span'):
+                    span_id = span.get('id', '')
+                    for header_pattern in history_headers:
+                        if header_pattern.lower() in h2_id.lower() or header_pattern.lower() in span_id.lower():
+                            content = self._extract_section_content(h2)
+                            if content:
+                                return content
             
             return None
         except Exception as e:
@@ -137,13 +154,14 @@ class NodeEnrichmentService:
     
     def _get_history_header_ids(self, lang: str) -> List[str]:
         """Get possible History section header IDs for a language."""
+        # Expanded list with common variations found on Wikipedia
         headers = {
-            "en": ["History", "Team_history"],
-            "fr": ["Histoire", "Historique"],
-            "de": ["Geschichte", "Teamgeschichte"],
-            "nl": ["Geschiedenis"],
-            "it": ["Storia"],
-            "es": ["Historia"]
+            "en": ["History", "Team_history", "History_of_the_team"],
+            "fr": ["Histoire", "Historique", "Histoire_de_l'équipe", "Histoire_de_l"],
+            "de": ["Geschichte", "Teamgeschichte", "Organisation_und_Geschichte"],
+            "nl": ["Geschiedenis", "Teamgeschiedenis"],
+            "it": ["Storia", "Cronistoria"],
+            "es": ["Historia", "Historia_del_equipo"]
         }
         return headers.get(lang, ["History"])
     
@@ -152,8 +170,13 @@ class NodeEnrichmentService:
         content = []
         
         # Navigate to parent h2 if header is a span
-        parent = header_element.parent if header_element.name != 'h2' else header_element
+        parent = header_element
+        while parent and parent.name != 'h2':
+            parent = parent.parent
         
+        if not parent:
+            return None
+            
         for sibling in parent.find_next_siblings():
             if sibling.name == 'h2':
                 break
