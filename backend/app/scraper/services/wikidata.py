@@ -9,7 +9,7 @@ class WikidataResult(BaseModel):
     sitelinks: Dict[str, str]  # {"en": "https://en.wikipedia.org/...", ...}
 
 class WikidataResolver:
-    SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
+    API_ENDPOINT = "https://www.wikidata.org/w/api.php"
     
     def __init__(self, cache: Optional[CacheManager] = None):
         self._cache = cache or CacheManager()
@@ -24,105 +24,145 @@ class WikidataResolver:
         Returns:
             A WikidataResult object if found, otherwise None.
         """
-        cache_key = f"wikidata:{team_name.lower()}"
+        # Patch known encoding issues from scraper
+        if "ArkAca" in team_name:
+            team_name = team_name.replace("ArkAca", "Arkéa")
+            
+        cache_key = f"wikidata_api_v2:{team_name.lower()}"
         cached = self._cache.get(cache_key, domain="wikidata")
         if cached:
             return WikidataResult.model_validate_json(cached)
         
-        query = self._build_query(team_name)
-        result = await self._execute_query(query)
+        # 1. Search for the entity
+        qid = await self._search_entity(team_name)
+        if not qid:
+            # Try cleaning name? e.g. remove "Team" prefix if it fails?
+            # For now, simplistic.
+            return None
+            
+        # 2. Get sitelinks for the QID
+        result = await self._get_entity_details(qid, team_name)
         
         if result:
             self._cache.set(cache_key, result.model_dump_json(), domain="wikidata")
         
         return result
     
-    def _build_query(self, team_name: str) -> str:
-        # P31: instance of
-        # P279: subclass of
-        # Q20658729: cycling team
-        # We search for items that are instances of cycling team (or subclasses)
-        # And filter by label containing the team name
-        return f'''
-        SELECT ?item ?itemLabel ?sitelink WHERE {{
-          ?item wdt:P31/wdt:P279* wd:Q20658729 .
-          ?item rdfs:label ?label .
-          FILTER(CONTAINS(LCASE(?label), "{team_name.lower()}"))
-          OPTIONAL {{ ?sitelink schema:about ?item }}
-          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en,fr,de,nl,it,es". }}
-        }}
-        LIMIT 20
-        '''
+    async def _search_entity(self, original_query: str) -> Optional[str]:
+        """Search for a cycling team item and return its QID."""
         
-    async def _execute_query(self, query: str) -> Optional[WikidataResult]:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
+        # Generates list of queries to try
+        queries = [original_query]
+        if " - " in original_query:
+            queries.append(original_query.replace(" - ", "-"))
+            queries.append(original_query.split(" - ")[0])
+            
+        # Try each query until we find a match
+        for query in queries:
+            qid = await self._execute_search_request(query, original_query)
+            if qid:
+                return qid
+        return None
+
+    async def _execute_search_request(self, query: str, context_query: str) -> Optional[str]:
+        """Execute a single search request and apply heuristics."""
+        params = {
+            "action": "wbsearchentities",
+            "search": query,
+            "language": "en",
+            "format": "json",
+            "type": "item",
+            "limit": 50
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    self.SPARQL_ENDPOINT,
-                    params={"query": query, "format": "json"},
-                    headers={"User-Agent": "ChainlinesScraper/1.0 (bot@chainlines.com)"}
+                    self.API_ENDPOINT,
+                    params=params, 
+                    headers={"User-Agent": "ChainlinesBot/1.0 (dev@chainlines.com)"}
                 )
                 response.raise_for_status()
                 data = response.json()
                 
-                bindings = data.get("results", {}).get("bindings", [])
-                if not bindings:
-                    return None
+                best_match = None
                 
-                # Logic to pick the best match or aggregate sitelinks
-                # For now, we take the first item and aggregate all its sitelinks found in the result set
-                # The SPARQL query returns one row per sitelink if we are not careful OR one row per item if we don't request sitelinks in a specific way.
-                # The current query: OPTIONAL { ?sitelink schema:about ?item } will cause cartesian product if multiple sitelinks exist?
-                # Actually, ?sitelink is the URL. schema:about points to the item.
-                # A better way might be to group by item, but simple parsing is fine for now.
-                
-                # We'll group by item QID first
-                candidates = {}
-                
-                for row in bindings:
-                    item_uri = row["item"]["value"]
-                    qid = item_uri.split("/")[-1]
-                    label = row["itemLabel"]["value"]
-                    sitelink = row.get("sitelink", {}).get("value")
+                for item in data.get("search", []):
+                    label = item.get("label", "")
+                    desc = item.get("description", "").lower()
                     
-                    if qid not in candidates:
-                        candidates[qid] = {
-                            "qid": qid,
-                            "label": label,
-                            "sitelinks": {}
-                        }
+                    # Heuristic 1: Skip Season Items (start with Year)
+                    import re
+                    if re.match(r'^\d{4}\s', label):
+                        continue
+                        
+                    # Heuristic 2: Skip Development/Women teams if not asked for
+                    keywords = ["development", "women", "dames", "femmes", "u23", "junio"]
                     
-                    if sitelink:
-                        # Extract language code from wikimedia URL
-                        # e.g. https://en.wikipedia.org/wiki/... -> en
-                        # e.g. https://commons.wikimedia.org/wiki/... -> commons (we skip non-wikipedia usually but keep for now)
-                        try:
-                            # Rudimentary parsing, can be improved
-                            import re
-                            match = re.search(r'https://(\w+)\.wikipedia\.org', sitelink)
-                            if match:
-                                code = match.group(1)
-                                candidates[qid]["sitelinks"][code] = sitelink
-                        except Exception:
-                            pass
+                    # Check against the ORIGINAL query context to decide if keywords are unwanted
+                    query_lower = context_query.lower()
+                    label_lower = label.lower()
+                    
+                    has_unwanted_keyword = False
+                    for kw in keywords:
+                        if kw in label_lower and kw not in query_lower:
+                            has_unwanted_keyword = True
+                            break
+                    
+                    if has_unwanted_keyword:
+                        continue
+                        
+                    # Heuristic 3: Prefer items with "cycling team" in description
+                    if "cycling" in desc or "cycliste" in desc:
+                         return item["id"]
+                    
+                    if not best_match:
+                        best_match = item["id"]
                 
-                if not candidates:
+                return best_match
+        except Exception:
+            return None
+
+    async def _get_entity_details(self, qid: str, original_label: str) -> Optional[WikidataResult]:
+        """Fetch sitelinks for a specific QID."""
+        params = {
+            "action": "wbgetentities",
+            "ids": qid,
+            "props": "sitelinks|labels",
+            "sitefilter": "enwiki|frwiki|dewiki|nlwiki|itwiki|eswiki",
+            "format": "json"
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    self.API_ENDPOINT, 
+                    params=params,
+                    headers={"User-Agent": "ChainlinesBot/1.0 (dev@chainlines.com)"}
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                entity = data.get("entities", {}).get(qid)
+                if not entity:
                     return None
+                    
+                sitelinks_raw = entity.get("sitelinks", {})
+                sitelinks = {}
                 
-                # Return the candidate with the most sitelinks? Or just the first one?
-                # For this slice, simple assumption: first unique QID found is the match.
-                # (Ideally we'd do fuzzy matching on the label vs input)
+                for site_key, info in sitelinks_raw.items():
+                    # site_key e.g. "enwiki"
+                    lang = site_key.replace("wiki", "")
+                    url = f"https://{lang}.wikipedia.org/wiki/{info['title'].replace(' ', '_')}"
+                    sitelinks[lang] = url
                 
-                first_match = list(candidates.values())[0]
+                # Get label in English
+                label = entity.get("labels", {}).get("en", {}).get("value", original_label)
                 
                 return WikidataResult(
-                    qid=first_match["qid"],
-                    label=first_match["label"],
-                    sitelinks=first_match["sitelinks"]
+                    qid=qid,
+                    label=label,
+                    sitelinks=sitelinks
                 )
-                
-            except httpx.HTTPError:
-                # Log error in real app
-                return None
-            except Exception:
-                return None
+        except Exception:
+            return None
