@@ -1,7 +1,7 @@
 """LLM prompts for scraper operations."""
 from typing import TYPE_CHECKING, List, Optional
 from app.scraper.sources.cyclingflash import ScrapedTeamData
-from app.scraper.llm.lineage import LineageDecision
+from app.scraper.llm.lineage import LineageDecision, LineageEventsExtraction
 from app.scraper.llm.models import SponsorExtractionResult
 from app.scraper.llm.model_config import PromptType
 
@@ -57,6 +57,45 @@ IMPORTANT: Lineage events occur on a single date (typically season start). Time 
 (e.g., a team folding mid-season may have a successor starting the following season).
 
 Return your decision with confidence score (0.0 to 1.0). If returning null for event_type, confidence should still be provided (confidence that there is NO connection).
+"""
+
+EXTRACT_LINEAGE_EVENTS_PROMPT = """You are analyzing Wikipedia content about a professional cycling team to extract lineage events.
+
+TEAM: {team_name}
+CONTEXT: This team is {context} in {year}.
+WIKIPEDIA CONTENT:
+{wikipedia_content}
+
+TASK: Extract any lineage events mentioned in the Wikipedia content.
+
+EVENT TYPES:
+For ENDING teams (context="ending"):
+- SUCCEEDED_BY: Team was succeeded by another team (license transfer)
+- JOINED: Team dissolved and merged into another team that continued existing
+- SPLIT_INTO: Team split into multiple successor teams
+- MERGED_WITH: Team merged with another team to form a new entity
+
+For STARTING teams (context="starting"):
+- SUCCESSOR_OF: Team is the successor of another team
+- BREAKAWAY_FROM: Team was formed by breaking away from another team
+- MERGER_OF: Team was formed by merging multiple predecessor teams
+
+INSTRUCTIONS:
+1. Look for explicit mentions of succession, mergers, joins, or breakaways
+2. Extract the NAME of the other team(s) involved
+3. Set confidence based on how explicit the Wikipedia content is:
+   - 0.9+: Explicit statement ("succeeded by", "was formed by merging")
+   - 0.7-0.9: Strong implication with named teams
+   - <0.7: Vague references or uncertain connections
+4. If no lineage events are found, return empty events list with a reason
+
+EXAMPLES OF WHAT TO LOOK FOR:
+- "The team was succeeded by Team XYZ in 2026"
+- "In 2025, the team merged with ABC Racing"
+- "Team NSN acquired the license from Israel Premier Tech"
+- "Formed following the dissolution of Former Team"
+
+Return structured data with events found.
 """
 
 SPONSOR_EXTRACTION_PROMPT = """You are an expert in professional cycling team sponsorship and brand identification.
@@ -285,3 +324,37 @@ class ScraperPrompts:
             response_model=SponsorExtractionResult,
             prompt_type=PromptType.SPONSOR_EXTRACTION
         )
+
+    async def extract_lineage_events(
+        self,
+        team_name: str,
+        context: str,
+        year: int,
+        wikipedia_content: str
+    ) -> List[dict]:
+        """Extract lineage events from Wikipedia content.
+        
+        Args:
+            team_name: Name of the team being analyzed.
+            context: "ending" or "starting" - indicates if team ended or started.
+            year: The year of the transition.
+            wikipedia_content: Concatenated Wikipedia history from all languages.
+            
+        Returns:
+            List of lineage event dicts with event_type, target_name, confidence, reasoning.
+        """
+        prompt = EXTRACT_LINEAGE_EVENTS_PROMPT.format(
+            team_name=team_name,
+            context=context,
+            year=year,
+            wikipedia_content=wikipedia_content[:8000]  # Limit to avoid token limits
+        )
+        
+        result = await self._llm.generate_structured(
+            prompt=prompt,
+            response_model=LineageEventsExtraction,
+            prompt_type=PromptType.DECIDE_LINEAGE  # Reuse lineage config
+        )
+        
+        # Convert to list of dicts for easier handling
+        return [event.model_dump() for event in result.events] if result.events else []

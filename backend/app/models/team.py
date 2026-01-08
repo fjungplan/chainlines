@@ -41,6 +41,7 @@ class TeamNode(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, onupdate=utc_now, nullable=False)
     
     external_ids: Mapped[Optional[dict]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True, comment="External source IDs: {wikidata: Q123, ...}")
+    wikipedia_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Concatenated Wikipedia history from all languages for lineage analysis")
 
     # Relationships
     eras: Mapped[List["TeamEra"]] = relationship("TeamEra", back_populates="node", cascade="all, delete-orphan")

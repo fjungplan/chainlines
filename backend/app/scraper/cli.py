@@ -227,33 +227,51 @@ async def run_scraper(
             years = list(range(start_year, end_year - 1, -1))
             await orchestrator.run(years=years)
 
-        # Phase 3: Lineage
+        # Phase 3: Lineage (now includes Phase 2.5 Wikipedia enrichment)
         if phase in (0, 3):
-            from app.scraper.orchestration.phase3 import LineageConnectionService, LineageOrchestrator, OrphanDetector
+            from app.scraper.orchestration.enrichment import NodeEnrichmentService
+            from app.scraper.orchestration.phase3 import (
+                BoundaryNodeDetector, LineageExtractor, LineageOrchestrator
+            )
             from app.services.audit_log_service import AuditLogService
 
-            logger.info("--- Starting Phase 3: Lineage Connection ---")
+            logger.info("--- Starting Phase 2.5: Wikipedia Enrichment ---")
+            
+            # Phase 2.5: Enrich nodes with Wikipedia content
+            enrichment_service = NodeEnrichmentService(
+                session=session,
+                scraper=base_scraper,
+                wikidata_resolver=wikidata_resolver
+            )
+            enriched_count = await enrichment_service.enrich_all_nodes()
+            logger.info(f"Phase 2.5 complete: enriched {enriched_count} nodes")
+
+            logger.info("--- Starting Phase 3: Lineage Detection ---")
 
             if not llm_prompts:
                 logger.error("LLM prompts not initialized (missing API key). Lineage analysis aborted.")
                 return
 
-            service = LineageConnectionService(
+            # Initialize new Phase 3 components
+            detector = BoundaryNodeDetector(session=session)
+            extractor = LineageExtractor(
                 prompts=llm_prompts,
                 audit_service=AuditLogService(),
                 session=session,
                 system_user_id=SYSTEM_USER_ID
             )
             orchestrator = LineageOrchestrator(
-                service=service,
+                detector=detector,
+                extractor=extractor,
                 session=session,
                 monitor=monitor
             )
 
-            # Detect candidates
-            detector = OrphanDetector(session=session)
-            candidates = await detector.get_orphan_candidates()
-            await orchestrator.run(candidates=candidates)
+            # Analyze each year transition
+            years = list(range(start_year, end_year - 1, -1))
+            for i in range(len(years) - 1):
+                transition_year = years[i + 1]  # e.g., 2025 for 2025->2026 transition
+                await orchestrator.run(transition_year=transition_year)
 
 
 def main() -> None:
