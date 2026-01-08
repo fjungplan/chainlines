@@ -86,7 +86,8 @@ class BoundaryNodeDetector:
             "name": node.legal_name,
             "year": reference_year,
             "uci_code": node.latest_uci_code,
-            "wikipedia_summary": node.wikipedia_summary
+            "wikipedia_summary": node.wikipedia_summary,
+            "_node": node  # Reference for dissolution_year updates
         }
 
 
