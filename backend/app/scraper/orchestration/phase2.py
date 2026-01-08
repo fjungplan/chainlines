@@ -739,6 +739,10 @@ class AssemblyOrchestrator:
                 # Rollback the session to clear error state
                 await self._session.rollback()
                 
+                # Refresh the system_user to prevent expiry-based lazy loading issues
+                if self._service._system_user:
+                    await self._session.refresh(self._service._system_user)
+                
                 # Check if we should retry
                 if attempts < MAX_RETRIES - 1:
                     # Calculate backoff: 2^attempts seconds (1, 2, 4 seconds)
