@@ -183,6 +183,14 @@ class LineageExtractor:
             status=status
         )
         
+        # Update dissolution_year on TeamNode when team folded
+        event_type = event.get("event_type")
+        if event_type in ("FOLDED", "MERGED"):
+            node = source_node.get("_node")
+            if node:
+                node.dissolution_year = source_node["year"]
+                logger.info(f"  Updated dissolution_year to {source_node['year']} for {source_node['name']}")
+        
         logger.info(
             f"  Created {event.get('event_type')} event: "
             f"{source_node['name']} → {event.get('target_name')} ({status.value})"

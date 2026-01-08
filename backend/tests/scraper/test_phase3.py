@@ -119,3 +119,45 @@ async def test_lineage_extractor_skips_no_wikipedia():
     events = await extractor.analyze_ending_node(node_info)
     assert len(events) == 0
     mock_prompts.extract_lineage_events.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_updates_dissolution_year_on_fold():
+    """LineageExtractor should update TeamNode.dissolution_year when FOLDED event is detected."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode
+    
+    mock_prompts = AsyncMock()
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    
+    # Create a real TeamNode to verify mutation
+    node = TeamNode(node_id=uuid4(), legal_name="Team A", founding_year=2020)
+    assert node.dissolution_year is None  # Initially null
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    node_info = {
+        "id": node.node_id,
+        "name": "Team A",
+        "year": 2024,
+        "_node": node  # Pass the actual node for mutation
+    }
+    
+    fold_event = {
+        "event_type": "FOLDED",
+        "target_name": None,
+        "confidence": 0.95,
+        "reasoning": "Team folded after 2024 season"
+    }
+    
+    # Create lineage record (should update dissolution_year)
+    await extractor.create_lineage_record(node_info, fold_event)
+    
+    # Verify dissolution_year was updated
+    assert node.dissolution_year == 2024
+
