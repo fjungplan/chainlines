@@ -208,6 +208,9 @@ async def run_scraper(
             system_user = await session.get(User, SYSTEM_USER_ID)
             if not system_user:
                 logger.warning("Scraper user not found, sponsor edits will not create audit entries")
+            else:
+                # Refresh to ensure all columns are loaded (prevents MissingGreenlet in EditService)
+                await session.refresh(system_user)
 
             enricher = None
             if llm_prompts:
