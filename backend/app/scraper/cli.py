@@ -55,6 +55,14 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="End year for scraping (default: 1990)"
     )
 
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        nargs='?',
+        const="auto",
+        help="Path to save log output. Defaults to scraper_{timestamp}.log if flag is present but no path provided"
+    )
+
     return parser.parse_args(args)
 
 
@@ -277,6 +285,26 @@ async def run_scraper(
 def main() -> None:
     """CLI entry point."""
     args = parse_args()
+
+    log_file = args.log_file
+    if log_file:
+        from pathlib import Path
+        if log_file == "auto":
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            log_file = str(log_dir / f"scraper_{timestamp}.log")
+        else:
+            # Ensure the directory for custom path exists
+            log_path = Path(log_file)
+            if log_path.parent:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logging.getLogger().addHandler(file_handler)
+        logger.info(f"Logging to file: {log_file}")
     
     asyncio.run(run_scraper(
         phase=args.phase,
