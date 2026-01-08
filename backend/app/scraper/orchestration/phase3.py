@@ -160,7 +160,15 @@ class LineageExtractor:
         source_node: Dict[str, Any],
         event: Dict[str, Any]
     ) -> None:
-        """Create an audit log entry for a detected lineage event."""
+        """Create an audit log entry for a detected lineage event.
+        
+        When status is APPROVED, also inserts the actual LineageEvent record.
+        """
+        from sqlalchemy import select
+        from app.models.lineage import LineageEvent
+        from app.models.team import TeamNode
+        from app.models.enums import LineageEventType
+        
         status = (
             EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD
             else EditStatus.PENDING
@@ -184,9 +192,45 @@ class LineageExtractor:
             status=status
         )
         
+        # If APPROVED, create the actual LineageEvent record
+        if status == EditStatus.APPROVED:
+            target_name = event.get("target_name")
+            if target_name:
+                # Look up the target team node
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
+                result = await self._session.execute(stmt)
+                target_node = result.scalar_one_or_none()
+                
+                if target_node:
+                    # Map event types to LineageEventType enum
+                    event_type_map = {
+                        "JOINED": LineageEventType.MERGE,
+                        "MERGED_WITH": LineageEventType.MERGE,
+                        "MERGED": LineageEventType.MERGE,
+                        "SUCCEEDED_BY": LineageEventType.CONTINUATION,
+                        "SUCCESSOR_OF": LineageEventType.CONTINUATION,
+                        "SPLIT_INTO": LineageEventType.SPLIT,
+                        "BREAKAWAY_FROM": LineageEventType.SPLIT,
+                        "FOLDED": LineageEventType.DISSOLUTION,
+                    }
+                    lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.CONTINUATION)
+                    
+                    lineage_event = LineageEvent(
+                        predecessor_node_id=source_node["node_id"],
+                        successor_node_id=target_node.node_id,
+                        event_year=source_node["year"],
+                        event_type=lineage_type,
+                        notes=event.get("reasoning"),
+                        created_by=self._user_id
+                    )
+                    self._session.add(lineage_event)
+                    logger.info(f"    ✓ Created LineageEvent record: {source_node['name']} → {target_node.legal_name}")
+                else:
+                    logger.warning(f"    ✗ Could not find target team '{target_name}' for LineageEvent")
+        
         # Update dissolution_year on TeamNode when team folded
         event_type = event.get("event_type")
-        if event_type in ("FOLDED", "MERGED"):
+        if event_type in ("FOLDED", "MERGED", "JOINED"):
             node = source_node.get("_node")
             if node:
                 node.dissolution_year = source_node["year"]
