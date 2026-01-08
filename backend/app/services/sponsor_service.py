@@ -95,7 +95,7 @@ class SponsorService:
             last_modified_by=user_id
         )
         session.add(brand)
-        await session.commit()
+        await session.flush()  # Use flush instead of commit - caller will commit
         await session.refresh(brand)
         return brand
 
