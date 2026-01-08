@@ -444,17 +444,37 @@ class TeamAssemblyService:
         if enriched.wikipedia_data:
             wiki_history = enriched.wikipedia_data.history_text
 
-        era = TeamEra(
-            node=node,
-            season_year=data.season_year,
-            valid_from=date(data.season_year, 1, 1),
-            registered_name=data.name,
-            uci_code=data.uci_code,
-            country_code=data.country_code,
-            tier_level=data.tier_level,
-            wikipedia_history_content=wiki_history  # Store Wikipedia history
+        # Check if era already exists for this node and year
+        existing_era = next(
+            (e for e in node.eras if e.season_year == data.season_year),
+            None
         )
-        self._session.add(era)
+
+        if existing_era:
+            logger.info(f"    - Updating existing era for {data.name} ({data.season_year})")
+            era = existing_era
+            # Update fields
+            era.registered_name = data.name
+            era.uci_code = data.uci_code
+            era.country_code = data.country_code
+            era.tier_level = data.tier_level
+            if wiki_history:
+                era.wikipedia_history_content = wiki_history
+            
+            # Clear existing sponsor links to rebuild them
+            era.sponsor_links.clear()
+        else:
+            era = TeamEra(
+                node=node,
+                season_year=data.season_year,
+                valid_from=date(data.season_year, 1, 1),
+                registered_name=data.name,
+                uci_code=data.uci_code,
+                country_code=data.country_code,
+                tier_level=data.tier_level,
+                wikipedia_history_content=wiki_history  # Store Wikipedia history
+            )
+            self._session.add(era)
 
         await self._create_sponsor_links(era, data.sponsors, data.country_code)
         return era
