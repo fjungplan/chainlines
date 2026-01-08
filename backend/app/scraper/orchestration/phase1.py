@@ -169,6 +169,10 @@ class DiscoveryService:
         # Process retry queue at end of all years
         await self._process_retry_queue()
         
+        # CRITICAL: Save final checkpoint with all URLs including backfilled ones
+        self._save_checkpoint(team_urls)
+        logger.info(f"Final checkpoint saved with {len(team_urls)} team-year pairs")
+        
         return DiscoveryResult(
             team_urls=team_urls,
             sponsor_names=self._collector.get_all()
