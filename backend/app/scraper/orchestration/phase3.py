@@ -113,10 +113,15 @@ class LineageExtractor:
     
     async def analyze_ending_node(
         self,
-        node_info: Dict[str, Any]
+        node_info: Dict[str, Any],
+        available_teams: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Analyze an ending node to find what it became.
+        
+        Args:
+            node_info: Dict with team info including wikipedia_summary
+            available_teams: Optional list of team names from DB for LLM to pick from
         
         Returns list of lineage events found (SUCCEEDED_BY, JOINED, SPLIT_INTO, etc.)
         """
@@ -128,17 +133,23 @@ class LineageExtractor:
             team_name=node_info["name"],
             context="ending",
             year=node_info["year"],
-            wikipedia_content=node_info["wikipedia_summary"]
+            wikipedia_content=node_info["wikipedia_summary"],
+            available_teams=available_teams or []
         )
         
         return events or []
     
     async def analyze_starting_node(
         self,
-        node_info: Dict[str, Any]
+        node_info: Dict[str, Any],
+        available_teams: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Analyze a starting node to find where it came from.
+        
+        Args:
+            node_info: Dict with team info including wikipedia_summary
+            available_teams: Optional list of team names from DB for LLM to pick from
         
         Returns list of lineage events found (SUCCESSOR_OF, BREAKAWAY_FROM, MERGER_OF, etc.)
         """
@@ -150,7 +161,8 @@ class LineageExtractor:
             team_name=node_info["name"],
             context="starting",
             year=node_info["year"],
-            wikipedia_content=node_info["wikipedia_summary"]
+            wikipedia_content=node_info["wikipedia_summary"],
+            available_teams=available_teams or []
         )
         
         return events or []
@@ -197,30 +209,46 @@ class LineageExtractor:
             target_name = event.get("target_name")
             if target_name:
                 # Look up the target team node - try exact match first, then ILIKE
-                # First try exact match
+                # First try exact match on legal_name
                 stmt = select(TeamNode).where(TeamNode.legal_name == target_name)
                 result = await self._session.execute(stmt)
                 target_node = result.scalar_one_or_none()
                 
-                # If no exact match, try ILIKE with first result
+                # If no exact match, try ILIKE on legal_name
                 if not target_node:
                     stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
                     result = await self._session.execute(stmt)
                     target_node = result.scalars().first()
                 
+                # Fallback: search by TeamEra.registered_name (handles temporal naming)
+                # e.g., "Lotto" (2025 name) → "Lotto - Intermarché" (2026 name)
+                if not target_node:
+                    from app.models.team import TeamEra
+                    from sqlalchemy.orm import selectinload
+                    stmt = select(TeamEra).where(
+                        TeamEra.registered_name.ilike(f"%{target_name}%")
+                    ).options(selectinload(TeamEra.node))
+                    result = await self._session.execute(stmt)
+                    era = result.scalars().first()
+                    if era and era.node:
+                        target_node = era.node
+                        logger.info(f"    ↳ Resolved '{target_name}' via era name → {target_node.legal_name}")
+                
                 if target_node:
                     # Map event types to LineageEventType enum
+                    # Available: LEGAL_TRANSFER, SPIRITUAL_SUCCESSION, MERGE, SPLIT
                     event_type_map = {
                         "JOINED": LineageEventType.MERGE,
                         "MERGED_WITH": LineageEventType.MERGE,
                         "MERGED": LineageEventType.MERGE,
-                        "SUCCEEDED_BY": LineageEventType.CONTINUATION,
-                        "SUCCESSOR_OF": LineageEventType.CONTINUATION,
+                        "MERGER_OF": LineageEventType.MERGE,
+                        "SUCCEEDED_BY": LineageEventType.LEGAL_TRANSFER,
+                        "SUCCESSOR_OF": LineageEventType.LEGAL_TRANSFER,
                         "SPLIT_INTO": LineageEventType.SPLIT,
                         "BREAKAWAY_FROM": LineageEventType.SPLIT,
-                        "FOLDED": LineageEventType.DISSOLUTION,
+                        "FOLDED": LineageEventType.MERGE,  # Folded into nothing - treat as merge
                     }
-                    lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.CONTINUATION)
+                    lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.LEGAL_TRANSFER)
                     
                     lineage_event = LineageEvent(
                         predecessor_node_id=source_node["node_id"],

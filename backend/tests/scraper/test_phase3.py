@@ -65,6 +65,13 @@ async def test_lineage_extractor_analyzes_ending_node():
     mock_audit = AsyncMock()
     mock_session = AsyncMock()
     
+    # Mock session.execute to return None for target team lookups
+    # (we're just testing the audit log creation, not the LineageEvent record)
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value.first.return_value = None
+    mock_session.execute.return_value = mock_result
+    
     extractor = LineageExtractor(
         prompts=mock_prompts,
         audit_service=mock_audit,
@@ -74,6 +81,7 @@ async def test_lineage_extractor_analyzes_ending_node():
     
     node_info = {
         "name": "Team A",
+        "node_id": uuid4(),
         "has_wikipedia": True,
         "wikipedia_summary": "Team history here...",
         "year": 2024
@@ -161,3 +169,119 @@ async def test_lineage_extractor_updates_dissolution_year_on_fold():
     # Verify dissolution_year was updated
     assert node.dissolution_year == 2024
 
+
+@pytest.mark.asyncio
+async def test_extract_lineage_receives_candidate_teams():
+    """LLM should receive a list of candidate team names to pick from."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    
+    mock_prompts = AsyncMock()
+    mock_prompts.extract_lineage_events.return_value = [{
+        "event_type": "JOINED",
+        "target_name": "Lotto - Intermarché",  # Should pick from candidate list
+        "confidence": 0.95,
+        "reasoning": "Picked from available teams"
+    }]
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=AsyncMock(),
+        session=AsyncMock(),
+        system_user_id=uuid4()
+    )
+    
+    node_info = {
+        "name": "Intermarché - Wanty",
+        "wikipedia_summary": "Team merged with Lotto...",
+        "year": 2025,
+        "node_id": uuid4()
+    }
+    
+    # Available teams should be passed to LLM
+    available_teams = ["Lotto - Intermarché", "Bahrain Victorious", "UAE Emirates"]
+    
+    events = await extractor.analyze_ending_node(node_info, available_teams=available_teams)
+    
+    # Verify LLM was called with available_teams
+    mock_prompts.extract_lineage_events.assert_called_once()
+    call_kwargs = mock_prompts.extract_lineage_events.call_args[1]
+    assert "available_teams" in call_kwargs
+    assert "Lotto - Intermarché" in call_kwargs["available_teams"]
+
+
+@pytest.mark.asyncio
+async def test_target_resolution_via_era_name():
+    """When target not found by legal_name, should search by TeamEra.registered_name."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode, TeamEra
+    from app.models.enums import EditStatus
+    
+    mock_prompts = AsyncMock()
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    
+    # Create target team with era that has the old name
+    target_node = TeamNode(
+        node_id=uuid4(),
+        legal_name="Lotto - Intermarché",  # Current name
+        founding_year=2024
+    )
+    target_era_2025 = TeamEra(
+        era_id=uuid4(),
+        node_id=target_node.node_id,
+        season_year=2025,
+        registered_name="Lotto"  # Old name that Wikipedia references
+    )
+    target_node.eras = [target_era_2025]
+    
+    # Mock session to:
+    # 1. Return None for exact legal_name match
+    # 2. Return None for ILIKE legal_name
+    # 3. Return the era for ILIKE registered_name
+    mock_result_none = MagicMock()
+    mock_result_none.scalar_one_or_none.return_value = None
+    mock_result_none.scalars.return_value.first.return_value = None
+    
+    mock_result_era = MagicMock()
+    mock_result_era.scalars.return_value.first.return_value = target_era_2025
+    
+    # Configure selectinload to return node from era
+    target_era_2025.node = target_node
+    
+    call_count = [0]
+    async def mock_execute(stmt):
+        call_count[0] += 1
+        # First two calls: legal_name lookups (return None)
+        # Third call: registered_name lookup (return era)
+        if call_count[0] <= 2:
+            return mock_result_none
+        return mock_result_era
+    
+    mock_session.execute = mock_execute
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    source_node = {
+        "name": "Intermarché - Wanty",
+        "node_id": uuid4(),
+        "year": 2025
+    }
+    
+    event = {
+        "event_type": "JOINED",
+        "target_name": "Lotto",  # Wikipedia uses old name
+        "confidence": 0.95,
+        "reasoning": "Team joined Lotto"
+    }
+    
+    await extractor.create_lineage_record(source_node, event)
+    
+    # Verify audit was called (meaning target was found)
+    mock_audit.create_edit.assert_called_once()
+    # Verify we made three queries (legal_name exact, legal_name ILIKE, era registered_name)
+    assert call_count[0] == 3

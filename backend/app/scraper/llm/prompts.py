@@ -66,6 +66,9 @@ CONTEXT: This team is {context} in {year}.
 WIKIPEDIA CONTENT:
 {wikipedia_content}
 
+AVAILABLE TEAMS IN DATABASE:
+{available_teams}
+
 TASK: Extract any lineage events mentioned in the Wikipedia content.
 
 EVENT TYPES:
@@ -83,11 +86,13 @@ For STARTING teams (context="starting"):
 INSTRUCTIONS:
 1. Look for explicit mentions of succession, mergers, joins, or breakaways
 2. Extract the NAME of the other team(s) involved
-3. Set confidence based on how explicit the Wikipedia content is:
+3. IMPORTANT: For target_name, PREFER names from the AVAILABLE TEAMS list above.
+   Wikipedia may use old names (e.g., "Lotto") - match these to current DB names (e.g., "Lotto - Intermarché").
+4. Set confidence based on how explicit the Wikipedia content is:
    - 0.9+: Explicit statement ("succeeded by", "was formed by merging")
    - 0.7-0.9: Strong implication with named teams
    - <0.7: Vague references or uncertain connections
-4. If no lineage events are found, return empty events list with a reason
+5. If no lineage events are found, return empty events list with a reason
 
 EXAMPLES OF WHAT TO LOOK FOR:
 - "The team was succeeded by Team XYZ in 2026"
@@ -330,7 +335,8 @@ class ScraperPrompts:
         team_name: str,
         context: str,
         year: int,
-        wikipedia_content: str
+        wikipedia_content: str,
+        available_teams: List[str] = None
     ) -> List[dict]:
         """Extract lineage events from Wikipedia content.
         
@@ -339,15 +345,20 @@ class ScraperPrompts:
             context: "ending" or "starting" - indicates if team ended or started.
             year: The year of the transition.
             wikipedia_content: Concatenated Wikipedia history from all languages.
+            available_teams: List of team names from DB for LLM to pick from.
             
         Returns:
             List of lineage event dicts with event_type, target_name, confidence, reasoning.
         """
+        # Format available teams as bullet list or "None provided"
+        teams_str = "\n".join(f"- {t}" for t in (available_teams or [])) or "None provided"
+        
         prompt = EXTRACT_LINEAGE_EVENTS_PROMPT.format(
             team_name=team_name,
             context=context,
             year=year,
-            wikipedia_content=wikipedia_content[:8000]  # Limit to avoid token limits
+            wikipedia_content=wikipedia_content[:8000],  # Limit to avoid token limits
+            available_teams=teams_str
         )
         
         result = await self._llm.generate_structured(
