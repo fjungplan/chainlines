@@ -456,10 +456,13 @@ class TeamAssemblyService:
             uci_code = None
 
         # Check if era already exists for this node and year
-        existing_era = next(
-            (e for e in node.eras if e.season_year == data.season_year),
-            None
-        )
+        stmt_era = select(TeamEra).where(
+            TeamEra.node_id == node.node_id,
+            TeamEra.season_year == data.season_year
+        ).options(selectinload(TeamEra.sponsor_links))
+        
+        result_era = await self._session.execute(stmt_era)
+        existing_era = result_era.scalar_one_or_none()
 
         if existing_era:
             logger.info(f"    - Updating existing era for {data.name} ({data.season_year})")
@@ -628,9 +631,9 @@ class AssemblyOrchestrator:
             # CyclingRanking URL resolution needs more logic
             # For now, returning None as it requires QID->URL mapping
             return None
-        # elif source_name == "memoire":
-        #    # Memoire URLs would come from sitelinks if available
-        #    return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
+        elif source_name == "memoire":
+            # Memoire URLs would come from sitelinks if available
+            return wd_result.sitelinks.get("fr")  # FR Wikipedia as proxy
         
         return None
     

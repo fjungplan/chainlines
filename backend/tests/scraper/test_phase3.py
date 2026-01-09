@@ -194,10 +194,16 @@ async def test_extract_lineage_receives_candidate_teams():
         "reasoning": "Picked from available teams"
     }]
     
+    mock_session = AsyncMock()
+    # Configure execute result for team lookup
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [] # Return empty list for team lookup (or mocks if needed)
+    mock_session.execute.return_value = mock_result
+    
     extractor = LineageExtractor(
         prompts=mock_prompts,
         audit_service=AsyncMock(),
-        session=AsyncMock(),
+        session=mock_session,
         system_user_id=uuid4()
     )
     
