@@ -202,7 +202,89 @@ class LineageExtractor:
             event: Dict with event_type, target_name, confidence, reasoning
             event_year_override: Optional year to use for the event (e.g. for ending nodes, use year+1)
         """
-        # Create an audit log entry first
+        target_name = event.get("target_name")
+        target_node = None
+        
+        # Step 1: Match target team name to DB node (if target specified)
+        if target_name:
+            # ASCII normalization approach: normalize both target and DB names
+            import unicodedata
+            from difflib import SequenceMatcher
+            
+            def normalize_to_ascii(s: str) -> str:
+                """Normalize string to ASCII for comparison."""
+                return unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
+            
+            target_normalized = normalize_to_ascii(target_name)
+            
+            # Fetch all team names and find best match based on normalized comparison
+            stmt = select(TeamNode)
+            result = await self._session.execute(stmt)
+            all_nodes = result.scalars().all()
+            
+            best_match = None
+            best_score = 0.0
+            
+            for node in all_nodes:
+                node_normalized = normalize_to_ascii(node.legal_name)
+                score = SequenceMatcher(None, target_normalized, node_normalized).ratio()
+                if score > best_score:
+                    best_score = score
+                    best_match = node
+            
+            # Also check era registered_name for temporal name resolution
+            from app.models.team import TeamEra
+            stmt_era = select(TeamEra).options(selectinload(TeamEra.node))
+            result_era = await self._session.execute(stmt_era)
+            all_eras = result_era.scalars().all()
+            
+            for era in all_eras:
+                if era.registered_name and era.node:
+                    era_normalized = normalize_to_ascii(era.registered_name)
+                    score = SequenceMatcher(None, target_normalized, era_normalized).ratio()
+                    if score > best_score:
+                        best_score = score
+                        best_match = era.node
+            
+            # Thresholds
+            if best_score >= 0.95:
+                target_node = best_match
+                logger.info(f"    ↳ Matched '{target_name}' → {best_match.legal_name} (score: {best_score:.2f})")
+            elif best_score >= 0.80:
+                logger.warning(f"    ⚠ Low confidence match '{target_name}' → {best_match.legal_name} (score: {best_score:.2f}) - needs manual review")
+            else:
+                logger.warning(f"    ✗ No confident match for '{target_name}' (best: {best_match.legal_name if best_match else 'None'}, score: {best_score:.2f})")
+        
+        # Step 2: Calculate event year and lineage type for idempotency check
+        event_year = event_year_override if event_year_override is not None else source_node["year"]
+        event_type_map = {
+            "JOINED": LineageEventType.MERGE,
+            "MERGED_WITH": LineageEventType.MERGE,
+            "MERGED": LineageEventType.MERGE,
+            "MERGER_OF": LineageEventType.MERGE,
+            "SUCCEEDED_BY": LineageEventType.LEGAL_TRANSFER,
+            "SUCCESSOR_OF": LineageEventType.LEGAL_TRANSFER,
+            "SPLIT_INTO": LineageEventType.SPLIT,
+            "BREAKAWAY_FROM": LineageEventType.SPLIT,
+            "FOLDED": LineageEventType.MERGE,
+        }
+        lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.LEGAL_TRANSFER)
+        
+        # Step 3: [IDEMPOTENCY] Check for existing duplicate event BEFORE creating audit log
+        if target_node:
+            stmt_dup = select(LineageEvent).where(
+                LineageEvent.predecessor_node_id == source_node["node_id"],
+                LineageEvent.successor_node_id == target_node.node_id,
+                LineageEvent.event_type == lineage_type,
+                LineageEvent.event_year == event_year
+            )
+            dup_result = await self._session.execute(stmt_dup)
+            if dup_result.scalar_one_or_none():
+                logger.warning(f"    ⏩ Skipping duplicate LineageEvent: {source_node['name']} → {target_node.legal_name} ({event_year})")
+                return
+        
+        # Step 4: Create audit log entry
+        status = EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD else EditStatus.PENDING
         try:
             edit_context = {
                 "source_node": source_node["name"],
@@ -212,13 +294,11 @@ class LineageExtractor:
                 "reasoning": event.get("reasoning")
             }
             
-            status = EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD else EditStatus.PENDING
-            
             await self._audit.create_edit(
                 session=self._session,
                 user_id=self._user_id,
                 entity_type="LineageEvent",
-                entity_id=None,  # Will be generated by audit service
+                entity_id=None,
                 action=EditAction.CREATE,
                 old_data=None,
                 new_data=edit_context,
@@ -227,99 +307,26 @@ class LineageExtractor:
             
         except Exception as e:
             logger.error(f"Failed to create audit log for lineage event: {e}")
-            # Continue anyway? Or fail? For now, log and continue as this is critical path
         
-        # If APPROVED, create the actual LineageEvent record
-        if status == EditStatus.APPROVED:
-            target_name = event.get("target_name")
-            if target_name:
-                # ASCII normalization approach: normalize both target and DB names
-                # Focus on character corruption (Unicode/ASCII issues)
-                import unicodedata
-                from difflib import SequenceMatcher
-                
-                def normalize_to_ascii(s: str) -> str:
-                    """Normalize string to ASCII for comparison."""
-                    return unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
-                
-                target_normalized = normalize_to_ascii(target_name)
-                
-                # Fetch all team names and find best match based on normalized comparison
-                stmt = select(TeamNode)
-                result = await self._session.execute(stmt)
-                all_nodes = result.scalars().all()
-                
-                best_match = None
-                best_score = 0.0
-                
-                for node in all_nodes:
-                    node_normalized = normalize_to_ascii(node.legal_name)
-                    # Use SequenceMatcher for similarity (handles corruption better than exact match)
-                    score = SequenceMatcher(None, target_normalized, node_normalized).ratio()
-                    if score > best_score:
-                        best_score = score
-                        best_match = node
-                
-                # Also check era registered_name for temporal name resolution
-                from app.models.team import TeamEra
-                stmt_era = select(TeamEra).options(selectinload(TeamEra.node))
-                result_era = await self._session.execute(stmt_era)
-                all_eras = result_era.scalars().all()
-                
-                for era in all_eras:
-                    if era.registered_name and era.node:
-                        era_normalized = normalize_to_ascii(era.registered_name)
-                        score = SequenceMatcher(None, target_normalized, era_normalized).ratio()
-                        if score > best_score:
-                            best_score = score
-                            best_match = era.node
-                
-                # Thresholds:
-                # >= 0.95: Auto-create LineageEvent (high confidence)
-                # 0.80-0.95: Log warning, don't create (needs manual review)
-                # < 0.80: No match found
-                target_node = None
-                if best_score >= 0.95:
-                    target_node = best_match
-                    logger.info(f"    ↳ Matched '{target_name}' → {best_match.legal_name} (score: {best_score:.2f})")
-                elif best_score >= 0.80:
-                    logger.warning(f"    ⚠ Low confidence match '{target_name}' → {best_match.legal_name} (score: {best_score:.2f}) - needs manual review")
-                else:
-                    logger.warning(f"    ✗ No confident match for '{target_name}' (best: {best_match.legal_name if best_match else 'None'}, score: {best_score:.2f})")
-                
-                if target_node:
-                    # Map event types to LineageEventType enum
-                    # Available: LEGAL_TRANSFER, SPIRITUAL_SUCCESSION, MERGE, SPLIT
-                    event_type_map = {
-                        "JOINED": LineageEventType.MERGE,
-                        "MERGED_WITH": LineageEventType.MERGE,
-                        "MERGED": LineageEventType.MERGE,
-                        "MERGER_OF": LineageEventType.MERGE,
-                        "SUCCEEDED_BY": LineageEventType.LEGAL_TRANSFER,
-                        "SUCCESSOR_OF": LineageEventType.LEGAL_TRANSFER,
-                        "SPLIT_INTO": LineageEventType.SPLIT,
-                        "BREAKAWAY_FROM": LineageEventType.SPLIT,
-                        "FOLDED": LineageEventType.MERGE,  # Folded into nothing - treat as merge
-                    }
-                    lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.LEGAL_TRANSFER)
-                    
-                    try:
-                        lineage_event = LineageEvent(
-                            predecessor_node_id=source_node["node_id"],
-                            successor_node_id=target_node.node_id,
-                            event_year=event_year_override if event_year_override is not None else source_node["year"],
-                            event_type=lineage_type,
-                            notes=event.get("reasoning"),
-                            created_by=self._user_id
-                        )
-                        self._session.add(lineage_event)
-                        logger.info(f"    ✓ Created LineageEvent record: {source_node['name']} → {target_node.legal_name}")
-                    except Exception as e:
-                        logger.error(f"    ⚠ Error creating LineageEvent: {e}")
-                        import traceback
-                        logger.error(traceback.format_exc())
-                else:
-                    logger.warning(f"    ✗ Could not find target team '{target_name}' for LineageEvent")
+        # Step 5: If APPROVED, create the actual LineageEvent record
+        if status == EditStatus.APPROVED and target_node:
+            try:
+                lineage_event = LineageEvent(
+                    predecessor_node_id=source_node["node_id"],
+                    successor_node_id=target_node.node_id,
+                    event_year=event_year,
+                    event_type=lineage_type,
+                    notes=event.get("reasoning"),
+                    created_by=self._user_id
+                )
+                self._session.add(lineage_event)
+                logger.info(f"    ✓ Created LineageEvent record: {source_node['name']} → {target_node.legal_name}")
+            except Exception as e:
+                logger.error(f"    ⚠ Error creating LineageEvent: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        elif not target_node and target_name:
+            logger.warning(f"    ✗ Could not find target team '{target_name}' for LineageEvent")
         
         # Update dissolution_year on TeamNode when team folded
         event_type = event.get("event_type")

@@ -81,10 +81,21 @@ async def test_lineage_extractor_analyzes_ending_node():
     
     # Configure mock to return iteration of nodes
     mock_result.scalars.return_value.all.return_value = [target_node_mock]
-    # Also for scalar_one_or_none if used
-    mock_result.scalar_one_or_none.return_value = target_node_mock
     
-    mock_session.execute.return_value = mock_result
+    # Mock for era lookup (also returns target_node_mock acting as era)
+    mock_result_era = MagicMock()
+    mock_result_era.scalars.return_value.all.return_value = [target_node_mock]
+    
+    # Mock for idempotency check - returns None (no duplicate found)
+    mock_result_dup = MagicMock()
+    mock_result_dup.scalar_one_or_none.return_value = None
+    
+    # Configure execute to return different results for 3 calls
+    mock_session.execute.side_effect = [
+        mock_result,       # 1. TeamNode search
+        mock_result_era,   # 2. TeamEra search
+        mock_result_dup    # 3. Idempotency check (returns None = no duplicate)
+    ]
     
     extractor = LineageExtractor(
         prompts=mock_prompts,
@@ -283,3 +294,67 @@ async def test_target_resolution_via_era_name():
     # Verify audit was called (meaning target was found)
     mock_audit.create_edit.assert_called_once()
 
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_prevents_duplicate_records():
+    """LineageExtractor should not create duplicate LineageEvents."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode
+    from app.models.lineage import LineageEvent
+    
+    mock_prompts = AsyncMock()
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # session.add is synchronous
+    
+    # Setup: Target node search succeeds
+    target_node = TeamNode(node_id=uuid4(), legal_name="Team B", founding_year=2025)
+    target_node.registered_name = "Team B"  # For era loop
+    target_node.node = target_node  # For era.node access
+    mock_result_node = MagicMock()
+    mock_result_node.scalars.return_value.all.return_value = [target_node]
+    mock_result_node.scalars.return_value.first.return_value = target_node
+    
+    # Setup: Era search (returns the target node from era)
+    mock_result_era = MagicMock()
+    mock_result_era.scalars.return_value.all.return_value = [target_node]  # target_node acts as era with .node
+    
+    # Setup: DB check for EXISTING event returns an object (duplicate found)
+    existing_event = LineageEvent(event_id=uuid4())
+    mock_result_event = MagicMock()
+    mock_result_event.scalar_one_or_none.return_value = existing_event
+    
+    # Configure execute to return [nodes, eras, existing_event]
+    # The code makes 3 execute calls:
+    # 1. select(TeamNode) - all nodes for fuzzy matching
+    # 2. select(TeamEra) - all eras for temporal matching
+    # 3. select(LineageEvent) - idempotency check
+    mock_session.execute.side_effect = [
+        mock_result_node,   # 1. TeamNode search
+        mock_result_era,    # 2. TeamEra search
+        mock_result_event   # 3. Idempotency check 
+    ]
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    source_info = {"name": "Team A", "node_id": uuid4(), "year": 2024}
+    event_data = {
+        "event_type": "SUCCEEDED_BY",
+        "target_name": "Team B",
+        "confidence": 0.95,
+        "reasoning": "Duplicate test"
+    }
+    
+    # Execution
+    await extractor.create_lineage_record(source_info, event_data)
+    
+    # Verification
+    # Should NOT have called audit.create_edit because duplicate was found
+    mock_audit.create_edit.assert_not_called()
+    # Should NOT have added to session
+    mock_session.add.assert_not_called()
