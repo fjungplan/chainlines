@@ -208,19 +208,27 @@ class LineageExtractor:
         if status == EditStatus.APPROVED:
             target_name = event.get("target_name")
             if target_name:
-                # Normalize target name for matching (handle Unicode issues)
+                # Split target name and use first significant word for matching
+                # This handles cases like "Lotto - Intermarché" → match on "Lotto"
                 import unicodedata
+                from sqlalchemy import func
+                
+                # Normalize and get first word (skip short words like "Pro", "Team")
                 target_normalized = unicodedata.normalize('NFKD', target_name).encode('ASCII', 'ignore').decode('ASCII')
+                words = [w for w in target_normalized.split() if len(w) > 3 and w not in ('Team', 'Pro', 'Racing')]
+                first_word = words[0] if words else target_normalized
                 
-                # Look up the target team node - try ILIKE first for fuzzy matching
-                # Skip exact match since Unicode can cause issues
-                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_normalized}%"))
-                result = await self._session.execute(stmt)
-                target_node = result.scalars().first()
-                
-                # Also try with original name (in case normalization lost too much)
-                if not target_node:
-                    stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
+                # Use PostgreSQL unaccent for accent-insensitive matching
+                # Fallback: if unaccent not available, use first word ILIKE
+                try:
+                    stmt = select(TeamNode).where(
+                        func.unaccent(TeamNode.legal_name).ilike(f"%{first_word}%")
+                    )
+                    result = await self._session.execute(stmt)
+                    target_node = result.scalars().first()
+                except Exception:
+                    # Fallback without unaccent
+                    stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{first_word}%"))
                     result = await self._session.execute(stmt)
                     target_node = result.scalars().first()
                 

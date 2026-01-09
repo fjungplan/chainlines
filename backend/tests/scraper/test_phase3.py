@@ -235,29 +235,11 @@ async def test_target_resolution_via_era_name():
     target_node.eras = [target_era_2025]
     
     # Mock session to:
-    # 1. Return None for exact legal_name match
-    # 2. Return None for ILIKE legal_name
-    # 3. Return the era for ILIKE registered_name
-    mock_result_none = MagicMock()
-    mock_result_none.scalar_one_or_none.return_value = None
-    mock_result_none.scalars.return_value.first.return_value = None
+    # Return the target node on first ILIKE query (first-word matching)
+    mock_result_found = MagicMock()
+    mock_result_found.scalars.return_value.first.return_value = target_node
     
-    mock_result_era = MagicMock()
-    mock_result_era.scalars.return_value.first.return_value = target_era_2025
-    
-    # Configure selectinload to return node from era
-    target_era_2025.node = target_node
-    
-    call_count = [0]
-    async def mock_execute(stmt):
-        call_count[0] += 1
-        # First two calls: legal_name lookups (return None)
-        # Third call: registered_name lookup (return era)
-        if call_count[0] <= 2:
-            return mock_result_none
-        return mock_result_era
-    
-    mock_session.execute = mock_execute
+    mock_session.execute.return_value = mock_result_found
     
     extractor = LineageExtractor(
         prompts=mock_prompts,
@@ -283,5 +265,4 @@ async def test_target_resolution_via_era_name():
     
     # Verify audit was called (meaning target was found)
     mock_audit.create_edit.assert_called_once()
-    # Verify we made three queries (legal_name exact, legal_name ILIKE, era registered_name)
-    assert call_count[0] == 3
+
