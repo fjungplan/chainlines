@@ -312,6 +312,17 @@ class LineageOrchestrator:
             logger.info("Phase 3: No boundary nodes found")
             return
         
+        # Gather all team names for LLM-guided matching
+        # Include both ending and starting node names as potential targets
+        all_team_names = [n["name"] for n in ending_nodes + starting_nodes]
+        # Also fetch all active team names from DB for broader matching
+        from sqlalchemy import select
+        from app.models.team import TeamNode
+        result = await self._session.execute(select(TeamNode.legal_name))
+        db_team_names = [row[0] for row in result.fetchall()]
+        available_teams = list(set(all_team_names + db_team_names))
+        logger.info(f"Phase 3: {len(available_teams)} teams available for LLM matching")
+        
         processed = 0
         
         # Step 2: Analyze ending nodes (what did they become?)
@@ -321,7 +332,7 @@ class LineageOrchestrator:
                 await self._monitor.check_status()
             
             logger.info(f"  Analyzing ending: {node['name']}")
-            events = await self._extractor.analyze_ending_node(node)
+            events = await self._extractor.analyze_ending_node(node, available_teams=available_teams)
             
             if events:
                 logger.info(f"    Found {len(events)} lineage event(s)")
@@ -341,7 +352,7 @@ class LineageOrchestrator:
                 await self._monitor.check_status()
             
             logger.info(f"  Analyzing starting: {node['name']}")
-            events = await self._extractor.analyze_starting_node(node)
+            events = await self._extractor.analyze_starting_node(node, available_teams=available_teams)
             
             if events:
                 logger.info(f"    Found {len(events)} lineage event(s)")
