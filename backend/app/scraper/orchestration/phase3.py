@@ -208,13 +208,17 @@ class LineageExtractor:
         if status == EditStatus.APPROVED:
             target_name = event.get("target_name")
             if target_name:
-                # Look up the target team node - try exact match first, then ILIKE
-                # First try exact match on legal_name
-                stmt = select(TeamNode).where(TeamNode.legal_name == target_name)
-                result = await self._session.execute(stmt)
-                target_node = result.scalar_one_or_none()
+                # Normalize target name for matching (handle Unicode issues)
+                import unicodedata
+                target_normalized = unicodedata.normalize('NFKD', target_name).encode('ASCII', 'ignore').decode('ASCII')
                 
-                # If no exact match, try ILIKE on legal_name
+                # Look up the target team node - try ILIKE first for fuzzy matching
+                # Skip exact match since Unicode can cause issues
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_normalized}%"))
+                result = await self._session.execute(stmt)
+                target_node = result.scalars().first()
+                
+                # Also try with original name (in case normalization lost too much)
                 if not target_node:
                     stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
                     result = await self._session.execute(stmt)
