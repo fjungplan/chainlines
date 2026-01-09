@@ -55,6 +55,14 @@ def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
         help="End year for scraping (default: 1990)"
     )
 
+    parser.add_argument(
+        "--log-file",
+        type=str,
+        nargs='?',
+        const="auto",
+        help="Path to save log output. Defaults to scraper_{timestamp}.log if flag is present but no path provided"
+    )
+
     return parser.parse_args(args)
 
 
@@ -125,7 +133,7 @@ async def run_scraper(
     workers = [
         WikipediaWorker(base_scraper),
         CyclingRankingWorker(base_scraper),
-        MemoireWorker(base_scraper),
+        # MemoireWorker(base_scraper), # Disable until logic is fixed
     ]
 
     # Initialize LLM infrastructure (Shared across phases)
@@ -190,10 +198,19 @@ async def run_scraper(
             from app.scraper.orchestration.phase2 import TeamAssemblyService, AssemblyOrchestrator
             from app.services.audit_log_service import AuditLogService
             from app.scraper.sources.cyclingflash import CyclingFlashScraper
+            from app.models.user import User
 
             from app.scraper.services.enrichment import TeamEnrichmentService
 
             logger.info("--- Starting Phase 2: Team Assembly ---")
+            
+            # Fetch the scraper User object for EditService calls
+            system_user = await session.get(User, SYSTEM_USER_ID)
+            if not system_user:
+                logger.warning("Scraper user not found, sponsor edits will not create audit entries")
+            else:
+                # Refresh to ensure all columns are loaded (prevents MissingGreenlet in EditService)
+                await session.refresh(system_user)
 
             enricher = None
             if llm_prompts:
@@ -202,7 +219,8 @@ async def run_scraper(
             service = TeamAssemblyService(
                 audit_service=AuditLogService(),
                 session=session,
-                system_user_id=SYSTEM_USER_ID
+                system_user_id=SYSTEM_USER_ID,
+                system_user=system_user  # Pass User object for EditService
             )
             orchestrator = AssemblyOrchestrator(
                 service=service,
@@ -220,38 +238,76 @@ async def run_scraper(
             years = list(range(start_year, end_year - 1, -1))
             await orchestrator.run(years=years)
 
-        # Phase 3: Lineage
+        # Phase 3: Lineage (now includes Phase 2.5 Wikipedia enrichment)
         if phase in (0, 3):
-            from app.scraper.orchestration.phase3 import LineageConnectionService, LineageOrchestrator, OrphanDetector
+            from app.scraper.orchestration.enrichment import NodeEnrichmentService
+            from app.scraper.orchestration.phase3 import (
+                BoundaryNodeDetector, LineageExtractor, LineageOrchestrator
+            )
             from app.services.audit_log_service import AuditLogService
 
-            logger.info("--- Starting Phase 3: Lineage Connection ---")
+            logger.info("--- Starting Phase 2.5: Wikipedia Enrichment ---")
+            
+            # Phase 2.5: Enrich nodes with Wikipedia content
+            enrichment_service = NodeEnrichmentService(
+                session=session,
+                scraper=base_scraper,
+                wikidata_resolver=wikidata_resolver
+            )
+            enriched_count = await enrichment_service.enrich_all_nodes()
+            logger.info(f"Phase 2.5 complete: enriched {enriched_count} nodes")
+
+            logger.info("--- Starting Phase 3: Lineage Detection ---")
 
             if not llm_prompts:
                 logger.error("LLM prompts not initialized (missing API key). Lineage analysis aborted.")
                 return
 
-            service = LineageConnectionService(
+            # Initialize new Phase 3 components
+            detector = BoundaryNodeDetector(session=session)
+            extractor = LineageExtractor(
                 prompts=llm_prompts,
                 audit_service=AuditLogService(),
                 session=session,
                 system_user_id=SYSTEM_USER_ID
             )
             orchestrator = LineageOrchestrator(
-                service=service,
+                detector=detector,
+                extractor=extractor,
                 session=session,
                 monitor=monitor
             )
 
-            # Detect candidates
-            detector = OrphanDetector(session=session)
-            candidates = await detector.get_orphan_candidates()
-            await orchestrator.run(candidates=candidates)
+            # Analyze each year transition
+            years = list(range(start_year, end_year - 1, -1))
+            for i in range(len(years) - 1):
+                transition_year = years[i + 1]  # e.g., 2025 for 2025->2026 transition
+                await orchestrator.run(transition_year=transition_year)
 
 
 def main() -> None:
     """CLI entry point."""
     args = parse_args()
+
+    log_file = args.log_file
+    if log_file:
+        from pathlib import Path
+        if log_file == "auto":
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            log_file = str(log_dir / f"scraper_{timestamp}.log")
+        else:
+            # Ensure the directory for custom path exists
+            log_path = Path(log_file)
+            if log_path.parent:
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logging.getLogger().addHandler(file_handler)
+        logger.info(f"Logging to file: {log_file}")
     
     asyncio.run(run_scraper(
         phase=args.phase,

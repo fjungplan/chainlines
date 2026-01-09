@@ -1,5 +1,5 @@
 """Phase 1: Discovery and Sponsor Collection."""
-from typing import Set, List, Optional, Union, Tuple, TYPE_CHECKING
+from typing import Set, List, Optional, Union, Tuple, Dict, TYPE_CHECKING
 from app.scraper.llm.models import SponsorInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.scraper.services.brand_matcher import BrandMatcherService
@@ -64,6 +64,18 @@ class DiscoveryService:
         # Initialize brand matcher if session available
         self._brand_matcher = BrandMatcherService(session) if session else None
         
+        # Initialize enricher once to enable LLM caching across teams
+        # (Previously created per-team, resetting the in-memory cache)
+        self._enricher = None
+        if session and llm_prompts:
+            from app.scraper.services.enrichment import TeamEnrichmentService
+            self._enricher = TeamEnrichmentService(session, llm_prompts)
+        
+        # Team history tracking for gap backfill
+        self._team_histories: Dict[str, List[int]] = {}  # team_name -> available_years from dropdown
+        self._scraped_teams: Dict[str, Set[int]] = {}     # team_name -> years already scraped
+        self._url_by_team: Dict[str, str] = {}            # team_name -> base URL for backfilling
+        
         logger.info(
             f"DiscoveryService initialized with "
             f"LLM extraction: {llm_prompts is not None}, "
@@ -79,7 +91,7 @@ class DiscoveryService:
     ) -> DiscoveryResult:
         """Discover all teams and collect sponsor names."""
         checkpoint = self._checkpoint.load()
-        team_urls: list[str] = []
+        team_urls: list[tuple[str, int]] = []  # Changed to (URL, year) tuples
         
         if checkpoint and checkpoint.phase == 1:
             team_urls = checkpoint.team_queue.copy()
@@ -122,20 +134,24 @@ class DiscoveryService:
                     logger.info(f"{prefix}: COLLECTED '{data.name}'")
                     logger.info(f"    - Details: UCI: {data.uci_code}, Country: {data.country_code}, Tier: {data.tier_level}")
                     
-                    # NEW: Enrich with LLM data (centralized service)
-                    if self._session and self._llm_prompts:
-                        # Initialize enricher on demand (or could be in __init__)
-                        from app.scraper.services.enrichment import TeamEnrichmentService
-                        enricher = TeamEnrichmentService(self._session, self._llm_prompts)
-                        
-                        data = await enricher.enrich_team_data(data)
+                    # Enrich with LLM data (reusing single enricher for cache benefits)
+                    if self._enricher:
+                        data = await self._enricher.enrich_team_data(data)
 
                     sponsor_names = [s.brand_name for s in data.sponsors]
                     logger.info(f"    - Sponsors: {', '.join(sponsor_names) if sponsor_names else 'None'}")
                     
-                    if url not in team_urls:
-                        team_urls.append(url)
+                    # Store (URL, year) tuple to ensure correct year is processed in Phase 2
+                    url_year_pair = (url, year)
+                    if url_year_pair not in team_urls:
+                        team_urls.append(url_year_pair)
                         self._collector.add(data.sponsors)
+                        
+                        # Track for backfill: store available_years and scraped year
+                        if data.available_years:
+                            self._team_histories[data.name] = data.available_years
+                        self._scraped_teams.setdefault(data.name, set()).add(year)
+                        self._url_by_team[data.name] = url.rsplit('-', 1)[0]  # Base URL without year
                         
                         # Save checkpoint periodically
                         if i % 10 == 0 or i == len(urls):
@@ -147,8 +163,15 @@ class DiscoveryService:
                 self._save_checkpoint(team_urls)
                 raise
         
+        # Backfill gaps in team history (PASS 2)
+        team_urls = await self._backfill_gaps(team_urls)
+        
         # Process retry queue at end of all years
         await self._process_retry_queue()
+        
+        # CRITICAL: Save final checkpoint with all URLs including backfilled ones
+        self._save_checkpoint(team_urls)
+        logger.info(f"Final checkpoint saved with {len(team_urls)} team-year pairs")
         
         return DiscoveryResult(
             team_urls=team_urls,
@@ -173,12 +196,72 @@ class DiscoveryService:
         else:  # Pre-1991
             return self._gt_index.is_relevant(team_name, year)
 
-    def _save_checkpoint(self, team_urls: list[str]) -> None:
+    def _save_checkpoint(self, team_urls: list[tuple[str, int]]) -> None:
         """Save current progress."""
         self._checkpoint.save(CheckpointData(
             phase=1,
             team_queue=team_urls,
         ))
+    
+    async def _backfill_gaps(
+        self,
+        team_urls: list[tuple[str, int]]
+    ) -> list[tuple[str, int]]:
+        """
+        Backfill missing years to preserve lineage continuity (PASS 2).
+        
+        Uses team history dropdown data to identify gaps in scraped years
+        and adds missing years to the queue if they close a gap.
+        """
+        if not self._team_histories:
+            logger.debug("No team histories collected, skipping backfill")
+            return team_urls
+        
+        backfilled = 0
+        for team_name, available_years in self._team_histories.items():
+            scraped_years = self._scraped_teams.get(team_name, set())
+            base_url = self._url_by_team.get(team_name)
+            
+            if not base_url or not scraped_years:
+                continue
+            
+            # Find gaps: years in dropdown but not scraped
+            missing_years = set(available_years) - scraped_years
+            
+            for year in sorted(missing_years, reverse=True):
+                # Only backfill if it closes a gap (has adjacent scraped years)
+                if self._closes_gap(year, scraped_years):
+                    url_for_year = f"{base_url}-{year}"
+                    url_year_pair = (url_for_year, year)
+                    
+                    if url_year_pair not in team_urls:
+                        team_urls.append(url_year_pair)
+                        backfilled += 1
+                        logger.info(f"Backfilling '{team_name}' ({year}) to close gap")
+        
+        if backfilled > 0:
+            logger.info(f"Backfill complete: added {backfilled} team-year pairs")
+            self._save_checkpoint(team_urls)
+        
+        return team_urls
+    
+    def _closes_gap(self, year: int, scraped_years: Set[int]) -> bool:
+        """
+        Check if year is between two scraped years (closes a gap).
+        
+        Args:
+            year: The year to check
+            scraped_years: Set of already scraped years for this team
+            
+        Returns:
+            True if this year closes a gap, False otherwise
+        """
+        if not scraped_years or len(scraped_years) < 2:
+            return False
+        
+        sorted_years = sorted(scraped_years)
+        # Check if year falls between min and max scraped years
+        return min(sorted_years) < year < max(sorted_years)
     
     async def _extract_with_resilience(
         self,

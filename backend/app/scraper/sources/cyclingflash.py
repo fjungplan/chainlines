@@ -1,6 +1,7 @@
 """CyclingFlash scraper implementation."""
 import re
-from typing import Optional
+import hashlib
+from typing import Optional, List
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
@@ -18,6 +19,18 @@ class ScrapedTeamData(BaseModel):
     extraction_confidence: Optional[float] = Field(
         default=None,
         description="Confidence of sponsor extraction (if LLM was used)"
+    )
+    available_years: List[int] = Field(
+        default_factory=list,
+        description="Years available in team history dropdown (for identity matching)"
+    )
+    dissolution_year: Optional[int] = Field(
+        default=None,
+        description="Year the team dissolved (derived from max year in identity group)"
+    )
+    team_identity_id: Optional[str] = Field(
+        default=None,
+        description="Stable identity hash derived from team history dropdown"
     )
 
 class CyclingFlashParser:
@@ -92,7 +105,7 @@ class CyclingFlashParser:
         return result
 
 
-    def parse_team_detail(self, html: str, season_year: int) -> ScrapedTeamData:
+    def parse_team_detail(self, html: str, season_year: int, url: str = None) -> ScrapedTeamData:
         """Extract team data from detail page."""
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -155,6 +168,73 @@ class CyclingFlashParser:
         if prev_link:
             prev_url = prev_link.get('href')
         
+        
+        # Extract team identity from Next.js streaming data (editions object)
+        # CyclingFlash embeds team lineage in __next_f.push script tags
+        # Format: self.__next_f.push([...,"editions":{"slug-2026":"Name (2026)",...},...])
+        team_identity_id = None
+        
+        # Find all script tags containing __next_f.push
+        scripts = soup.find_all('script')
+        editions_slugs = []
+        
+        
+        for script in scripts:
+            script_text = script.string
+            if script_text and '\\"editions\\"' in script_text:
+                # Extract editions using regex - handles escaped quotes in script
+                import json
+                try:
+                    # Match \"editions\":{...} where {...} contains the slug mappings
+                    # The editions object is flat (no nested braces)
+                    # Note: script contains escaped quotes like \"editions\":{\"slug\":\"Name\"}
+                    match = re.search(r'\\"editions\\":\{([^}]+)\}', script_text)
+                    if match:
+                        editions_content = match.group(1)
+                        # Unescape the content and build valid JSON
+                        editions_content = editions_content.replace('\\"', '"')
+                        editions_json = '{"editions":{' + editions_content + '}}'
+                        editions_data = json.loads(editions_json)
+                        editions_slugs = list(editions_data.get('editions', {}).keys())
+                        if editions_slugs:
+                            break
+                except (json.JSONDecodeError, ValueError):
+                    continue
+        
+        # Generate identity from the sorted list of edition slugs
+        dissolution_year = None
+        
+        if editions_slugs:
+            # Sort slugs to ensure consistent identity across all pages
+            sorted_slugs = sorted(editions_slugs)
+            # Create hash from all slugs combined
+            identity_source = ':'.join(sorted_slugs)
+            team_identity_id = hashlib.md5(identity_source.encode()).hexdigest()[:16]
+            
+            # Calculate dissolution year
+            # If the current season_year is the last year in the editions list,
+            # then this team identity effectively dissolves/ends this year.
+            years = []
+            for slug in sorted_slugs:
+                # Typical format: team-name-2023
+                # We look for 4 digits at the end of the slug
+                m = re.search(r'-(\d{4})$', slug)
+                if m:
+                    years.append(int(m.group(1)))
+            
+            if years:
+                max_year = max(years)
+                # If the max year in the dropdown is LESS than the current real-world year,
+                # then the team definitely dissolved/ended in the past.
+                # We avoid using <= season_year because for current/future seasons, 
+                # max_year equals season_year but the team is active.
+                import datetime
+                current_year = datetime.datetime.now().year
+                
+                if max_year < current_year:
+                    dissolution_year = max_year
+        
+        
         return ScrapedTeamData(
             name=name,
             uci_code=uci_code,
@@ -162,7 +242,10 @@ class CyclingFlashParser:
             country_code=country_code,
             sponsors=sponsors,
             previous_season_url=prev_url,
-            season_year=season_year
+            season_year=season_year,
+            available_years=[],  # Not using dropdown anymore
+            dissolution_year=dissolution_year,
+            team_identity_id=team_identity_id
         )
 
     def _get_text(self, soup: BeautifulSoup, selector: str) -> Optional[str]:
@@ -208,4 +291,4 @@ class CyclingFlashScraper(BaseScraper):
         """Get team details from a team page."""
         url = f"{self.BASE_URL}{path}" if not path.startswith("http") else path
         html = await self.fetch(url)
-        return self._parser.parse_team_detail(html, season_year)
+        return self._parser.parse_team_detail(html, season_year, path)

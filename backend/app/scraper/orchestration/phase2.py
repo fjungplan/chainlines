@@ -6,18 +6,23 @@ from uuid import UUID
 from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
 from app.models.team import TeamNode, TeamEra
+from app.models.user import User
 from app.scraper.sources.cyclingflash import ScrapedTeamData
 from app.scraper.llm.models import SponsorInfo
 from app.services.audit_log_service import AuditLogService
+from app.services.edit_service import EditService
+from app.schemas.edits import SponsorMasterEditRequest, SponsorBrandEditRequest
 from app.models.enums import EditAction, EditStatus
 from app.scraper.orchestration.workers import SourceWorker, SourceData
 from app.scraper.services.wikidata import WikidataResolver, WikidataResult
 from app.scraper.services.arbiter import ConflictArbiter, ArbitrationDecision, ArbitrationResult
 
 from app.scraper.utils.sse import sse_manager
+from app.scraper.utils.sponsor_normalizer import normalize_sponsor_name
 
 if TYPE_CHECKING:
     from app.scraper.services.enrichment import TeamEnrichmentService
@@ -81,11 +86,13 @@ class TeamAssemblyService:
         self,
         audit_service: AuditLogService,
         session: AsyncSession,
-        system_user_id: UUID
+        system_user_id: UUID,
+        system_user: Optional[User] = None  # User object for EditService
     ):
         self._audit = audit_service
         self._session = session
         self._user_id = system_user_id
+        self._system_user = system_user  # For EditService calls
     
     async def create_team_era(
         self,
@@ -125,13 +132,18 @@ class TeamAssemblyService:
             "registered_name": data.name,
             "season_year": data.season_year,
             "uci_code": data.uci_code,
+            "country_code": data.country_code,
             "tier_level": data.tier_level,
             "valid_from": f"{data.season_year}-01-01",
+            "team_identity_id": data.team_identity_id,  # For node matching across name changes
             "sponsors": [
                 {
                     "name": s_info.brand_name, 
                     "prominence": prominence_map.get(s_info.brand_name, 0),
-                    "parent_company": s_info.parent_company
+                    "parent_company": s_info.parent_company,
+                    "brand_color": s_info.brand_color,
+                    "industry_sector": s_info.industry_sector,
+                    "source_url": s_info.source_url
                 }
                 for s_info in data.sponsors
             ]
@@ -154,36 +166,72 @@ class TeamAssemblyService:
 
     async def _get_or_create_sponsor_master(
         self,
-        legal_name: str
+        legal_name: str,
+        industry_sector: Optional[str] = None,
+        source_url: Optional[str] = None
     ) -> SponsorMaster:
-        """Get or create sponsor master (parent company)."""
-        stmt = select(SponsorMaster).where(SponsorMaster.legal_name == legal_name)
+        """Get or create sponsor master (parent company) via EditService.
+        
+        Creates an audit log entry for each new master.
+        """
+        stmt = select(SponsorMaster).where(SponsorMaster.legal_name.ilike(legal_name))
         result = await self._session.execute(stmt)
         master = result.scalar_one_or_none()
         
-        if not master:
-            logger.info(f"Creating new SponsorMaster: {legal_name}")
-            master = SponsorMaster(
-                legal_name=legal_name,
-            )
-            self._session.add(master)
-
+        if master:
+            return master
         
+        # Create via EditService if we have a user
+        if self._system_user:
+            logger.info(f"Creating SponsorMaster via EditService: {legal_name}")
+            request = SponsorMasterEditRequest(
+                legal_name=legal_name,
+                industry_sector=industry_sector,
+                source_url=source_url,
+                reason="Created by Smart Scraper during team extraction"
+            )
+            await EditService.create_sponsor_master_edit(
+                session=self._session,
+                user=self._system_user,
+                request=request
+            )
+            # Re-fetch the created master
+            result = await self._session.execute(stmt)
+            master = result.scalar_one_or_none()
+            return master
+        
+        # Fallback: Direct creation (legacy path, no audit)
+        logger.info(f"Creating new SponsorMaster (direct): {legal_name}")
+        master = SponsorMaster(legal_name=legal_name)
+        self._session.add(master)
+        await self._session.flush()
         return master
     
     async def _get_or_create_brand(
         self,
-        sponsor_info: SponsorInfo
+        sponsor_info: SponsorInfo,
+        country_code: Optional[str] = None
     ) -> SponsorBrand:
-        """Get or create sponsor brand with parent company."""
+        """Get or create sponsor brand with parent company via EditService.
+        
+        Creates audit log entries for both master and brand.
+        
+        Args:
+            sponsor_info: Sponsor information from LLM extraction
+            country_code: Optional country code for abbreviation normalization (BEL, ITA, etc.)
+        """
         # Handle parent company first
         master = None
         if sponsor_info.parent_company:
-            master = await self._get_or_create_sponsor_master(sponsor_info.parent_company)
+            master = await self._get_or_create_sponsor_master(
+                legal_name=sponsor_info.parent_company,
+                industry_sector=sponsor_info.industry_sector,
+                source_url=sponsor_info.source_url
+            )
         
-        # Check if brand exists
+        # Check if brand exists (case-insensitive)
         stmt = select(SponsorBrand).where(
-            SponsorBrand.brand_name == sponsor_info.brand_name
+            SponsorBrand.brand_name.ilike(sponsor_info.brand_name)
         )
         if master:
             stmt = stmt.where(SponsorBrand.master_id == master.master_id)
@@ -191,41 +239,101 @@ class TeamAssemblyService:
         result = await self._session.execute(stmt)
         brand = result.scalar_one_or_none()
         
-        if not brand:
-            # If no master but parent_company passed? (Handled above).
-            # If no master and NO parent_company passed?
-            # Model requires master_id. We must create a "Self-Master" or similar.
-            if not master:
-                # Fallback: Create master with same name as brand
-                logger.info(f"Creating default SponsorMaster for brand: {sponsor_info.brand_name}")
-                master = await self._get_or_create_sponsor_master(sponsor_info.brand_name)
-
-            logger.info(
-                f"Creating new SponsorBrand: {sponsor_info.brand_name} "
-                f"(parent: {master.legal_name})"
-            )
-            brand = SponsorBrand(
-                brand_name=sponsor_info.brand_name,
-                master=master,
-                default_hex_color="#000000",
-            )
-            self._session.add(brand)
-
+        if brand:
+            return brand
         
+        # Need a master for the brand
+        if not master:
+            # Apply sponsor normalization to get correct parent company
+            # e.g., "FDJ United" -> parent: "Française des Jeux"
+            # e.g., "Lotto" with country_code="BEL" -> parent: "Nationale Loterij"
+            normalized_master_name, _ = normalize_sponsor_name(
+                sponsor_info.brand_name, country_code
+            )
+            
+            logger.info(f"Creating master for brand '{sponsor_info.brand_name}' -> '{normalized_master_name}'")
+            master = await self._get_or_create_sponsor_master(
+                legal_name=normalized_master_name,
+                industry_sector=sponsor_info.industry_sector,
+                source_url=sponsor_info.source_url
+            )
+
+        # Create brand via EditService if we have a user
+        if self._system_user:
+            logger.info(f"Creating SponsorBrand via EditService: {sponsor_info.brand_name}")
+            request = SponsorBrandEditRequest(
+                master_id=str(master.master_id),
+                brand_name=sponsor_info.brand_name,
+                default_hex_color=sponsor_info.brand_color or "#000000",
+                source_url=sponsor_info.source_url,
+                reason="Created by Smart Scraper during team extraction"
+            )
+            await EditService.create_sponsor_brand_edit(
+                session=self._session,
+                user=self._system_user,
+                request=request
+            )
+            # Re-fetch the created brand
+            stmt = select(SponsorBrand).where(
+                SponsorBrand.brand_name == sponsor_info.brand_name,
+                SponsorBrand.master_id == master.master_id
+            )
+            result = await self._session.execute(stmt)
+            brand = result.scalar_one_or_none()
+            return brand
+        
+        # Fallback: Direct creation (legacy path, no audit)
+        logger.info(f"Creating SponsorBrand (direct): {sponsor_info.brand_name}")
+        brand = SponsorBrand(
+            brand_name=sponsor_info.brand_name,
+            master=master,
+            default_hex_color=sponsor_info.brand_color or "#000000",
+        )
+        self._session.add(brand)
+        await self._session.flush()
         return brand
     
     async def _create_sponsor_links(
         self,
         team_era: TeamEra,
-        sponsors: List[SponsorInfo]
+        sponsors: List[SponsorInfo],
+        country_code: Optional[str] = None
     ):
-        """Create sponsor links for team era."""
-        for idx, sponsor_info in enumerate(sponsors):
-            brand = await self._get_or_create_brand(sponsor_info)
+        """Create sponsor links for team era with proper prominence calculation."""
+        # Classify sponsors as TITLE or EQUIPMENT based on team name
+        # Title sponsors = sponsors whose brand name appears in the team name
+        team_name_lower = team_era.registered_name.lower()
+        
+        title_sponsors = []
+        equipment_sponsors = []
+        
+        for sponsor in sponsors:
+            # Check if brand name appears in team name (case-insensitive, fuzzy match)
+            brand_lower = sponsor.brand_name.lower()
+            # Remove common suffixes for better matching
+            brand_clean = brand_lower.replace(' team', '').replace(' cycling', '').strip()
             
-            # Create link with prominence (title sponsors higher)
-            prominence = 100 - (idx * 10)  # 100%, 90%, 80%, etc.
-            prominence = max(prominence, 0)  # Min 0%
+            if brand_clean in team_name_lower:
+                title_sponsors.append(sponsor)
+            else:
+                equipment_sponsors.append(sponsor)
+        
+        # Calculate prominence only for title sponsors using ProminenceCalculator
+        title_names = [s.brand_name for s in title_sponsors]
+        title_prominence = ProminenceCalculator.calculate(title_names)
+        
+        # Build prominence map
+        prominence_map = {}
+        for s, p in zip(title_sponsors, title_prominence):
+            prominence_map[s.brand_name] = p
+        
+        # Create links for ALL sponsors (title + equipment)
+        # Maintain original order from scraper
+        for idx, sponsor_info in enumerate(sponsors):
+            brand = await self._get_or_create_brand(sponsor_info, country_code)
+            
+            # Get prominence from map (0 for equipment sponsors)
+            prominence = prominence_map.get(sponsor_info.brand_name, 0)
             
             link = TeamSponsorLink(
                 era=team_era,
@@ -236,18 +344,47 @@ class TeamAssemblyService:
             self._session.add(link)
 
     async def assemble_team(self, data: ScrapedTeamData) -> TeamEra:
-        """Assemble team era from scraped data (Direct Creation)."""
-        # Create Node (needed for Era)
-        stmt = select(TeamNode).where(TeamNode.legal_name == data.name)
-        result = await self._session.execute(stmt)
-        node = result.scalar_one_or_none()
+        """Assemble team era from scraped data.
+        
+        Node matching priority:
+        1. Match by team_identity_id (stable across name changes)
+        2. Fall back to legal_name match
+        3. Create new node if not found
+        """
+        node = None
+        
+        # Step 1: Try to find existing node by team_identity_id
+        if data.team_identity_id:
+            stmt = select(TeamNode).options(selectinload(TeamNode.eras)).where(
+                TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
+            )
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 2: Fall back to legal_name match (for teams without identity)
         if not node:
-             node = TeamNode(
-                 legal_name=data.name,
-                 founding_year=data.season_year,
-              )
-             self._session.add(node)
- 
+            stmt = select(TeamNode).options(selectinload(TeamNode.eras)).where(TeamNode.legal_name == data.name)
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 3: Create new node if not found
+        if not node:
+            external_ids = {}
+            if data.team_identity_id:
+                external_ids["cyclingflash_identity"] = data.team_identity_id
+            
+            node = TeamNode(
+                legal_name=data.name,
+                founding_year=data.season_year,
+                dissolution_year=data.dissolution_year,
+                external_ids=external_ids if external_ids else None
+            )
+            self._session.add(node)
+            await self._session.flush()  # Get node_id assigned
+        else:
+            # Update existing node if new data provides dissolution info
+            if data.dissolution_year:
+                 node.dissolution_year = data.dissolution_year
 
         era = TeamEra(
             node=node,
@@ -260,8 +397,111 @@ class TeamAssemblyService:
         )
         self._session.add(era)
 
+        await self._create_sponsor_links(era, data.sponsors, data.country_code)
+        return era
 
-        await self._create_sponsor_links(era, data.sponsors)
+    async def assemble_team_enriched(self, enriched: "EnrichedTeamData") -> TeamEra:
+        """Assemble team era from enriched data, including Wikipedia history.
+        
+        Args:
+            enriched: EnrichedTeamData containing base_data and optional wikipedia_data
+            
+        Returns:
+            Created TeamEra with Wikipedia history stored
+        """
+        data = enriched.base_data
+        node = None
+        
+        # Step 1: Try to find existing node by team_identity_id
+        if data.team_identity_id:
+            stmt = select(TeamNode).options(
+                selectinload(TeamNode.eras).selectinload(TeamEra.sponsor_links)
+            ).where(
+                TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
+            )
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 2: Fall back to legal_name match
+        if not node:
+            stmt = select(TeamNode).options(
+                selectinload(TeamNode.eras).selectinload(TeamEra.sponsor_links)
+            ).where(TeamNode.legal_name == data.name)
+            result = await self._session.execute(stmt)
+            node = result.scalar_one_or_none()
+        
+        # Step 3: Create new node if not found
+        if not node:
+            external_ids = {}
+            if data.team_identity_id:
+                external_ids["cyclingflash_identity"] = data.team_identity_id
+            
+            node = TeamNode(
+                legal_name=data.name,
+                founding_year=data.season_year,
+                external_ids=external_ids if external_ids else None
+            )
+            self._session.add(node)
+            await self._session.flush()
+        else:
+            # Update founding year if this season is earlier
+            if node.founding_year is None or data.season_year < node.founding_year:
+                node.founding_year = data.season_year
+            
+            # Update dissolution year if provided by scraper (from dropdown analysis)
+            if data.dissolution_year:
+                # Only update if explicitly provided. 
+                # Note: We trust the scraper's max_year calculation.
+                node.dissolution_year = data.dissolution_year
+
+        # Extract Wikipedia history if available
+        wiki_history = None
+        if enriched.wikipedia_data:
+            wiki_history = enriched.wikipedia_data.history_text
+
+        # Validate UCI code format (must be exactly 3 uppercase letters or None)
+        import re
+        uci_code = data.uci_code
+        if uci_code and not re.match(r'^[A-Z]{3}$', uci_code):
+            logger.warning(f"    - Invalid UCI code '{uci_code}' - setting to None")
+            uci_code = None
+
+        # Check if era already exists for this node and year
+        stmt_era = select(TeamEra).where(
+            TeamEra.node_id == node.node_id,
+            TeamEra.season_year == data.season_year
+        ).options(selectinload(TeamEra.sponsor_links))
+        
+        result_era = await self._session.execute(stmt_era)
+        existing_era = result_era.scalar_one_or_none()
+
+        if existing_era:
+            logger.info(f"    - Updating existing era for {data.name} ({data.season_year})")
+            era = existing_era
+            # Update fields
+            era.registered_name = data.name
+            era.uci_code = uci_code
+            era.country_code = data.country_code
+            era.tier_level = data.tier_level
+            if wiki_history:
+                era.wikipedia_history_content = wiki_history
+            
+            # Clear existing sponsor links to rebuild them
+            era.sponsor_links.clear()
+        else:
+            era = TeamEra(
+                node=node,
+                season_year=data.season_year,
+                valid_from=date(data.season_year, 1, 1),
+                registered_name=data.name,
+                uci_code=uci_code,
+                country_code=data.country_code,
+                tier_level=data.tier_level,
+                wikipedia_history_content=wiki_history  # Store Wikipedia history
+            )
+            self._session.add(era)
+
+        await self._create_sponsor_links(era, data.sponsors, data.country_code)
         return era
 
 
@@ -375,8 +615,8 @@ class AssemblyOrchestrator:
                 await self._handle_split(enriched, decision)
                 return
                 
-        # MERGE or No Conflict -> Proceed to assembly
-        await self._service.create_team_era(enriched.base_data, confidence=enriched.base_data.extraction_confidence or 0.95)
+        # MERGE or No Conflict -> Proceed to assembly with enriched data
+        await self._service.assemble_team_enriched(enriched)
 
     def _get_url_for_worker(
         self, 
@@ -465,54 +705,101 @@ class AssemblyOrchestrator:
 
 
     async def run(self, years: List[int]) -> None:
-        """Process the team queue for specified years."""
+        """Process the team queue for specified years with retry support."""
+        import json
+        from pathlib import Path
+        
+        MAX_RETRIES = 3
+        
         checkpoint = self._checkpoint.load()
         if not checkpoint or not checkpoint.team_queue:
             logger.warning("Phase 2: No teams in queue to process. Run Phase 1 first.")
             return
 
-        queue = checkpoint.team_queue
-        logger.info(f"Phase 2: Starting Assembly for {len(queue)} teams across {years}")
+        # Initialize queue with attempt counts: [(url, year, attempt_count), ...]
+        queue = [(url, year, 0) for (url, year) in checkpoint.team_queue]
+        failed_assemblies = []
+        processed_count = 0
+        total_items = len(queue)
         
-        for i, url in enumerate(queue, 1):
+        logger.info(f"Phase 2: Starting Assembly for {total_items} team-year pairs")
+        
+        while queue:
+            url, year, attempts = queue.pop(0)
+            processed_count += 1
+            
             if self._monitor:
                 await self._monitor.check_status()
             
-            await self._emit_progress(i, len(queue))
+            await self._emit_progress(processed_count, total_items)
             
-            # For each team, we may need to fetch detail for multiple years 
-            # if we want a complete history, but for now we follow the simple 
-            # Phase 1 -> Phase 2 flow where Phase 1 gathered the URLs.
+            logger.info(f"Team {processed_count}/{total_items}: Assembling '{url}' for {year}" + 
+                       (f" (attempt {attempts + 1})" if attempts > 0 else ""))
             
-            # We'll process the latest requested year for this URL
-            year = years[0] # Simplification for now
-            
-            logger.info(f"Team {i}/{len(queue)}: Assembling '{url}' for {year}")
             try:
-                data = await self._scraper.get_team(url, year)
+                # Step 1: Scrape base data from CyclingFlash
+                base_data = await self._scraper.get_team(url, year)
                 
-                # Enrich if service available
+                # Step 2: Enrich with multi-source data (Wikidata, Wikipedia, etc.)
+                enriched = await self._enrich_team(base_data)
+                
+                # Step 3: Apply sponsor enrichment (if available)
                 if self._enricher:
-                    data = await self._enricher.enrich_team_data(data)
+                    enriched.base_data = await self._enricher.enrich_team_data(enriched.base_data)
                 
-                # LLM Confidence is simulated here or retrieved if we stored it
-                # For Phase 2 extraction, we assume high confidence (0.95) if parsing succeeded
-                # or we would have used an LLM-assisted parser.
+                # Step 4: Process (handles conflicts, arbiter, assembly)
+                await self._process_team(enriched)
                 
-                # Wrap base data in EnrichedTeamData if not enriched
-                if not isinstance(data, EnrichedTeamData):
-                     # Temporarily create wrapper if enricher didn't run or return one
-                     # If enricher ran, 'data' should be EnrichedTeamData
-                     # But current enricher code in _run only calls self._enricher.enrich_team_data(data)
-                     # Let's assume enrich_team_data returns EnrichedTeamData
-                     if not isinstance(data, EnrichedTeamData):
-                        data = EnrichedTeamData(base_data=data)
+                # Commit transaction for this team
+                await self._session.commit()
                 
-                await self._process_team(data)
             except Exception as e:
-                logger.error(f"    - Failed to assemble {url}: {e}")
-                # Rollback the session to clear error state and allow next team to process
+                error_msg = str(e)
+                logger.error(f"    - Failed to assemble {url}: {error_msg}")
+                
+                # Rollback the session to clear error state
                 await self._session.rollback()
+                
+                # Refresh the system_user to prevent expiry-based lazy loading issues
+                if self._service._system_user:
+                    await self._session.refresh(self._service._system_user)
+                
+                # Check if we should retry
+                if attempts < MAX_RETRIES - 1:
+                    # Calculate backoff: 2^attempts seconds (1, 2, 4 seconds)
+                    backoff_seconds = 2 ** attempts
+                    logger.info(f"    - Will retry in {backoff_seconds}s (attempt {attempts + 2}/{MAX_RETRIES})")
+                    
+                    # Add back to end of queue with incremented attempt count
+                    queue.append((url, year, attempts + 1))
+                    
+                    # Apply backoff delay
+                    await asyncio.sleep(backoff_seconds)
+                else:
+                    # Max retries exceeded, record failure
+                    failed_assemblies.append({
+                        "url": url,
+                        "year": year,
+                        "error": error_msg,
+                        "attempts": attempts + 1
+                    })
+                    logger.warning(f"    - Max retries exceeded for {url}. Recording failure.")
+                
                 continue
+        
+        # Log final summary
+        if failed_assemblies:
+            logger.warning(f"Phase 2: {len(failed_assemblies)} team(s) failed after {MAX_RETRIES} attempts")
+            
+            # Write failed assemblies to file for later analysis/retry
+            failed_path = Path("logs/failed_assemblies.json")
+            failed_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(failed_path, "w") as f:
+                json.dump(failed_assemblies, f, indent=2)
+            
+            logger.info(f"Phase 2: Failed assemblies logged to {failed_path}")
+        else:
+            logger.info("Phase 2: All assemblies completed successfully!")
 
         logger.info("Phase 2: Assembly complete.")

@@ -429,8 +429,8 @@ async def test_phase2_invokes_arbiter_on_conflict():
     # Verify arbiter called
     mock_arbiter.decide.assert_called_once()
     
-    # Verify proceed to assemble_team was called (since MERGE)
-    mock_service.create_team_era.assert_called_once()
+    # Verify proceed to assemble_team_enriched was called (since MERGE)
+    mock_service.assemble_team_enriched.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -547,3 +547,118 @@ async def test_phase2_emits_decision_event():
     # or just rely on the other assertions for now until we define the Event bus perfectly.
     # We'll assert that SPLIT logic was handled (create_team_era NOT called).
     mock_service.create_team_era.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_run_calls_enrich_team():
+    """Orchestrator.run() should call _enrich_team for each team in queue."""
+    from unittest.mock import patch, MagicMock, AsyncMock
+    from app.scraper.orchestration.phase2 import AssemblyOrchestrator, EnrichedTeamData
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.checkpoint import CheckpointData
+    
+    mock_service = AsyncMock()
+    mock_scraper = AsyncMock()
+    mock_checkpoint = MagicMock()
+    mock_session = AsyncMock()
+    mock_resolver = AsyncMock()
+    
+    # Configure checkpoint to return a queue with one team
+    mock_checkpoint.load.return_value = CheckpointData(
+        phase=1,
+        team_queue=[("/team/test-2025", 2025)]
+    )
+    
+    # Configure scraper to return base data
+    base_data = ScrapedTeamData(
+        name="Test Team",
+        season_year=2025,
+        sponsors=[],
+        uci_code="TST",
+        tier_level=1
+    )
+    mock_scraper.get_team.return_value = base_data
+    
+    # Configure resolver (so _enrich_team has something to do)
+    mock_resolver.resolve.return_value = None
+    
+    orchestrator = AssemblyOrchestrator(
+        service=mock_service,
+        scraper=mock_scraper,
+        checkpoint_manager=mock_checkpoint,
+        session=mock_session,
+        wikidata_resolver=mock_resolver,
+        workers=[]
+    )
+    
+    # Spy on _enrich_team
+    enrich_called = False
+    original_enrich = orchestrator._enrich_team
+    
+    async def spy_enrich(data):
+        nonlocal enrich_called
+        enrich_called = True
+        return EnrichedTeamData(base_data=data)
+    
+    orchestrator._enrich_team = spy_enrich
+    
+    # Run orchestrator
+    await orchestrator.run(years=[2025])
+    
+    # Verify _enrich_team was called
+    assert enrich_called, "_enrich_team should be called during run()"
+
+
+@pytest.mark.asyncio
+async def test_wikipedia_history_stored_in_era(db_session):
+    """Wikipedia history text should be stored in TeamEra."""
+    from app.scraper.orchestration.phase2 import TeamAssemblyService, EnrichedTeamData
+    from app.scraper.sources.cyclingflash import ScrapedTeamData
+    from app.scraper.orchestration.workers import SourceData
+    from app.services.audit_log_service import AuditLogService
+    from app.db.seed_smart_scraper_user import seed_smart_scraper_user, SMART_SCRAPER_USER_ID
+    from sqlalchemy import select
+    from app.models.team import TeamEra
+    
+    # Seed system user
+    await seed_smart_scraper_user(db_session)
+    await db_session.commit()
+    
+    service = TeamAssemblyService(
+        audit_service=AuditLogService(),
+        session=db_session,
+        system_user_id=SMART_SCRAPER_USER_ID
+    )
+    
+    # Create enriched data with Wikipedia history
+    base_data = ScrapedTeamData(
+        name="History Team",
+        season_year=2025,
+        sponsors=[],
+        uci_code="HST",
+        tier_level=1
+    )
+    
+    wiki_history = "This team was founded in 1990 and has won 5 Grand Tours."
+    
+    enriched = EnrichedTeamData(
+        base_data=base_data,
+        wikipedia_data=SourceData(
+            source="wikipedia",
+            history_text=wiki_history
+        )
+    )
+    
+    # Assemble team with enriched data
+    era = await service.assemble_team_enriched(enriched)
+    await db_session.commit()
+    
+    # Verify history was stored
+    result = await db_session.execute(
+        select(TeamEra).where(TeamEra.era_id == era.era_id)
+    )
+    era = result.scalar_one()
+    
+    assert era.wikipedia_history_content is not None
+    assert "founded in 1990" in era.wikipedia_history_content
+

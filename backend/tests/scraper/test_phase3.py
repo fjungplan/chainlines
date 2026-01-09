@@ -1,152 +1,360 @@
 """Test Phase 3 Lineage Connection orchestration."""
 import pytest
-from datetime import date
-
-def test_orphan_detector_finds_gaps():
-    """OrphanDetector should find teams with year gaps."""
-    from app.scraper.orchestration.phase3 import OrphanDetector
-    
-    teams = [
-        {"id": "a", "name": "Team A", "end_year": 2022},
-        {"id": "b", "name": "Team B", "start_year": 2023},
-        {"id": "c", "name": "Team C", "end_year": 2020},
-    ]
-    
-    detector = OrphanDetector(session=AsyncMock())
-    candidates = detector.find_candidates(teams)
-    
-    # Should match Team A (ended 2022) with Team B (started 2023)
-    assert len(candidates) >= 1
-    assert any(c["predecessor"]["name"] == "Team A" for c in candidates)
-
-def test_orphan_detector_ignores_large_gaps():
-    """OrphanDetector should ignore gaps > 2 years."""
-    from app.scraper.orchestration.phase3 import OrphanDetector
-    
-    teams = [
-        {"id": "a", "name": "Team A", "end_year": 2018},
-        {"id": "b", "name": "Team B", "start_year": 2023},
-    ]
-    
-    detector = OrphanDetector(session=AsyncMock(), max_gap_years=2)
-    candidates = detector.find_candidates(teams)
-    
-    assert len(candidates) == 0
-
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+from datetime import date
 
 @pytest.mark.asyncio
-async def test_lineage_service_creates_event():
-    """LineageConnectionService should create lineage events."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
+async def test_boundary_detector_finds_nodes():
+    """BoundaryNodeDetector should find teams ending/starting at transition year."""
+    from app.scraper.orchestration.phase3 import BoundaryNodeDetector
+    from app.models.team import TeamNode, TeamEra
+    
+    # Setup mock session
+    mock_session = AsyncMock()
+    
+    # Create test nodes
+    # Node A: 2024 (Ends at transition year 2024 for 2024->2025)
+    node_a = TeamNode(node_id=uuid4(), legal_name="Team A", founding_year=2024)
+    node_a.eras = [TeamEra(season_year=2024)]
+    
+    # Node B: 2025 (Starts at next year 2025)
+    node_b = TeamNode(node_id=uuid4(), legal_name="Team B", founding_year=2025)
+    node_b.eras = [TeamEra(season_year=2025)]
+    
+    # Node C: 2024, 2025 (Continuous, not a boundary)
+    node_c = TeamNode(node_id=uuid4(), legal_name="Team C", founding_year=2024)
+    node_c.eras = [TeamEra(season_year=2024), TeamEra(season_year=2025)]
+    
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_session.execute.return_value = mock_result
+    mock_result.scalars.return_value.all.return_value = [node_a, node_b, node_c]
+    
+    detector = BoundaryNodeDetector(session=mock_session)
+    # Transition year 2024 (looking for ends in 2024, starts in 2025)
+    result = await detector.get_boundary_nodes(transition_year=2024)
+    
+    # Verify ending nodes
+    assert len(result["ending"]) == 1
+    assert result["ending"][0]["name"] == "Team A"
+    assert result["ending"][0]["year"] == 2024
+    
+    # Verify starting nodes
+    assert len(result["starting"]) == 1
+    assert result["starting"][0]["name"] == "Team B"
+    assert result["starting"][0]["year"] == 2025
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_analyzes_ending_node():
+    """LineageExtractor should call LLM to analyze ending nodes."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.enums import EditAction
     
     mock_prompts = AsyncMock()
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=LineageEventType.LEGAL_TRANSFER,
-            confidence=0.95,
-            reasoning="Same team",
-            predecessor_ids=[uuid4()],
-            successor_ids=[uuid4()]
-        )
-    )
+    mock_requests = AsyncMock()
+    
+    # Mock LLM return
+    mock_prompts.extract_lineage_events.return_value = [{
+        "event_type": "SUCCEEDED_BY",
+        "target_name": "Team B",
+        "confidence": 0.95,
+        "reasoning": "Explicit mention in history"
+    }]
     
     mock_audit = AsyncMock()
     mock_session = AsyncMock()
+    # session.add is synchronous
+    mock_session.add = MagicMock()
     
-    service = LineageConnectionService(
+    # Mock session.execute to return None for target team lookups
+    # (we're just testing the audit log creation, not the LineageEvent record)
+    mock_result = MagicMock()
+    
+    # Mock finding 'Team B' when iterating all nodes for fuzzy matching
+    target_node_mock = MagicMock()
+    # IMPORTANT: unicodedata.normalize requires a real string, not a MagicMock
+    target_node_mock.legal_name = "Team B" 
+    target_node_mock.registered_name = "Team B Era" # For TeamEra loop
+    target_node_mock.node_id = uuid4()
+    target_node_mock.node = target_node_mock # For era.node access
+    
+    # Configure mock to return iteration of nodes
+    mock_result.scalars.return_value.all.return_value = [target_node_mock]
+    
+    # Mock for era lookup (also returns target_node_mock acting as era)
+    mock_result_era = MagicMock()
+    mock_result_era.scalars.return_value.all.return_value = [target_node_mock]
+    
+    # Mock for idempotency check - returns None (no duplicate found)
+    mock_result_dup = MagicMock()
+    mock_result_dup.scalar_one_or_none.return_value = None
+    
+    # Configure execute to return different results for 3 calls
+    mock_session.execute.side_effect = [
+        mock_result,       # 1. TeamNode search
+        mock_result_era,   # 2. TeamEra search
+        mock_result_dup    # 3. Idempotency check (returns None = no duplicate)
+    ]
+    
+    extractor = LineageExtractor(
         prompts=mock_prompts,
         audit_service=mock_audit,
         session=mock_session,
         system_user_id=uuid4()
     )
     
-    await service.connect(
-        predecessor_info="Team A 2022",
-        successor_info="Team B 2023"
+    node_info = {
+        "name": "Team A",
+        "node_id": uuid4(),
+        "has_wikipedia": True,
+        "wikipedia_summary": "Team history here...",
+        "year": 2024
+    }
+    
+    # Run analysis - this will now also call create_lineage_record internally if events found
+    events = await extractor.analyze_ending_node(node_info)
+    
+    # Verify events returned
+    assert len(events) == 1
+    assert events[0]["event_type"] == "SUCCEEDED_BY"
+    
+    # Verify audit call
+    assert mock_audit.create_edit.called
+    call_kwargs = mock_audit.create_edit.call_args[1]
+    assert call_kwargs["action"] == EditAction.CREATE
+    assert call_kwargs["entity_type"] == "LineageEvent"
+    assert call_kwargs["new_data"]["source_node"] == "Team A"
+    assert call_kwargs["new_data"]["target_team"] == "Team B"
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_skips_no_wikipedia():
+    """LineageExtractor should skip nodes with no Wikipedia content."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    
+    mock_prompts = AsyncMock()
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=AsyncMock(),
+        session=AsyncMock(),
+        system_user_id=uuid4()
     )
     
-    mock_prompts.decide_lineage.assert_called_once()
+    node_info = {
+        "name": "Team A",
+        "wikipedia_summary": None, # No content
+        "year": 2024
+    }
+    
+    events = await extractor.analyze_ending_node(node_info)
+    assert len(events) == 0
+    mock_prompts.extract_lineage_events.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_lineage_extractor_updates_dissolution_year_on_fold():
+    """LineageExtractor should update TeamNode.dissolution_year when FOLDED event is detected."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode
+    
+    mock_prompts = AsyncMock()
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    
+    # Create a real TeamNode to verify mutation
+    node = TeamNode(node_id=uuid4(), legal_name="Team A", founding_year=2020)
+    assert node.dissolution_year is None  # Initially null
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    node_info = {
+        "id": node.node_id,
+        "name": "Team A",
+        "year": 2024,
+        "_node": node  # Pass the actual node for mutation
+    }
+    
+    fold_event = {
+        "event_type": "FOLDED",
+        "target_name": None,
+        "confidence": 0.95,
+        "reasoning": "Team folded after 2024 season"
+    }
+    
+    # Create lineage record (should update dissolution_year)
+    await extractor.create_lineage_record(node_info, fold_event)
+    
+    # Verify dissolution_year was updated
+    assert node.dissolution_year == 2024
+
+
+@pytest.mark.asyncio
+async def test_extract_lineage_receives_candidate_teams():
+    """LLM should receive a list of candidate team names to pick from."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    
+    mock_prompts = AsyncMock()
+    mock_prompts.extract_lineage_events.return_value = [{
+        "event_type": "JOINED",
+        "target_name": "Lotto - Intermarché",  # Should pick from candidate list
+        "confidence": 0.95,
+        "reasoning": "Picked from available teams"
+    }]
+    
+    mock_session = AsyncMock()
+    # Configure execute result for team lookup
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [] # Return empty list for team lookup (or mocks if needed)
+    mock_session.execute.return_value = mock_result
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=AsyncMock(),
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    node_info = {
+        "name": "Intermarché - Wanty",
+        "wikipedia_summary": "Team merged with Lotto...",
+        "year": 2025,
+        "node_id": uuid4()
+    }
+    
+    # Available teams should be passed to LLM
+    available_teams = ["Lotto - Intermarché", "Bahrain Victorious", "UAE Emirates"]
+    
+    events = await extractor.analyze_ending_node(node_info, available_teams=available_teams)
+    
+    # Verify LLM was called with available_teams
+    mock_prompts.extract_lineage_events.assert_called_once()
+    call_kwargs = mock_prompts.extract_lineage_events.call_args[1]
+    assert "available_teams" in call_kwargs
+    assert "Lotto - Intermarché" in call_kwargs["available_teams"]
+
+
+@pytest.mark.asyncio
+async def test_target_resolution_via_era_name():
+    """When target not found by legal_name, should search by TeamEra.registered_name."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode, TeamEra
+    from app.models.enums import EditStatus
+    
+    mock_prompts = AsyncMock()
+    mock_audit = AsyncMock()
+    mock_session = AsyncMock()
+    
+    # Create target team with era that has the old name
+    target_node = TeamNode(
+        node_id=uuid4(),
+        legal_name="Lotto - Intermarché",  # Current name
+        founding_year=2024
+    )
+    target_era_2025 = TeamEra(
+        era_id=uuid4(),
+        node_id=target_node.node_id,
+        season_year=2025,
+        registered_name="Lotto"  # Old name that Wikipedia references
+    )
+    target_node.eras = [target_era_2025]
+    
+    # Mock session to:
+    # Return the target node on first ILIKE query (first-word matching)
+    mock_result_found = MagicMock()
+    mock_result_found.scalars.return_value.first.return_value = target_node
+    
+    mock_session.execute.return_value = mock_result_found
+    
+    extractor = LineageExtractor(
+        prompts=mock_prompts,
+        audit_service=mock_audit,
+        session=mock_session,
+        system_user_id=uuid4()
+    )
+    
+    source_node = {
+        "name": "Intermarché - Wanty",
+        "node_id": uuid4(),
+        "year": 2025
+    }
+    
+    event = {
+        "event_type": "JOINED",
+        "target_name": "Lotto",  # Wikipedia uses old name
+        "confidence": 0.95,
+        "reasoning": "Team joined Lotto"
+    }
+    
+    await extractor.create_lineage_record(source_node, event)
+    
+    # Verify audit was called (meaning target was found)
     mock_audit.create_edit.assert_called_once()
 
-@pytest.mark.asyncio
-async def test_lineage_service_handles_no_connection():
-    """LineageConnectionService should NOT create event for NO_CONNECTION."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
-    
-    mock_prompts = AsyncMock()
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=None,
-            confidence=0.99,
-            reasoning="Totally different teams",
-            predecessor_ids=[],
-            successor_ids=[]
-        )
-    )
-    
-    mock_audit = AsyncMock()
-    mock_session = AsyncMock()
-    
-    service = LineageConnectionService(
-        prompts=mock_prompts,
-        audit_service=mock_audit,
-        session=mock_session,
-        system_user_id=uuid4()
-    )
-    
-    await service.connect(
-        predecessor_info="Team X 2010",
-        successor_info="Team Y 2025"
-    )
-    
-    # Should check with LLM but NOT create an edit
-    mock_prompts.decide_lineage.assert_called_once()
-    mock_audit.create_edit.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_lineage_prompt_includes_wiki_history():
-    """LineageConnectionService should pass history to prompt."""
-    from app.scraper.orchestration.phase3 import LineageConnectionService
-    from app.scraper.llm.lineage import LineageDecision
-    from app.models.enums import LineageEventType
+async def test_lineage_extractor_prevents_duplicate_records():
+    """LineageExtractor should not create duplicate LineageEvents."""
+    from app.scraper.orchestration.phase3 import LineageExtractor
+    from app.models.team import TeamNode
+    from app.models.lineage import LineageEvent
     
     mock_prompts = AsyncMock()
-    # Configure return value to avoid TypeError during confidence check
-    mock_prompts.decide_lineage = AsyncMock(
-        return_value=LineageDecision(
-            event_type=LineageEventType.LEGAL_TRANSFER,
-            confidence=0.95,
-            reasoning="Test reasoning",
-            predecessor_ids=[],
-            successor_ids=[]
-        )
-    )
     mock_audit = AsyncMock()
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # session.add is synchronous
     
-    service = LineageConnectionService(
+    # Setup: Target node search succeeds
+    target_node = TeamNode(node_id=uuid4(), legal_name="Team B", founding_year=2025)
+    target_node.registered_name = "Team B"  # For era loop
+    target_node.node = target_node  # For era.node access
+    mock_result_node = MagicMock()
+    mock_result_node.scalars.return_value.all.return_value = [target_node]
+    mock_result_node.scalars.return_value.first.return_value = target_node
+    
+    # Setup: Era search (returns the target node from era)
+    mock_result_era = MagicMock()
+    mock_result_era.scalars.return_value.all.return_value = [target_node]  # target_node acts as era with .node
+    
+    # Setup: DB check for EXISTING event returns an object (duplicate found)
+    existing_event = LineageEvent(event_id=uuid4())
+    mock_result_event = MagicMock()
+    mock_result_event.scalar_one_or_none.return_value = existing_event
+    
+    # Configure execute to return [nodes, eras, existing_event]
+    # The code makes 3 execute calls:
+    # 1. select(TeamNode) - all nodes for fuzzy matching
+    # 2. select(TeamEra) - all eras for temporal matching
+    # 3. select(LineageEvent) - idempotency check
+    mock_session.execute.side_effect = [
+        mock_result_node,   # 1. TeamNode search
+        mock_result_era,    # 2. TeamEra search
+        mock_result_event   # 3. Idempotency check 
+    ]
+    
+    extractor = LineageExtractor(
         prompts=mock_prompts,
         audit_service=mock_audit,
         session=mock_session,
         system_user_id=uuid4()
     )
     
-    await service.connect(
-        predecessor_info="Team A",
-        successor_info="Team B",
-        predecessor_history="Had financial issues.",
-        successor_history="Founded by ex-Team A staff."
-    )
+    source_info = {"name": "Team A", "node_id": uuid4(), "year": 2024}
+    event_data = {
+        "event_type": "SUCCEEDED_BY",
+        "target_name": "Team B",
+        "confidence": 0.95,
+        "reasoning": "Duplicate test"
+    }
     
-    mock_prompts.decide_lineage.assert_called_once_with(
-        predecessor_info="Team A",
-        successor_info="Team B",
-        predecessor_history="Had financial issues.",
-        successor_history="Founded by ex-Team A staff."
-    )
+    # Execution
+    await extractor.create_lineage_record(source_info, event_data)
+    
+    # Verification
+    # Should NOT have called audit.create_edit because duplicate was found
+    mock_audit.create_edit.assert_not_called()
+    # Should NOT have added to session
+    mock_session.add.assert_not_called()

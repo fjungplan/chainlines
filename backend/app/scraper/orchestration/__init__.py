@@ -9,14 +9,17 @@ from app.scraper.orchestration.phase2 import (
     TeamAssemblyService
 )
 from app.scraper.orchestration.phase3 import (
-    OrphanDetector,
-    LineageConnectionService
+    BoundaryNodeDetector,
+    LineageExtractor,
+    LineageOrchestrator
 )
+from app.scraper.orchestration.enrichment import NodeEnrichmentService
 
 __all__ = [
     "SponsorCollector", "DiscoveryService", 
     "DiscoveryResult", "SponsorResolution",
     "ProminenceCalculator", "TeamAssemblyService",
-    "OrphanDetector", "LineageConnectionService"
+    "BoundaryNodeDetector", "LineageExtractor", 
+    "LineageOrchestrator", "NodeEnrichmentService"
 ]
 

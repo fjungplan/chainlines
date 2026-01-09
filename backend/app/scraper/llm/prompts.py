@@ -1,7 +1,7 @@
 """LLM prompts for scraper operations."""
 from typing import TYPE_CHECKING, List, Optional
 from app.scraper.sources.cyclingflash import ScrapedTeamData
-from app.scraper.llm.lineage import LineageDecision
+from app.scraper.llm.lineage import LineageDecision, LineageEventsExtraction
 from app.scraper.llm.models import SponsorExtractionResult
 from app.scraper.llm.model_config import PromptType
 
@@ -59,9 +59,53 @@ IMPORTANT: Lineage events occur on a single date (typically season start). Time 
 Return your decision with confidence score (0.0 to 1.0). If returning null for event_type, confidence should still be provided (confidence that there is NO connection).
 """
 
+EXTRACT_LINEAGE_EVENTS_PROMPT = """You are analyzing Wikipedia content about a professional cycling team to extract lineage events.
+
+TEAM: {team_name}
+CONTEXT: This team is {context} in {year}.
+WIKIPEDIA CONTENT:
+{wikipedia_content}
+
+AVAILABLE TEAMS IN DATABASE:
+{available_teams}
+
+TASK: Extract any lineage events mentioned in the Wikipedia content.
+
+EVENT TYPES:
+For ENDING teams (context="ending"):
+- SUCCEEDED_BY: Team was succeeded by another team (license transfer)
+- JOINED: Team dissolved and merged into another team that continued existing
+- SPLIT_INTO: Team split into multiple successor teams
+- MERGED_WITH: Team merged with another team to form a new entity
+
+For STARTING teams (context="starting"):
+- SUCCESSOR_OF: Team is the successor of another team
+- BREAKAWAY_FROM: Team was formed by breaking away from another team
+- MERGER_OF: Team was formed by merging multiple predecessor teams
+
+INSTRUCTIONS:
+1. Look for explicit mentions of succession, mergers, joins, or breakaways
+2. Extract the NAME of the other team(s) involved
+3. IMPORTANT: For target_name, PREFER names from the AVAILABLE TEAMS list above.
+   Wikipedia may use old names (e.g., "Lotto") - match these to current DB names (e.g., "Lotto - Intermarché").
+4. Set confidence based on how explicit the Wikipedia content is:
+   - 0.9+: Explicit statement ("succeeded by", "was formed by merging")
+   - 0.7-0.9: Strong implication with named teams
+   - <0.7: Vague references or uncertain connections
+5. If no lineage events are found, return empty events list with a reason
+
+EXAMPLES OF WHAT TO LOOK FOR:
+- "The team was succeeded by Team XYZ in 2026"
+- "In 2025, the team merged with ABC Racing"
+- "Team NSN acquired the license from Israel Premier Tech"
+- "Formed following the dissolution of Former Team"
+
+Return structured data with events found.
+"""
+
 SPONSOR_EXTRACTION_PROMPT = """You are an expert in professional cycling team sponsorship and brand identification.
 
-TASK: Extract sponsor/brand information from a professional cycling team name.
+TASK: Extract ONLY title/naming sponsor brands from a professional cycling team name.
 
 TEAM INFORMATION:
 - Team Name: {team_name}
@@ -69,39 +113,115 @@ TEAM INFORMATION:
 - Country: {country_code}
 - Partial DB Matches: {partial_matches}
 
-IMPORTANT INSTRUCTIONS:
-1. **Re-verify ALL parts independently** - The partial matches may be incorrect
-   Example: If DB matched "Lotto" but team is "Lotto NL Jumbo", "Lotto" alone is wrong
+CRITICAL INSTRUCTIONS:
 
-2. **Extract sponsors accurately:**
-   - Return ONLY actual sponsor/brand names (companies, organizations)
-   - Distinguish sponsors from team descriptors (e.g., "Victorious", "Grenadiers")
-   - **DO NOT split compound brands** (e.g., "Uno-X Mobility" is ONE brand, NOT "Uno" + "X Mobility")
-   - **DO NOT include the full team name as a sponsor** (e.g., "XDS Astana Team" is the team, "XDS" and "Astana" are the sponsors)
-   - Handle multi-word brand names correctly (e.g., "Ineos Grenadier" not "Ineos")
-   - Identify parent companies when possible
+1. **Extract ONLY Title/Naming Sponsors:**
+   - Title sponsors are companies whose names appear IN THE TEAM NAME ITSELF
+   - DO NOT extract equipment sponsors (bikes, wheels, clothing, nutrition, etc.)
+   - Equipment sponsors will be handled separately by the scraper
+   - Example: "Alpecin - Premier Tech" → Title sponsors: ["Alpecin", "Premier Tech"]
+   - Example: "Bahrain Victorious" → Title sponsor: ["Bahrain"] ("Victorious" is a descriptor)
 
-3. **Use Web Search / Current Knowledge:**
-   - Use your browsing tool or internal knowledge to verify if a brand is a single entity or a partnership.
-   - **CRITICAL:** Many teams use new 2025/2026 sponsors. Verify the *current* commercial reality.
-   - Example: "Uno-X Mobility" is a specific fuel/mobility sub-brand of Reitan, distinct from just "Uno-X".
+2. **Be Self-Critical and Conservative:**
+   - If you're uncertain whether a word is a sponsor or descriptor, mark confidence lower
+   - Don't guess - if the team name is ambiguous, reduce confidence to <85%
+   - Example uncertainties that should reduce confidence:
+     * Unclear brand boundaries ("Modern Adventure" vs "Modern" + "Adventure"?)
+     * Potential descriptors ("Pro", "Cycling", "Team", "Racing")
+     * Regional variants ("Lotto NL" vs "Lotto")
+   - Better to have a human review an 80% confidence case than auto-approve a wrong extraction
 
-4. **Examples:**
-   - "Bahrain Victorious" → sponsor: "Bahrain", descriptor: "Victorious"
-   - "Ineos Grenadiers" → sponsor: "Ineos Grenadier" (brand of INEOS Group), descriptor: "s"
-   - "Uno-X Mobility" → sponsor: "Uno-X Mobility" (Single brand)
-   - "XDS Astana Team" → sponsors: ["XDS", "Astana"], filler: "Team"
-   - "UAE Team Emirates XRG" → sponsors: ["UAE", "Emirates", "XRG"]
-   - "Lotto NL Jumbo Team" → sponsors: ["Lotto NL", "Jumbo"], filler: "Team"
+3. **Verify Partial Matches:**
+   - The partial matches from DB may be incorrect or incomplete
+   - Re-verify ALL parts independently
+   - Example: If DB matched "Lotto" but team is "Lotto NL Jumbo", "Lotto" alone is wrong
 
-5. **Parent Companies:**
-   - If you know the parent company, include it (e.g., "Ineos Grenadier" → INEOS Group)
-   - If uncertain, leave as null
+4. **Handle Compound Brands Correctly:**
+   - DO NOT split compound brands (e.g., "Uno-X Mobility" is ONE brand)
+   - DO NOT include the full team name as a sponsor (e.g., "XDS Astana Team" → ["XDS", "Astana"], NOT the full name)
+   - Handle multi-word brand names (e.g., "Ineos Grenadier" not just "Ineos")
 
-6. **Regional Note:**
-   - "Lotto NL" and "Lotto Belgium" are SEPARATE companies, not variants
+5. **Examples of TITLE Sponsors (what TO extract):**
+   - "Bahrain Victorious" → ["Bahrain"]
+   - "Ineos Grenadiers" → ["Ineos Grenadier"] (brand of INEOS Group)
+   - "Uno-X Mobility" → ["Uno-X Mobility"]
+   - "XDS Astana Team" → ["XDS", "Astana"]
+   - "UAE Team Emirates XRG" → ["UAE", "Emirates", "XRG"]
+   - "Alpecin - Premier Tech" → ["Alpecin", "Premier Tech"]
+   - "Soudal - Quick Step" → ["Soudal", "Quick Step"]
+   - "Modern Adventure Pro Cycling" → ["Modern Adventure"] (if certain it's a brand; otherwise confidence <85%)
 
-Provide your analysis with high confidence and clear reasoning.
+6. **Examples of NON-title words (what NOT to extract):**
+   - Team descriptors: "Victorious", "Grenadiers", "United", "Development"
+   - Generic terms: "Team", "Pro", "Cycling", "Racing"
+   - Equipment brands appearing outside the team name (handled by scraper)
+
+7. **Parent Companies and Abbreviations:**
+   - Include parent company ONLY if you're certain (e.g., "Ineos Grenadier" → INEOS Group)
+   - Known abbreviations should reference full parent names:
+     * "FDJ" or "FDJ United" → parent: "Française des Jeux" (French national lottery)
+     * "UAE" → parent: "Emirates" or "United Arab Emirates"
+     * "DSM" → parent: "Royal DSM" (Dutch multinational)
+   - **COUNTRY-AWARE DISAMBIGUATION (Critical):**
+     * "Lotto" for BELGIAN teams (BEL) → parent: "Nationale Loterij" (Belgian national lottery)
+     * "Lotto" for ITALIAN teams (ITA) → "Lotto Sport Italia" (Italian sports brand)
+     * "Lotto" without clear country context → Leave parent as null, set confidence <85%
+   - If uncertain, leave parent as null
+   - Don't guess at corporate structures
+
+8. **Brand Colors - BE SPECIFIC AND ACCURATE:**
+   - Research/recall the EXACT official brand color, not a generic approximation
+   - Examples of GOOD colors (specific, brand-accurate):
+     * Alpecin: #009DE0 (sky blue)
+     * Bahrain: #DD2A4C (coral pink)  
+     * INEOS: #1A1F5F (navy blue)
+     * Red Bull: #123375 (dark blue, NOT red!)
+     * Soudal: #FFD700 (gold/yellow)
+   - Examples of POOR colors to AVOID:
+     * Generic #FF0000 (pure red) - very few brands use this exact shade
+     * Generic #0000FF (pure blue) - too bright, most brands use custom blues
+     * #000000 (black) - only use if brand truly uses black as primary (rare)
+   - **CRITICAL**: If you don't know the exact official shade, leave NULL rather than guessing
+   - Generic colors reduce data quality - it's better to have no color than wrong color
+
+9. **Industry Sector:**
+   - Classify the sponsor's primary business sector
+   - Use ONE of these categories:
+     * "Banking & Financial Services"
+     * "Technology"
+     * "Healthcare & Pharma"
+     * "Food & Beverage"
+     * "Automotive"
+     * "Energy & Utilities"
+     * "Retail & Consumer Goods"
+     * "Real Estate & Construction"
+     * "Telecommunications"
+     * "Tourism & Hospitality"
+     * "Government & Public"
+     * "Other"
+   - Examples:
+     * Alpecin → "Healthcare & Pharma" (hair care products)
+     * Bahrain → "Tourism & Hospitality"
+     * BORA → "Retail & Consumer Goods" (home appliances)
+     * Red Bull → "Food & Beverage"
+
+10. **Source URL:**
+    - Provide the sponsor's official website OR Wikipedia page
+    - Format: Full URL starting with https://
+    - Examples:
+      * https://www.alpecin.com
+      * https://en.wikipedia.org/wiki/Bahrain
+    - Use for manual verification and research
+    - Leave null if you cannot determine a reliable source
+
+11. **Confidence Scoring:**
+   - 0.95-1.0: Extremely clear, well-known brands ("Bahrain Victorious", "UAE Emirates")
+   - 0.90-0.94: Clear brands, minor ambiguity ("Alpecin - Premier Tech")
+   - 0.85-0.89: Some uncertainty in brand boundaries or recognition
+   - <0.85: Significant uncertainty - prefer human review
+
+Provide your analysis with honest confidence assessment and clear reasoning.
+If you're not certain, SAY SO in your reasoning and lower the confidence.
 """
 
 
@@ -209,3 +329,43 @@ class ScraperPrompts:
             response_model=SponsorExtractionResult,
             prompt_type=PromptType.SPONSOR_EXTRACTION
         )
+
+    async def extract_lineage_events(
+        self,
+        team_name: str,
+        context: str,
+        year: int,
+        wikipedia_content: str,
+        available_teams: List[str] = None
+    ) -> List[dict]:
+        """Extract lineage events from Wikipedia content.
+        
+        Args:
+            team_name: Name of the team being analyzed.
+            context: "ending" or "starting" - indicates if team ended or started.
+            year: The year of the transition.
+            wikipedia_content: Concatenated Wikipedia history from all languages.
+            available_teams: List of team names from DB for LLM to pick from.
+            
+        Returns:
+            List of lineage event dicts with event_type, target_name, confidence, reasoning.
+        """
+        # Format available teams as bullet list or "None provided"
+        teams_str = "\n".join(f"- {t}" for t in (available_teams or [])) or "None provided"
+        
+        prompt = EXTRACT_LINEAGE_EVENTS_PROMPT.format(
+            team_name=team_name,
+            context=context,
+            year=year,
+            wikipedia_content=wikipedia_content[:8000],  # Limit to avoid token limits
+            available_teams=teams_str
+        )
+        
+        result = await self._llm.generate_structured(
+            prompt=prompt,
+            response_model=LineageEventsExtraction,
+            prompt_type=PromptType.DECIDE_LINEAGE  # Reuse lineage config
+        )
+        
+        # Convert to list of dicts for easier handling
+        return [event.model_dump() for event in result.events] if result.events else []
