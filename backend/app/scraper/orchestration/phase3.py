@@ -196,10 +196,17 @@ class LineageExtractor:
         if status == EditStatus.APPROVED:
             target_name = event.get("target_name")
             if target_name:
-                # Look up the target team node
-                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
+                # Look up the target team node - try exact match first, then ILIKE
+                # First try exact match
+                stmt = select(TeamNode).where(TeamNode.legal_name == target_name)
                 result = await self._session.execute(stmt)
                 target_node = result.scalar_one_or_none()
+                
+                # If no exact match, try ILIKE with first result
+                if not target_node:
+                    stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{target_name}%"))
+                    result = await self._session.execute(stmt)
+                    target_node = result.scalars().first()
                 
                 if target_node:
                     # Map event types to LineageEventType enum
