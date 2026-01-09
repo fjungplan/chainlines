@@ -208,43 +208,59 @@ class LineageExtractor:
         if status == EditStatus.APPROVED:
             target_name = event.get("target_name")
             if target_name:
-                # Split target name and use first significant word for matching
-                # This handles cases like "Lotto - Intermarché" → match on "Lotto"
+                # ASCII normalization approach: normalize both target and DB names
+                # Focus on character corruption (Unicode/ASCII issues)
                 import unicodedata
-                from sqlalchemy import func
+                from difflib import SequenceMatcher
                 
-                # Normalize and get first word (skip short words like "Pro", "Team")
-                target_normalized = unicodedata.normalize('NFKD', target_name).encode('ASCII', 'ignore').decode('ASCII')
-                words = [w for w in target_normalized.split() if len(w) > 3 and w not in ('Team', 'Pro', 'Racing')]
-                first_word = words[0] if words else target_normalized
+                def normalize_to_ascii(s: str) -> str:
+                    """Normalize string to ASCII for comparison."""
+                    return unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII').lower().strip()
                 
-                # Use PostgreSQL unaccent for accent-insensitive matching
-                # Fallback: if unaccent not available, use first word ILIKE
-                try:
-                    stmt = select(TeamNode).where(
-                        func.unaccent(TeamNode.legal_name).ilike(f"%{first_word}%")
-                    )
-                    result = await self._session.execute(stmt)
-                    target_node = result.scalars().first()
-                except Exception:
-                    # Fallback without unaccent
-                    stmt = select(TeamNode).where(TeamNode.legal_name.ilike(f"%{first_word}%"))
-                    result = await self._session.execute(stmt)
-                    target_node = result.scalars().first()
+                target_normalized = normalize_to_ascii(target_name)
                 
-                # Fallback: search by TeamEra.registered_name (handles temporal naming)
-                # e.g., "Lotto" (2025 name) → "Lotto - Intermarché" (2026 name)
-                if not target_node:
-                    from app.models.team import TeamEra
-                    from sqlalchemy.orm import selectinload
-                    stmt = select(TeamEra).where(
-                        TeamEra.registered_name.ilike(f"%{target_name}%")
-                    ).options(selectinload(TeamEra.node))
-                    result = await self._session.execute(stmt)
-                    era = result.scalars().first()
-                    if era and era.node:
-                        target_node = era.node
-                        logger.info(f"    ↳ Resolved '{target_name}' via era name → {target_node.legal_name}")
+                # Fetch all team names and find best match based on normalized comparison
+                stmt = select(TeamNode)
+                result = await self._session.execute(stmt)
+                all_nodes = result.scalars().all()
+                
+                best_match = None
+                best_score = 0.0
+                
+                for node in all_nodes:
+                    node_normalized = normalize_to_ascii(node.legal_name)
+                    # Use SequenceMatcher for similarity (handles corruption better than exact match)
+                    score = SequenceMatcher(None, target_normalized, node_normalized).ratio()
+                    if score > best_score:
+                        best_score = score
+                        best_match = node
+                
+                # Also check era registered_name for temporal name resolution
+                from app.models.team import TeamEra
+                stmt_era = select(TeamEra).options(selectinload(TeamEra.node))
+                result_era = await self._session.execute(stmt_era)
+                all_eras = result_era.scalars().all()
+                
+                for era in all_eras:
+                    if era.registered_name and era.node:
+                        era_normalized = normalize_to_ascii(era.registered_name)
+                        score = SequenceMatcher(None, target_normalized, era_normalized).ratio()
+                        if score > best_score:
+                            best_score = score
+                            best_match = era.node
+                
+                # Thresholds:
+                # >= 0.95: Auto-create LineageEvent (high confidence)
+                # 0.80-0.95: Log warning, don't create (needs manual review)
+                # < 0.80: No match found
+                target_node = None
+                if best_score >= 0.95:
+                    target_node = best_match
+                    logger.info(f"    ↳ Matched '{target_name}' → {best_match.legal_name} (score: {best_score:.2f})")
+                elif best_score >= 0.80:
+                    logger.warning(f"    ⚠ Low confidence match '{target_name}' → {best_match.legal_name} (score: {best_score:.2f}) - needs manual review")
+                else:
+                    logger.warning(f"    ✗ No confident match for '{target_name}' (best: {best_match.legal_name if best_match else 'None'}, score: {best_score:.2f})")
                 
                 if target_node:
                     # Map event types to LineageEventType enum
