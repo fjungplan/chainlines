@@ -114,16 +114,18 @@ class LineageExtractor:
     async def analyze_ending_node(
         self,
         node_info: Dict[str, Any],
-        available_teams: Optional[List[str]] = None
+        available_teams: Optional[List[str]] = None,
+        event_year_override: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Analyze an ending node to find what it became.
+        Analyze an ending node to find where it went.
         
         Args:
             node_info: Dict with team info including wikipedia_summary
             available_teams: Optional list of team names from DB for LLM to pick from
+            event_year_override: Optional year to use for the event (e.g. node_year + 1)
         
-        Returns list of lineage events found (SUCCEEDED_BY, JOINED, SPLIT_INTO, etc.)
+        Returns list of lineage events found (SUCCEEDED_BY, JOINED, SPLIT_INTO, MERGED_WITH)
         """
         if not node_info.get("wikipedia_summary"):
             logger.info(f"  Skipping {node_info['name']} - no Wikipedia content")
@@ -134,15 +136,24 @@ class LineageExtractor:
             context="ending",
             year=node_info["year"],
             wikipedia_content=node_info["wikipedia_summary"],
-            available_teams=available_teams or []
+            available_teams=available_teams or [],
         )
+        
+        if events:
+            for event in events:
+                await self.create_lineage_record(
+                    node_info, 
+                    event, 
+                    event_year_override=event_year_override
+                )
         
         return events or []
     
     async def analyze_starting_node(
         self,
         node_info: Dict[str, Any],
-        available_teams: Optional[List[str]] = None
+        available_teams: Optional[List[str]] = None,
+        event_year_override: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Analyze a starting node to find where it came from.
@@ -150,6 +161,7 @@ class LineageExtractor:
         Args:
             node_info: Dict with team info including wikipedia_summary
             available_teams: Optional list of team names from DB for LLM to pick from
+            event_year_override: Optional year to use for the event if different from node year
         
         Returns list of lineage events found (SUCCESSOR_OF, BREAKAWAY_FROM, MERGER_OF, etc.)
         """
@@ -162,47 +174,59 @@ class LineageExtractor:
             context="starting",
             year=node_info["year"],
             wikipedia_content=node_info["wikipedia_summary"],
-            available_teams=available_teams or []
+            available_teams=available_teams or [],
         )
+        
+        if events:
+            for event in events:
+                await self.create_lineage_record(
+                    node_info, 
+                    event,
+                    event_year_override=event_year_override
+                )
         
         return events or []
     
     async def create_lineage_record(
         self,
         source_node: Dict[str, Any],
-        event: Dict[str, Any]
+        event: Dict[str, Any],
+        event_year_override: Optional[int] = None
     ) -> None:
-        """Create an audit log entry for a detected lineage event.
-        
-        When status is APPROVED, also inserts the actual LineageEvent record.
         """
-        from sqlalchemy import select
-        from app.models.lineage import LineageEvent
-        from app.models.team import TeamNode
-        from app.models.enums import LineageEventType
+        Create a LineageEvent record, with audit logging.
         
-        status = (
-            EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD
-            else EditStatus.PENDING
-        )
-        
-        await self._audit.create_edit(
-            session=self._session,
-            user_id=self._user_id,
-            entity_type="LineageEvent",
-            entity_id=None,
-            action=EditAction.CREATE,
-            old_data=None,
-            new_data={
-                "event_type": event.get("event_type"),
-                "source_team": source_node["name"],
+        Args:
+            source_node: Dict with node_id, name, etc.
+            event: Dict with event_type, target_name, confidence, reasoning
+            event_year_override: Optional year to use for the event (e.g. for ending nodes, use year+1)
+        """
+        # Create an audit log entry first
+        try:
+            edit_context = {
+                "source_node": source_node["name"],
                 "target_team": event.get("target_name"),
-                "year": source_node["year"],
-                "reasoning": event.get("reasoning"),
-                "confidence": event.get("confidence")
-            },
-            status=status
-        )
+                "event_type": event.get("event_type"),
+                "confidence": event.get("confidence"),
+                "reasoning": event.get("reasoning")
+            }
+            
+            status = EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD else EditStatus.PENDING
+            
+            await self._audit.create_edit(
+                entity_type="LineageEvent",
+                entity_id=UUID(int=0),  # Placeholder, will be linked if created
+                user_id=self._user_id,
+                action=EditAction.CREATE,
+                status=status,
+                snapshot_before=None,
+                snapshot_after=event,
+                source="System: Auto-approved (High Confidence)" if status == EditStatus.APPROVED else "System: Low Confidence"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to create audit log for lineage event: {e}")
+            # Continue anyway? Or fail? For now, log and continue as this is critical path
         
         # If APPROVED, create the actual LineageEvent record
         if status == EditStatus.APPROVED:
@@ -282,7 +306,7 @@ class LineageExtractor:
                         lineage_event = LineageEvent(
                             predecessor_node_id=source_node["node_id"],
                             successor_node_id=target_node.node_id,
-                            event_year=source_node["year"],
+                            event_year=event_year_override if event_year_override is not None else source_node["year"],
                             event_type=lineage_type,
                             notes=event.get("reasoning"),
                             created_by=self._user_id
@@ -365,13 +389,20 @@ class LineageOrchestrator:
                 await self._monitor.check_status()
             
             logger.info(f"  Analyzing ending: {node['name']}")
-            events = await self._extractor.analyze_ending_node(node, available_teams=available_teams)
+            # For ending nodes (e.g., year=2025), the event (merge/transfer) effectively
+            # happens at the start of the NEXT season (2026).
+            events = await self._extractor.analyze_ending_node(
+                node, 
+                available_teams=available_teams,
+                event_year_override=node['year'] + 1
+            )
             
             if events:
                 logger.info(f"    Found {len(events)} lineage event(s)")
                 for event in events:
                     logger.info(f"      - {event.get('event_type')}: {event.get('target_name')} (conf: {event.get('confidence')})")
-                    await self._extractor.create_lineage_record(node, event)
+                    # Note: analyze_ending_node now handles calling create_lineage_record
+                    # with the correct override passed down.
             else:
                 logger.info(f"    No lineage events detected by LLM")
             
@@ -385,13 +416,18 @@ class LineageOrchestrator:
                 await self._monitor.check_status()
             
             logger.info(f"  Analyzing starting: {node['name']}")
-            events = await self._extractor.analyze_starting_node(node, available_teams=available_teams)
+            # For starting nodes (e.g., year=2026), the event happens in that year.
+            events = await self._extractor.analyze_starting_node(
+                node, 
+                available_teams=available_teams,
+                event_year_override=node['year']
+            )
             
             if events:
                 logger.info(f"    Found {len(events)} lineage event(s)")
                 for event in events:
                     logger.info(f"      - {event.get('event_type')}: {event.get('target_name')} (conf: {event.get('confidence')})")
-                    await self._extractor.create_lineage_record(node, event)
+                    # Note: analyze_starting_node now handles calling create_lineage_record
             else:
                 logger.info(f"    No lineage events detected by LLM")
             
