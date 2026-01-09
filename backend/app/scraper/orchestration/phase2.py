@@ -174,7 +174,7 @@ class TeamAssemblyService:
         
         Creates an audit log entry for each new master.
         """
-        stmt = select(SponsorMaster).where(SponsorMaster.legal_name == legal_name)
+        stmt = select(SponsorMaster).where(SponsorMaster.legal_name.ilike(legal_name))
         result = await self._session.execute(stmt)
         master = result.scalar_one_or_none()
         
@@ -229,9 +229,9 @@ class TeamAssemblyService:
                 source_url=sponsor_info.source_url
             )
         
-        # Check if brand exists
+        # Check if brand exists (case-insensitive)
         stmt = select(SponsorBrand).where(
-            SponsorBrand.brand_name == sponsor_info.brand_name
+            SponsorBrand.brand_name.ilike(sponsor_info.brand_name)
         )
         if master:
             stmt = stmt.where(SponsorBrand.master_id == master.master_id)
@@ -376,10 +376,15 @@ class TeamAssemblyService:
             node = TeamNode(
                 legal_name=data.name,
                 founding_year=data.season_year,
+                dissolution_year=data.dissolution_year,
                 external_ids=external_ids if external_ids else None
             )
             self._session.add(node)
             await self._session.flush()  # Get node_id assigned
+        else:
+            # Update existing node if new data provides dissolution info
+            if data.dissolution_year:
+                 node.dissolution_year = data.dissolution_year
 
         era = TeamEra(
             node=node,
@@ -442,6 +447,12 @@ class TeamAssemblyService:
             # Update founding year if this season is earlier
             if node.founding_year is None or data.season_year < node.founding_year:
                 node.founding_year = data.season_year
+            
+            # Update dissolution year if provided by scraper (from dropdown analysis)
+            if data.dissolution_year:
+                # Only update if explicitly provided. 
+                # Note: We trust the scraper's max_year calculation.
+                node.dissolution_year = data.dissolution_year
 
         # Extract Wikipedia history if available
         wiki_history = None

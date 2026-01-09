@@ -24,6 +24,10 @@ class ScrapedTeamData(BaseModel):
         default_factory=list,
         description="Years available in team history dropdown (for identity matching)"
     )
+    dissolution_year: Optional[int] = Field(
+        default=None,
+        description="Year the team dissolved (derived from max year in identity group)"
+    )
     team_identity_id: Optional[str] = Field(
         default=None,
         description="Stable identity hash derived from team history dropdown"
@@ -198,12 +202,37 @@ class CyclingFlashParser:
                     continue
         
         # Generate identity from the sorted list of edition slugs
+        dissolution_year = None
+        
         if editions_slugs:
             # Sort slugs to ensure consistent identity across all pages
             sorted_slugs = sorted(editions_slugs)
             # Create hash from all slugs combined
             identity_source = ':'.join(sorted_slugs)
             team_identity_id = hashlib.md5(identity_source.encode()).hexdigest()[:16]
+            
+            # Calculate dissolution year
+            # If the current season_year is the last year in the editions list,
+            # then this team identity effectively dissolves/ends this year.
+            years = []
+            for slug in sorted_slugs:
+                # Typical format: team-name-2023
+                # We look for 4 digits at the end of the slug
+                m = re.search(r'-(\d{4})$', slug)
+                if m:
+                    years.append(int(m.group(1)))
+            
+            if years:
+                max_year = max(years)
+                # If the max year in the dropdown is LESS than the current real-world year,
+                # then the team definitely dissolved/ended in the past.
+                # We avoid using <= season_year because for current/future seasons, 
+                # max_year equals season_year but the team is active.
+                import datetime
+                current_year = datetime.datetime.now().year
+                
+                if max_year < current_year:
+                    dissolution_year = max_year
         
         
         return ScrapedTeamData(
@@ -215,6 +244,7 @@ class CyclingFlashParser:
             previous_season_url=prev_url,
             season_year=season_year,
             available_years=[],  # Not using dropdown anymore
+            dissolution_year=dissolution_year,
             team_identity_id=team_identity_id
         )
 
