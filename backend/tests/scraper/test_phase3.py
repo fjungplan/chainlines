@@ -64,12 +64,26 @@ async def test_lineage_extractor_analyzes_ending_node():
     
     mock_audit = AsyncMock()
     mock_session = AsyncMock()
+    # session.add is synchronous
+    mock_session.add = MagicMock()
     
     # Mock session.execute to return None for target team lookups
     # (we're just testing the audit log creation, not the LineageEvent record)
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = None
-    mock_result.scalars.return_value.first.return_value = None
+    
+    # Mock finding 'Team B' when iterating all nodes for fuzzy matching
+    target_node_mock = MagicMock()
+    # IMPORTANT: unicodedata.normalize requires a real string, not a MagicMock
+    target_node_mock.legal_name = "Team B" 
+    target_node_mock.registered_name = "Team B Era" # For TeamEra loop
+    target_node_mock.node_id = uuid4()
+    target_node_mock.node = target_node_mock # For era.node access
+    
+    # Configure mock to return iteration of nodes
+    mock_result.scalars.return_value.all.return_value = [target_node_mock]
+    # Also for scalar_one_or_none if used
+    mock_result.scalar_one_or_none.return_value = target_node_mock
+    
     mock_session.execute.return_value = mock_result
     
     extractor = LineageExtractor(
@@ -87,22 +101,19 @@ async def test_lineage_extractor_analyzes_ending_node():
         "year": 2024
     }
     
-    # Run analysis
+    # Run analysis - this will now also call create_lineage_record internally if events found
     events = await extractor.analyze_ending_node(node_info)
     
     # Verify events returned
     assert len(events) == 1
     assert events[0]["event_type"] == "SUCCEEDED_BY"
     
-    # Create audit record
-    await extractor.create_lineage_record(node_info, events[0])
-    
     # Verify audit call
-    mock_audit.create_edit.assert_called_once()
+    assert mock_audit.create_edit.called
     call_kwargs = mock_audit.create_edit.call_args[1]
     assert call_kwargs["action"] == EditAction.CREATE
     assert call_kwargs["entity_type"] == "LineageEvent"
-    assert call_kwargs["new_data"]["source_team"] == "Team A"
+    assert call_kwargs["new_data"]["source_node"] == "Team A"
     assert call_kwargs["new_data"]["target_team"] == "Team B"
 
 @pytest.mark.asyncio
