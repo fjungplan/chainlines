@@ -82,7 +82,7 @@ class BoundaryNodeDetector:
     def _node_to_dict(self, node: TeamNode, reference_year: int) -> Dict[str, Any]:
         """Convert TeamNode to dict for lineage analysis."""
         return {
-            "id": node.node_id,
+            "node_id": node.node_id,
             "name": node.legal_name,
             "year": reference_year,
             "uci_code": node.latest_uci_code,
@@ -278,16 +278,21 @@ class LineageExtractor:
                     }
                     lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.LEGAL_TRANSFER)
                     
-                    lineage_event = LineageEvent(
-                        predecessor_node_id=source_node["node_id"],
-                        successor_node_id=target_node.node_id,
-                        event_year=source_node["year"],
-                        event_type=lineage_type,
-                        notes=event.get("reasoning"),
-                        created_by=self._user_id
-                    )
-                    self._session.add(lineage_event)
-                    logger.info(f"    ✓ Created LineageEvent record: {source_node['name']} → {target_node.legal_name}")
+                    try:
+                        lineage_event = LineageEvent(
+                            predecessor_node_id=source_node["node_id"],
+                            successor_node_id=target_node.node_id,
+                            event_year=source_node["year"],
+                            event_type=lineage_type,
+                            notes=event.get("reasoning"),
+                            created_by=self._user_id
+                        )
+                        self._session.add(lineage_event)
+                        logger.info(f"    ✓ Created LineageEvent record: {source_node['name']} → {target_node.legal_name}")
+                    except Exception as e:
+                        logger.error(f"    ⚠ Error creating LineageEvent: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
                 else:
                     logger.warning(f"    ✗ Could not find target team '{target_name}' for LineageEvent")
         
