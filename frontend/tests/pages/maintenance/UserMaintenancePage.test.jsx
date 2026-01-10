@@ -22,31 +22,8 @@ describe('UserMaintenancePage Initial Load', () => {
         vi.clearAllMocks();
     });
 
-    it('waits for auth loading to finish before fetching users', async () => {
-        // Mock isAdmin false and loading true initially
-        const isAdminMock = vi.fn().mockReturnValue(false);
-        authContext.useAuth.mockReturnValue({
-            user: null,
-            loading: true,
-            isAdmin: isAdminMock,
-        });
-
-        usersApi.getUsers.mockResolvedValue({
-            items: [{ user_id: '123', display_name: 'Test User', email: 'test@example.com', role: 'EDITOR', is_banned: false }],
-            total: 1
-        });
-
-        const { rerender } = render(
-            <MemoryRouter>
-                <UserMaintenancePage />
-            </MemoryRouter>
-        );
-
-        // Should not show Access Denied yet (it might show loading spinner if we implemented it, or nothing)
-        // But most importantly, it should NOT call getUsers
-        expect(usersApi.getUsers).not.toHaveBeenCalled();
-
-        // Simulate Auth resolution (Loading finished, is Admin)
+    it('fetches users after debounce delay on mount', async () => {
+        // Mock isAdmin only (authLoading not needed anymore as per recent refactor)
         const isAdminResolved = vi.fn().mockReturnValue(true);
         authContext.useAuth.mockReturnValue({
             user: { name: 'Admin' },
@@ -54,15 +31,20 @@ describe('UserMaintenancePage Initial Load', () => {
             isAdmin: isAdminResolved,
         });
 
-        rerender(
+        usersApi.getUsers.mockResolvedValue({
+            items: [{ user_id: '123', display_name: 'Test User', email: 'test@example.com', role: 'EDITOR', is_banned: false }],
+            total: 1
+        });
+
+        render(
             <MemoryRouter>
                 <UserMaintenancePage />
             </MemoryRouter>
         );
 
-        // Now it should trigger the fetch
+        // Should call getUsers after delay
         await waitFor(() => {
-            expect(usersApi.getUsers).toHaveBeenCalled();
+            expect(usersApi.getUsers).toHaveBeenCalledWith({ search: '', limit: 100 });
         }, { timeout: 2000 });
 
         expect(screen.getByText('Test User')).toBeInTheDocument();
