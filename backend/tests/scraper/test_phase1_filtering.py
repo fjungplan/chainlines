@@ -15,12 +15,23 @@ def service():
     scraper = MagicMock()
     checkpoint = MagicMock()
     
+    # Mock identity index
+    idx = MagicMock()
+    # Use a real set for side effects so logical tests pass
+    idx_set = set()
+    idx.is_known.side_effect = lambda x: x in idx_set
+    idx.add.side_effect = lambda x: idx_set.add(x)
+    
     # Instantiate with required mocks
-    s = DiscoveryService(scraper=scraper, checkpoint_manager=checkpoint)
+    s = DiscoveryService(
+        scraper=scraper, 
+        checkpoint_manager=checkpoint,
+        identity_index=idx
+    )
     s._gt_index = MockGTIndex()
     
-    # Inject the set for testing
-    s._relevant_identities = set() 
+    # Expose the mock set via the service for easy test setup
+    s._identity_set_mock = idx_set 
     return s
 
 def test_is_relevant_post_1999_tier1_2(service):
@@ -36,7 +47,8 @@ def test_is_relevant_post_1999_tier3_default(service):
 def test_is_relevant_post_1999_tier3_historical(service):
     """Post-1999, Tier 3 IS relevant if identity is known (was T1/T2 before)."""
     identity = "team-historical-giant"
-    service._relevant_identities.add(identity)
+    # Update mock state
+    service._identity_set_mock.add(identity)
     
     # We need to update _is_relevant to accept identity. 
     # For TDD, we call it with the extra arg that we plan to add.

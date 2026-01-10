@@ -39,6 +39,7 @@ class DiscoveryResult:
 
 from app.scraper.monitor import ScraperStatusMonitor
 from app.scraper.services.gt_relevance import GTRelevanceIndex
+from app.scraper.services.identity_index import HistoricalIdentityIndex
 
 class DiscoveryService:
     """Orchestrates Phase 1: Team discovery and sponsor collection."""
@@ -50,7 +51,8 @@ class DiscoveryService:
         monitor: Optional[ScraperStatusMonitor] = None,
         session: Optional[AsyncSession] = None,
         llm_prompts: Optional["ScraperPrompts"] = None,
-        gt_index: Optional[GTRelevanceIndex] = None
+        gt_index: Optional[GTRelevanceIndex] = None,
+        identity_index: Optional[HistoricalIdentityIndex] = None
     ):
         self._scraper = scraper
         self._checkpoint = checkpoint_manager
@@ -59,8 +61,8 @@ class DiscoveryService:
         self._session = session
         self._llm_prompts = llm_prompts
         self._gt_index = gt_index or GTRelevanceIndex()
+        self._identity_index = identity_index or HistoricalIdentityIndex()
         self._retry_queue: List[Tuple[str, dict]] = []  # (team_name, context)
-        self._relevant_identities: Set[str] = set() # Dynamic index of team identities seen in T1/2
         
         # Initialize brand matcher if session available
         self._brand_matcher = BrandMatcherService(session) if session else None
@@ -80,7 +82,8 @@ class DiscoveryService:
         logger.info(
             f"DiscoveryService initialized with "
             f"LLM extraction: {llm_prompts is not None}, "
-            f"Brand matching: {self._brand_matcher is not None}"
+            f"Brand matching: {self._brand_matcher is not None}, "
+            f"Known identities: {len(self._identity_index.get_all())}"
         )
 
     
@@ -131,7 +134,7 @@ class DiscoveryService:
                     # Dynamic Relevance: Capture identity if currently relevant (Tier 1/2) for future reference
                     if data.tier_level in (1, 2):
                         if data.team_identity_id:
-                            self._relevant_identities.add(data.team_identity_id)
+                            self._identity_index.add(data.team_identity_id)
 
                     if not self._is_relevant(data.name, data.tier_level, year, data.team_identity_id):
                         logger.info(f"{prefix}: SKIPPING '{data.name}' - Irrelevant via rules (Tier {data.tier_level} in {year})")
@@ -198,7 +201,7 @@ class DiscoveryService:
         - Pre-1991: Keep ONLY if in GT index.
         """
         # Dynamic Relevance: If this identity was previously seen as Tier 1/2, keep it even if currently Tier 3
-        if team_identity and team_identity in self._relevant_identities:
+        if team_identity and self._identity_index.is_known(team_identity):
             # logger.info(f"Retaining Tier {tier} team '{team_name}' due to historical relevance ({team_identity})")
             return True
 
