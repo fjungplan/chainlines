@@ -60,6 +60,7 @@ class DiscoveryService:
         self._llm_prompts = llm_prompts
         self._gt_index = gt_index or GTRelevanceIndex()
         self._retry_queue: List[Tuple[str, dict]] = []  # (team_name, context)
+        self._relevant_identities: Set[str] = set() # Dynamic index of team identities seen in T1/2
         
         # Initialize brand matcher if session available
         self._brand_matcher = BrandMatcherService(session) if session else None
@@ -127,7 +128,12 @@ class DiscoveryService:
                         continue
 
                     # 2. Then apply relevance rules (Dual Seeding)
-                    if not self._is_relevant(data.name, data.tier_level, year):
+                    # Dynamic Relevance: Capture identity if currently relevant (Tier 1/2) for future reference
+                    if data.tier_level in (1, 2):
+                        if data.team_identity_id:
+                            self._relevant_identities.add(data.team_identity_id)
+
+                    if not self._is_relevant(data.name, data.tier_level, year, data.team_identity_id):
                         logger.info(f"{prefix}: SKIPPING '{data.name}' - Irrelevant via rules (Tier {data.tier_level} in {year})")
                         continue
                         
@@ -178,19 +184,31 @@ class DiscoveryService:
             sponsor_names=self._collector.get_all()
         )
     
-    def _is_relevant(self, team_name: str, tier: int, year: int) -> bool:
+    def _is_relevant(
+        self, 
+        team_name: str, 
+        tier: int, 
+        year: int,
+        team_identity: Optional[str] = None
+    ) -> bool:
         """
         Apply relevance filtering rules.
-        - Post-1999: Keep Tier 1 and 2 only.
+        - Post-1999: Keep Tier 1 and 2. Keep Tier 3 IF likely relevant (identity seen in T1/T2).
         - 1991-1998: Keep Tier 1. Keep Tier 2 ONLY if in GT index.
         - Pre-1991: Keep ONLY if in GT index.
         """
+        # Dynamic Relevance: If this identity was previously seen as Tier 1/2, keep it even if currently Tier 3
+        if team_identity and team_identity in self._relevant_identities:
+            # logger.info(f"Retaining Tier {tier} team '{team_name}' due to historical relevance ({team_identity})")
+            return True
+
         if year >= 1999:
             return tier in (1, 2)
         elif year >= 1991:
             if tier == 1:
                 return True
             elif tier == 2:
+                # Relaxed: Also check GT index for Tier 2 in this era
                 return self._gt_index.is_relevant(team_name, year)
             return False
         else:  # Pre-1991
