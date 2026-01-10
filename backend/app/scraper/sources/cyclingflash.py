@@ -1,11 +1,12 @@
 """CyclingFlash scraper implementation."""
 import re
 import hashlib
-from typing import Optional, List
+from typing import Optional, List, Dict
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 from app.scraper.base import BaseScraper
 from app.scraper.llm.models import SponsorInfo
+
 
 class ScrapedTeamData(BaseModel):
     """Data scraped from a team's detail page."""
@@ -31,6 +32,10 @@ class ScrapedTeamData(BaseModel):
     team_identity_id: Optional[str] = Field(
         default=None,
         description="Stable identity hash derived from team history dropdown"
+    )
+    editions: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Full map of edition slugs to names (e.g. {'slug-2024': 'Name (2024)'})"
     )
 
 class CyclingFlashParser:
@@ -105,9 +110,43 @@ class CyclingFlashParser:
         return result
 
 
-    def parse_team_detail(self, html: str, season_year: int, url: str = None) -> ScrapedTeamData:
-        """Extract team data from detail page."""
-        soup = BeautifulSoup(html, 'html.parser')
+    def parse_team_detail(self, html_content: str, team_id_slug: str, fallback_year: Optional[int] = None) -> ScrapedTeamData:
+        """
+        Parse team detail page to extract:
+        - Team name
+        - UCI code
+        - Tier level
+        - Country code
+        - Sponsors (title and equipment)
+        - Previous season URL
+        - Season year (derived from team_id_slug)
+        - Team identity ID (stable hash across seasons)
+        - Dissolution year (if applicable)
+        - All available editions (for identity matching)
+        
+        Args:
+            html_content: Raw HTML of the team detail page.
+            team_id_slug: The slug used to identify the team and season (e.g., "team-name-2024").
+                          This is used to derive the season_year.
+            fallback_year: Optional year to use if extraction from slug fails.
+        
+        Returns:
+            A ScrapedTeamData object containing the extracted information.
+        """
+        
+        # Extract season_year from team_id_slug
+        # Handle slugs with suffixes like "team-name-2026-2" (duplicate handling)
+        match = re.search(r'-(\d{4})(?:-[^/]+)?$', team_id_slug)
+        
+        if match:
+            season_year = int(match.group(1))
+        elif fallback_year:
+            # Fallback to provided year (e.g. from the list page context)
+            season_year = fallback_year
+        else:
+            raise ValueError(f"Could not extract season year from team_id_slug: {team_id_slug}")
+
+        soup = BeautifulSoup(html_content, 'html.parser')
         
         # Extract name from H1 (remove year suffix)
         header = soup.select_one('h1')
@@ -173,33 +212,81 @@ class CyclingFlashParser:
         # CyclingFlash embeds team lineage in __next_f.push script tags
         # Format: self.__next_f.push([...,"editions":{"slug-2026":"Name (2026)",...},...])
         team_identity_id = None
+        editions_data_dict = {}
         
         # Find all script tags containing __next_f.push
         scripts = soup.find_all('script')
         editions_slugs = []
-        
-        
+
+        import json
+
         for script in scripts:
             script_text = script.string
-            if script_text and '\\"editions\\"' in script_text:
-                # Extract editions using regex - handles escaped quotes in script
-                import json
-                try:
-                    # Match \"editions\":{...} where {...} contains the slug mappings
-                    # The editions object is flat (no nested braces)
-                    # Note: script contains escaped quotes like \"editions\":{\"slug\":\"Name\"}
-                    match = re.search(r'\\"editions\\":\{([^}]+)\}', script_text)
-                    if match:
-                        editions_content = match.group(1)
-                        # Unescape the content and build valid JSON
-                        editions_content = editions_content.replace('\\"', '"')
-                        editions_json = '{"editions":{' + editions_content + '}}'
-                        editions_data = json.loads(editions_json)
-                        editions_slugs = list(editions_data.get('editions', {}).keys())
-                        if editions_slugs:
+            if not script_text:
+                continue
+
+            # Robust Parsing Strategy: Find "editions" key then find nearest {
+            # This handles both escaped \"editions\":{ and unescaped "editions":{
+            
+            if "editions" in script_text:
+                key_idx = script_text.find("editions")
+                
+                # Find the opening brace after the key
+                brace_start = script_text.find("{", key_idx)
+                
+                if brace_start != -1:
+                    # Verify it looks like a key-value pair (must contain colon)
+                    segment = script_text[key_idx:brace_start]
+                    if ":" in segment and len(segment) < 20:
+                        # Proceed
+                        pass
+                    else:
+                        continue
+                        
+                    # Extract the JSON object by bracket counting
+                    nesting = 0
+                    json_str = ""
+                    found_end = False
+                    
+                    for i in range(brace_start, len(script_text)):
+                        char = script_text[i]
+                        json_str += char
+                        
+                        if char == '{':
+                            nesting += 1
+                        elif char == '}':
+                            nesting -= 1
+                        
+                        if nesting == 0:
+                            found_end = True
                             break
-                except (json.JSONDecodeError, ValueError):
-                    continue
+                    
+                    if found_end:
+                        # Unescape the JSON string found inside the JS string
+                        # It usually has escaped quotes: \"key\": \"value\"
+                        clean_json = json_str.replace('\\"', '"')
+                        clean_json = clean_json.replace('\\\\', '\\') # Handle escaped backslashes too if any
+
+                        # print(f"DEBUG: Extracted JSON: {clean_json[:50]}...")
+
+                        try:
+                            parsed_editions = json.loads(clean_json)
+                            # Verify content looks like editions map
+                            # Keys should satisfy regex or just be checked later
+                            editions_slugs = list(parsed_editions.keys())
+                            if editions_slugs:
+                                # Found it!
+                                # print(f"DEBUG: Successfully parsed {len(editions_slugs)} editions")
+                                
+                                # Convert simple name values to the dict format expected
+                                # Or just store them as is if they match ScrapedTeamData expectation
+                                # ScrapedTeamData.editions is Dict[str, str]
+                                
+                                editions_data_dict = parsed_editions
+                                break
+                        except json.JSONDecodeError:
+                            continue
+
         
         # Generate identity from the sorted list of edition slugs
         dissolution_year = None
@@ -245,8 +332,10 @@ class CyclingFlashParser:
             season_year=season_year,
             available_years=[],  # Not using dropdown anymore
             dissolution_year=dissolution_year,
-            team_identity_id=team_identity_id
+            team_identity_id=team_identity_id,
+            editions=editions_data_dict # Store full editions
         )
+
 
     def _get_text(self, soup: BeautifulSoup, selector: str) -> Optional[str]:
         """Safely extract text from selector."""
@@ -291,4 +380,4 @@ class CyclingFlashScraper(BaseScraper):
         """Get team details from a team page."""
         url = f"{self.BASE_URL}{path}" if not path.startswith("http") else path
         html = await self.fetch(url)
-        return self._parser.parse_team_detail(html, season_year, path)
+        return self._parser.parse_team_detail(html, team_id_slug=path.rsplit('/', 1)[-1], fallback_year=season_year)

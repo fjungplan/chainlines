@@ -141,7 +141,7 @@ async def test_full_sponsor_extraction_pipeline(
     
     # Phase 1: Scrape and extract
     # Use _parser directly as per findings
-    team_data = scraper._parser.parse_team_detail(real_html_fixture, season_year=2024)
+    team_data = scraper._parser.parse_team_detail(real_html_fixture, team_id_slug="team-jumbo-visma-2024")
     
     sponsors, confidence = await discovery._extract_sponsors(
         team_name=team_data.name,

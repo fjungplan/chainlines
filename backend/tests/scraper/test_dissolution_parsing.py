@@ -18,7 +18,7 @@ async def test_dissolution_year_extraction():
     self.__next_f.push([1,"...\\\"editions\\\":{\\\"team-2022\\\":\\\"Name 2022\\\",\\\"team-2023\\\":\\\"Name 2023\\\"}..."])
     </script>
     """
-    data = parser.parse_team_detail(html_dissolved, season_year=2023)
+    data = parser.parse_team_detail(html_dissolved, team_id_slug="team-2023")
     assert data.dissolution_year == 2023, f"Expected dissolution_year 2023, got {data.dissolution_year}"
 
     # Scenario 2: Team continues to current year (active)
@@ -29,7 +29,7 @@ async def test_dissolution_year_extraction():
     self.__next_f.push([1,"...\\\"editions\\\":{\\\"team-2025\\\":\\\"Name 2025\\\",\\\"team-2026\\\":\\\"Name 2026\\\"}..."])
     </script>
     """
-    data_active = parser.parse_team_detail(html_active, season_year=2026)
+    data_active = parser.parse_team_detail(html_active, team_id_slug="team-2026")
     assert data_active.dissolution_year is None, f"Expected active team (None), got {data_active.dissolution_year}"
 
     # Scenario 3: Dissolved in recent past (2024)
@@ -40,7 +40,7 @@ async def test_dissolution_year_extraction():
     self.__next_f.push([1,"...\\\"editions\\\":{\\\"team-2023\\\":\\\"Name 2023\\\",\\\"team-2024\\\":\\\"Name 2024\\\"}..."])
     </script>
     """
-    data_recent = parser.parse_team_detail(html_recent, season_year=2024)
+    data_recent = parser.parse_team_detail(html_recent, team_id_slug="team-2024")
     assert data_recent.dissolution_year == 2024, f"Expected dissolved 2024, got {data_recent.dissolution_year}"
 
     # Scenario 4: Discontinuous Eras (The "Peugeot" Case - Corrected)
@@ -52,12 +52,12 @@ async def test_dissolution_year_extraction():
     self.__next_f.push([1,"...\\\"editions\\\":{\\\"team-1912\\\":\\\"Name 1912\\\",\\\"team-2008\\\":\\\"Name 2008\\\"}..."])
     </script>
     """
-    data_gap = parser.parse_team_detail(html_gap, season_year=1912)
+    data_gap = parser.parse_team_detail(html_gap, team_id_slug="team-1912")
     assert data_gap.dissolution_year == 2008, f"Expected dissolution 2008, got {data_gap.dissolution_year}"
     assert data_gap.team_identity_id is not None
     
     # Verify ID stability: Scraping 2008 yields SAME ID
-    data_gap_2008 = parser.parse_team_detail(html_gap, season_year=2008)
+    data_gap_2008 = parser.parse_team_detail(html_gap, team_id_slug="team-2008")
     assert data_gap.team_identity_id == data_gap_2008.team_identity_id, "IDs must match across gap years"
 
 if __name__ == "__main__":

@@ -176,7 +176,7 @@ class TeamAssemblyService:
         """
         stmt = select(SponsorMaster).where(SponsorMaster.legal_name.ilike(legal_name))
         result = await self._session.execute(stmt)
-        master = result.scalar_one_or_none()
+        master = result.scalars().first()
         
         if master:
             return master
@@ -197,7 +197,7 @@ class TeamAssemblyService:
             )
             # Re-fetch the created master
             result = await self._session.execute(stmt)
-            master = result.scalar_one_or_none()
+            master = result.scalars().first()
             return master
         
         # Fallback: Direct creation (legacy path, no audit)
@@ -237,7 +237,7 @@ class TeamAssemblyService:
             stmt = stmt.where(SponsorBrand.master_id == master.master_id)
         
         result = await self._session.execute(stmt)
-        brand = result.scalar_one_or_none()
+        brand = result.scalars().first()
         
         if brand:
             return brand
@@ -279,7 +279,7 @@ class TeamAssemblyService:
                 SponsorBrand.master_id == master.master_id
             )
             result = await self._session.execute(stmt)
-            brand = result.scalar_one_or_none()
+            brand = result.scalars().first()
             return brand
         
         # Fallback: Direct creation (legacy path, no audit)
@@ -359,13 +359,13 @@ class TeamAssemblyService:
                 TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
             )
             result = await self._session.execute(stmt)
-            node = result.scalar_one_or_none()
+            node = result.scalars().first()
         
         # Step 2: Fall back to legal_name match (for teams without identity)
         if not node:
             stmt = select(TeamNode).options(selectinload(TeamNode.eras)).where(TeamNode.legal_name == data.name)
             result = await self._session.execute(stmt)
-            node = result.scalar_one_or_none()
+            node = result.scalars().first()
         
         # Step 3: Create new node if not found
         if not node:
@@ -420,7 +420,7 @@ class TeamAssemblyService:
                 TeamNode.external_ids.op('->>')('cyclingflash_identity') == data.team_identity_id
             )
             result = await self._session.execute(stmt)
-            node = result.scalar_one_or_none()
+            node = result.scalars().first()
         
         # Step 2: Fall back to legal_name match
         if not node:
@@ -428,7 +428,7 @@ class TeamAssemblyService:
                 selectinload(TeamNode.eras).selectinload(TeamEra.sponsor_links)
             ).where(TeamNode.legal_name == data.name)
             result = await self._session.execute(stmt)
-            node = result.scalar_one_or_none()
+            node = result.scalars().first()
         
         # Step 3: Create new node if not found
         if not node:
@@ -473,7 +473,7 @@ class TeamAssemblyService:
         ).options(selectinload(TeamEra.sponsor_links))
         
         result_era = await self._session.execute(stmt_era)
-        existing_era = result_era.scalar_one_or_none()
+        existing_era = result_era.scalars().first()
 
         if existing_era:
             logger.info(f"    - Updating existing era for {data.name} ({data.season_year})")
