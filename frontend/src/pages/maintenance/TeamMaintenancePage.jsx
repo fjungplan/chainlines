@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../../components/Loading';
@@ -27,11 +27,13 @@ export default function TeamMaintenancePage() {
     // Sorting State
     const [sortConfig, setSortConfig] = useState({ key: 'legal_name', direction: 'asc' });
 
-    const fetchTeams = async () => {
+    const fetchTeams = async (search = '') => {
         setLoading(true);
         setError(null);
         try {
-            const data = await teamsApi.getTeams({ limit: 100 });
+            const params = { limit: 100 };
+            if (search) params.search = search;
+            const data = await teamsApi.getTeams(params);
             setTeams(data.items);
             setTotal(data.total);
         } catch (err) {
@@ -43,8 +45,17 @@ export default function TeamMaintenancePage() {
     };
 
     useEffect(() => {
-        fetchTeams();
+        // fetchTeams is now handled by the debounced searchQuery useEffect
     }, []);
+
+    // Debounced search logic
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchTeams(searchQuery);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // --- Sorting Logic ---
     const handleSort = (key) => {
@@ -174,8 +185,7 @@ export default function TeamMaintenancePage() {
                             placeholder="Search teams..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            // removed team-search-input to use global default
-                            disabled
+                        // removed team-search-input to use global default
                         />
                         {(isEditor() || isAdmin()) && (
                             <Button variant="primary" onClick={handleCreateTeam}>
