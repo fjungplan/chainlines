@@ -110,7 +110,7 @@ class CyclingFlashParser:
         return result
 
 
-    def parse_team_detail(self, html_content: str, team_id_slug: str) -> ScrapedTeamData:
+    def parse_team_detail(self, html_content: str, team_id_slug: str, fallback_year: Optional[int] = None) -> ScrapedTeamData:
         """
         Parse team detail page to extract:
         - Team name
@@ -128,16 +128,23 @@ class CyclingFlashParser:
             html_content: Raw HTML of the team detail page.
             team_id_slug: The slug used to identify the team and season (e.g., "team-name-2024").
                           This is used to derive the season_year.
+            fallback_year: Optional year to use if extraction from slug fails.
         
         Returns:
             A ScrapedTeamData object containing the extracted information.
         """
         
         # Extract season_year from team_id_slug
-        match = re.search(r'-(\d{4})$', team_id_slug)
-        if not match:
+        # Handle slugs with suffixes like "team-name-2026-2" (duplicate handling)
+        match = re.search(r'-(\d{4})(?:-[^/]+)?$', team_id_slug)
+        
+        if match:
+            season_year = int(match.group(1))
+        elif fallback_year:
+            # Fallback to provided year (e.g. from the list page context)
+            season_year = fallback_year
+        else:
             raise ValueError(f"Could not extract season year from team_id_slug: {team_id_slug}")
-        season_year = int(match.group(1))
 
         soup = BeautifulSoup(html_content, 'html.parser')
         
@@ -373,4 +380,4 @@ class CyclingFlashScraper(BaseScraper):
         """Get team details from a team page."""
         url = f"{self.BASE_URL}{path}" if not path.startswith("http") else path
         html = await self.fetch(url)
-        return self._parser.parse_team_detail(html, team_id_slug=path.rsplit('/', 1)[-1])
+        return self._parser.parse_team_detail(html, team_id_slug=path.rsplit('/', 1)[-1], fallback_year=season_year)
