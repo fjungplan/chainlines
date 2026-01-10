@@ -254,3 +254,16 @@ class LineageService:
             "source_url": event.source_url,
             "is_protected": event.is_protected
         }
+
+    async def delete_event(self, event_id: uuid.UUID) -> bool:
+        """Delete a lineage event and invalidate timeline cache."""
+        event = await self.db.get(LineageEvent, event_id)
+        if not event:
+            return False
+            
+        await self.db.delete(event)
+        await self.db.commit()
+        
+        # Invalidate timeline cache after data change
+        TimelineService.invalidate_cache()
+        return True

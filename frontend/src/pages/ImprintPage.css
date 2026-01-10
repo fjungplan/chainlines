@@ -55,8 +55,6 @@
   background: none;
   border: none;
   cursor: pointer;
-  /* User request: "same 'padding' right and left as it currently has already on the top and bottom"
-     interpretation: consistent padding all around to frame the flag while keeping aspect ratio. */
   padding: 6px;
   display: flex;
   align-items: center;

@@ -255,6 +255,41 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         }
     };
 
+    const handleDeleteMaster = async () => {
+        if (!masterId) return;
+        if (!window.confirm("Are you sure you want to delete this sponsor? This will also delete all associated brands and cannot be undone.")) return;
+
+        setSubmitting(true);
+        setError(null);
+        try {
+            await sponsorsApi.deleteMaster(masterId);
+            onSuccess();
+        } catch (err) {
+            console.error("Delete master failed:", err);
+            setError(err.response?.data?.detail || "Failed to delete sponsor.");
+            setSubmitting(false);
+        }
+    };
+
+    const handleDeleteBrand = async () => {
+        if (!currentBrand) return;
+        if (!window.confirm("Are you sure you want to delete this brand identity? This action cannot be undone.")) return;
+
+        setSubmitting(true);
+        setError(null);
+        try {
+            await sponsorsApi.deleteBrand(currentBrand.brand_id);
+            // Go back to master view and refresh
+            setViewMode('MASTER');
+            setCurrentBrand(null);
+            await loadMasterData();
+        } catch (err) {
+            console.error("Delete brand failed:", err);
+            setError(err.response?.data?.detail || "Failed to delete brand.");
+            setSubmitting(false);
+        }
+    };
+
     // Filter industries
     const filteredIndustries = INDUSTRIES.filter(ind =>
         ind.toLowerCase().includes(masterForm.industry_sector.toLowerCase())
@@ -534,17 +569,46 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 </div>
             </div>
 
-            {/* === FOOTER (CONTEXT AWARE) === */}
             <div className="editor-footer">
-                <Button
-                    variant="secondary"
-                    className="footer-btn" // Keep class for specific layout margin if needed, or remove? Editor footer layout relies on flex gap.
-                    // Actually footer-btn styles are redundant with variant="secondary" mostly.
-                    onClick={handleBack}
-                    disabled={submitting}
-                >
-                    Cancel
-                </Button>
+                <div className="footer-actions-left">
+                    {isAdmin() && (
+                        <>
+                            {isBrandMode ? (
+                                currentBrand && (
+                                    <Button
+                                        variant="outline"
+                                        className="footer-btn"
+                                        style={{ borderColor: '#991b1b', color: '#fca5a5' }}
+                                        onClick={handleDeleteBrand}
+                                        disabled={submitting || isProtected}
+                                    >
+                                        Delete Brand
+                                    </Button>
+                                )
+                            ) : (
+                                masterId && (
+                                    <Button
+                                        variant="outline"
+                                        className="footer-btn"
+                                        style={{ borderColor: '#991b1b', color: '#fca5a5' }}
+                                        onClick={handleDeleteMaster}
+                                        disabled={submitting || isProtected}
+                                    >
+                                        Delete Sponsor
+                                    </Button>
+                                )
+                            )}
+                        </>
+                    )}
+                    <Button
+                        variant="secondary"
+                        className="footer-btn"
+                        onClick={handleBack}
+                        disabled={submitting}
+                    >
+                        Cancel
+                    </Button>
+                </div>
                 <div className="footer-actions-right">
                     {!isProtected && (
                         <>

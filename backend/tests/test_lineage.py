@@ -293,4 +293,24 @@ async def test_split_completion_removes_warning(isolated_session: AsyncSession, 
     await isolated_session.refresh(first)
     assert first.notes is None or "INCOMPLETE SPLIT" not in first.notes
     assert second.notes is None or "INCOMPLETE SPLIT" not in second.notes
-
+@pytest.mark.asyncio
+async def test_delete_event(isolated_session: AsyncSession, sample_team_node):
+    service = LineageService(isolated_session)
+    successor = TeamNode(founding_year=sample_team_node.founding_year + 3, legal_name="Chain Successor")
+    isolated_session.add(successor)
+    await isolated_session.commit()
+    await isolated_session.refresh(successor)
+    event = await service.create_event(
+        previous_id=sample_team_node.node_id,
+        next_id=successor.node_id,
+        year=successor.founding_year,
+        event_type=LineageEventType.LEGAL_TRANSFER,
+        notes="Delete test"
+    )
+    
+    # Delete event
+    await service.delete_event(event.event_id)
+    
+    # Verify deletion
+    result = await isolated_session.execute(select(LineageEvent).where(LineageEvent.event_id == event.event_id))
+    assert result.scalar_one_or_none() is None
