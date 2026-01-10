@@ -35,14 +35,11 @@
 }
 
 /* Ensure Lists inside formatted content look correct */
-.centered-content-card ul {
-  margin-left: 20px;
-  margin-bottom: 12px;
+.common-card .card-content ul {
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  padding-left: 1.5rem;
   color: var(--color-text-primary);
-}
-
-.centered-content-card ul li {
-  margin-bottom: 6px;
 }
 
 .index-link {
@@ -51,4 +48,38 @@
 
 .glossary li {
   margin-bottom: 1rem;
+}
+
+/* Language Toggle Button */
+.lang-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  /* User request: "same 'padding' right and left as it currently has already on the top and bottom"
+     interpretation: consistent padding all around to frame the flag while keeping aspect ratio. */
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.9;
+  transition: transform 0.2s, opacity 0.2s;
+  border-radius: 6px;
+}
+
+.lang-toggle-btn:hover {
+  opacity: 1;
+  background-color: var(--color-bg-tertiary);
+  /* Subtle hover background to show the shape */
+  transform: scale(1.05);
+}
+
+.lang-toggle-btn:focus-visible {
+  outline: 2px solid var(--primary-color, #007bff);
+  outline-offset: 2px;
+}
+
+.split-flag {
+  display: block;
+  /* Ensure clean edges for the SVG */
+  shape-rendering: geometricPrecision;
 }
