@@ -10,7 +10,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import './UserMaintenancePage.css';
 
 export default function UserMaintenancePage() {
-    const { isAdmin } = useAuth();
+    const { isAdmin, loading: authLoading } = useAuth();
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'editor'
@@ -41,10 +41,10 @@ export default function UserMaintenancePage() {
     };
 
     useEffect(() => {
-        if (isAdmin()) {
+        if (!authLoading && isAdmin()) {
             fetchUsers();
         }
-    }, [debouncedSearch]);
+    }, [debouncedSearch, isAdmin, authLoading]);
 
     // --- Sorting Logic ---
     const handleSort = (key) => {

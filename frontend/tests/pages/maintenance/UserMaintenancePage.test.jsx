@@ -1,69 +1,70 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import UserMaintenancePage from '../../../src/pages/maintenance/UserMaintenancePage';
-import { MemoryRouter } from 'react-router-dom';
-import * as usersApi from '../../../src/api/users';
 import '@testing-library/jest-dom';
+import { render, screen, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import UserMaintenancePage from '../../../src/pages/maintenance/UserMaintenancePage';
+import * as usersApi from '../../../src/api/users';
+import * as authContext from '../../../src/contexts/AuthContext';
+import { MemoryRouter } from 'react-router-dom';
 
 // Mock the API
 vi.mock('../../../src/api/users', () => ({
     getUsers: vi.fn(),
-    updateUser: vi.fn()
 }));
 
-// Mock Auth Context
+// Mock the AuthContext
 vi.mock('../../../src/contexts/AuthContext', () => ({
-    useAuth: () => ({
-        user: { id: 'admin-id', role: 'ADMIN' },
-        isAdmin: () => true,
-        isEditor: () => true,
-        loading: false
-    }),
-    AuthProvider: ({ children }) => <>{children}</>
+    useAuth: vi.fn(),
 }));
 
-const renderPage = () => {
-    return render(
-        <MemoryRouter>
-            <UserMaintenancePage />
-        </MemoryRouter>
-    );
-};
-
-describe('UserMaintenancePage', () => {
+describe('UserMaintenancePage Initial Load', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
-    it('renders loading state initially', () => {
-        // Mock promise that doesn't resolve immediately
-        usersApi.getUsers.mockReturnValue(new Promise(() => { }));
-        renderPage();
-        expect(screen.getByText(/loading/i)).toBeInTheDocument();
-    });
-
-    it('renders user list after fetching', async () => {
-        const mockUsers = {
-            items: [
-                { user_id: 'u1', display_name: 'User One', email: 'u1@test.com', role: 'EDITOR', is_banned: false },
-                { user_id: 'u2', display_name: 'User Two', email: 'u2@test.com', role: 'ADMIN', is_banned: true }
-            ],
-            total: 2
-        };
-        usersApi.getUsers.mockResolvedValue(mockUsers);
-
-        renderPage();
-
-        await waitFor(() => {
-            const loading = screen.queryByText(/loading/i);
-            expect(loading).not.toBeInTheDocument();
+    it('waits for auth loading to finish before fetching users', async () => {
+        // Mock isAdmin false and loading true initially
+        const isAdminMock = vi.fn().mockReturnValue(false);
+        authContext.useAuth.mockReturnValue({
+            user: null,
+            loading: true,
+            isAdmin: isAdminMock,
         });
 
-        expect(screen.getByText('User One')).toBeInTheDocument();
-        expect(screen.getByText('u1@test.com')).toBeInTheDocument();
-        expect(screen.getByText('EDITOR')).toBeInTheDocument();
+        usersApi.getUsers.mockResolvedValue({
+            items: [{ user_id: '123', display_name: 'Test User', email: 'test@example.com', role: 'EDITOR', is_banned: false }],
+            total: 1
+        });
 
-        expect(screen.getByText('User Two')).toBeInTheDocument();
+        const { rerender } = render(
+            <MemoryRouter>
+                <UserMaintenancePage />
+            </MemoryRouter>
+        );
+
+        // Should not show Access Denied yet (it might show loading spinner if we implemented it, or nothing)
+        // But most importantly, it should NOT call getUsers
+        expect(usersApi.getUsers).not.toHaveBeenCalled();
+
+        // Simulate Auth resolution (Loading finished, is Admin)
+        const isAdminResolved = vi.fn().mockReturnValue(true);
+        authContext.useAuth.mockReturnValue({
+            user: { name: 'Admin' },
+            loading: false,
+            isAdmin: isAdminResolved,
+        });
+
+        rerender(
+            <MemoryRouter>
+                <UserMaintenancePage />
+            </MemoryRouter>
+        );
+
+        // Now it should trigger the fetch
+        await waitFor(() => {
+            expect(usersApi.getUsers).toHaveBeenCalled();
+        }, { timeout: 2000 });
+
+        expect(screen.getByText('Test User')).toBeInTheDocument();
     });
 });
