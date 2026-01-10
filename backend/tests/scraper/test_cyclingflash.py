@@ -25,7 +25,7 @@ def test_parse_team_detail_extracts_data():
     html = (FIXTURE_DIR / "team_detail_2024.html").read_text()
     parser = CyclingFlashParser()
     
-    data = parser.parse_team_detail(html, season_year=2024)
+    data = parser.parse_team_detail(html, team_id_slug="team-visma-lease-a-bike-2024")
     
     assert data.name == "Team Visma | Lease a Bike"
     assert data.uci_code == "TJV"
@@ -120,14 +120,14 @@ def test_parse_team_detail_generates_team_identity_id():
     """
     
     parser = CyclingFlashParser()
-    data = parser.parse_team_detail(injected_html, season_year=2024)
+    data = parser.parse_team_detail(injected_html, team_id_slug="team-2024")
     
     # Should have a team identity ID
     assert hasattr(data, 'team_identity_id')
     assert data.team_identity_id is not None
     
     # Identity should be stable (derived from team-2024 and team-2025)
-    data2 = parser.parse_team_detail(injected_html, season_year=2024)
+    data2 = parser.parse_team_detail(injected_html, team_id_slug="team-2024")
     assert data.team_identity_id == data2.team_identity_id
 
 

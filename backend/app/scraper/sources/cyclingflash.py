@@ -373,4 +373,4 @@ class CyclingFlashScraper(BaseScraper):
         """Get team details from a team page."""
         url = f"{self.BASE_URL}{path}" if not path.startswith("http") else path
         html = await self.fetch(url)
-        return self._parser.parse_team_detail(html, season_year, path)
+        return self._parser.parse_team_detail(html, team_id_slug=path.rsplit('/', 1)[-1])
