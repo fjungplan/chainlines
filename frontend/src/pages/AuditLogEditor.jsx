@@ -63,9 +63,12 @@ const formatEntityType = (type) => {
     return typeMap[type] || type.replace(/_/g, ' '); // Fallback: replace underscores with spaces
 };
 
-export default function AuditLogEditor() {
+export default function AuditLogEditor({ backPath = '/audit-log', apiMethod = null }) {
     const { editId } = useParams();
     const navigate = useNavigate();
+
+    // Default to auditLogApi.getDetail if no apiMethod provided
+    const getDetailFn = apiMethod || auditLogApi.getDetail;
     const [edit, setEdit] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -83,7 +86,7 @@ export default function AuditLogEditor() {
     const loadEdit = async () => {
         try {
             setLoading(true);
-            const res = await auditLogApi.getDetail(editId);
+            const res = await getDetailFn(editId);
             setEdit(res.data);
             setError(null);
         } catch (err) {
@@ -175,7 +178,7 @@ export default function AuditLogEditor() {
                 {/* Header */}
                 <div className="editor-header">
                     <div className="header-left">
-                        <Button variant="ghost" className="back-btn" onClick={() => navigate('/audit-log')} title="Back to List">
+                        <Button variant="ghost" className="back-btn" onClick={() => navigate(backPath)} title="Back to List">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
                             </svg>
@@ -311,7 +314,7 @@ export default function AuditLogEditor() {
                         <Button
                             variant="secondary"
                             className="footer-btn"
-                            onClick={() => navigate('/audit-log')}
+                            onClick={() => navigate(backPath)}
                             disabled={actionLoading}
                         >
                             Close
