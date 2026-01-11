@@ -15,3 +15,8 @@ export const updateUser = async (userId, data) => {
     const response = await apiClient.patch(`${API_BASE}/${userId}`, data);
     return response.data;
 };
+
+export const deleteAccount = async () => {
+    const response = await apiClient.delete('/api/v1/account');
+    return response.data;
+};

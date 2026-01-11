@@ -15,6 +15,7 @@ from app.api.v1.lineage import router as lineage_router
 from app.api.v1.moderation import router as moderation_router
 from app.api.v1.audit_log import router as audit_log_router
 from app.api.v1.my_edits import router as my_edits_router
+from app.api.v1.account import router as account_account_router # Renaming to verify uniqueness or just account_router
 from app.api.admin.scraper import router as scraper_router
 
 from app.core.exceptions import (
@@ -144,6 +145,7 @@ app.include_router(lineage_router)
 app.include_router(moderation_router)
 app.include_router(audit_log_router)
 app.include_router(my_edits_router)
+app.include_router(account_account_router, prefix="/api/v1", tags=["account"])
 app.include_router(scraper_router, prefix="/api/v1/admin/scraper")
 
 
