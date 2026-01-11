@@ -1,3 +1,4 @@
+import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTeamHistory } from '../hooks/useTeamData';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,10 +14,10 @@ import { getCountryCode } from '../utils/countryUtils';
 function TeamDetailPage() {
   const { nodeId } = useParams();
   const { data, isLoading, error, refetch } = useTeamHistory(nodeId);
-  const { isEditor, isAdmin } = useAuth();
+  const { user } = useAuth();
 
-  // Helper: Check if user can edit
-  const canEdit = isEditor() || isAdmin();
+  // Show edit links to all logged-in users
+  const canEdit = !!user;
 
   if (isLoading) {
     return (
@@ -59,15 +60,16 @@ function TeamDetailPage() {
                     <div className="era-content">
                       <div className="era-info">
                         <h4>
-                          {era.name}
-                          {canEdit && era.era_id && (
+                          {canEdit && era.era_id ? (
                             <Link
                               to={`/maintenance/teams?nodeId=${nodeId}&eraId=${era.era_id}`}
-                              className="admin-edit-link"
+                              className="admin-edit-link-name"
                               title="Edit this era"
                             >
-                              ✎
+                              {era.name}
                             </Link>
+                          ) : (
+                            era.name
                           )}
                         </h4>
                         <div className="era-meta-pills">

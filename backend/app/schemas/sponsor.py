@@ -22,6 +22,9 @@ class SponsorLinkResponse(BaseModel):
     # We flatten basic brand info here for easier frontend consumption
     brand_name: str
     color: str  # effective color (override or default)
+    
+    # Navigation support
+    master_id: Optional[UUID] = None
 
     model_config = {
         "from_attributes": True

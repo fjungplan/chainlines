@@ -69,12 +69,14 @@ class TeamDetailService:
                                 prominence_percent=link.prominence_percent,
                                 hex_color_override=link.hex_color_override,
                                 brand_name=link.brand.brand_name,
-                                color=link.hex_color_override if link.hex_color_override else link.brand.default_hex_color
+                                color=link.hex_color_override if link.hex_color_override else link.brand.default_hex_color,
+                                master_id=link.brand.master_id,
                             )
                         )
 
             timeline.append(
                 TeamHistoryEra(
+                    era_id=era.era_id,
                     year=era.season_year,
                     name=era.registered_name,
                     tier=era.tier_level,

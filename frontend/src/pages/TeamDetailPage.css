@@ -205,6 +205,22 @@
   color: var(--color-accent, #646cff);
 }
 
+/* Admin Edit Link (Name Wrapper) */
+.admin-edit-link-name {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-edit-link-name:hover {
+  text-decoration: none;
+  color: var(--color-primary);
+  filter: brightness(1.2);
+  /* Slight pop if primary matches background poorly */
+}
+
 .era-status {
   font-style: italic;
   color: #888;
