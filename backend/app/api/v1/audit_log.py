@@ -153,13 +153,13 @@ async def list_audit_log(
         # Normalize type for checks (handle TEAM, TEAM_NODE, team_node, etc.)
         etype = edit.entity_type.upper()
         
-        if etype in ("TEAM", "TEAM_NODE"):
+        if etype in ("TEAM", "TEAM_NODE", "TEAMNODE"):
             entity_name = snap.get("display_name") or snap.get("legal_name") or entity_name
-        elif etype in ("SPONSOR", "SPONSOR_MASTER"):
+        elif etype in ("SPONSOR", "SPONSOR_MASTER", "SPONSORMASTER"):
             entity_name = snap.get("legal_name") or entity_name
-        elif etype in ("BRAND", "SPONSOR_BRAND"):
+        elif etype in ("BRAND", "SPONSOR_BRAND", "SPONSORBRAND"):
             entity_name = snap.get("brand_name") or snap.get("name") or entity_name
-        elif etype in ("ERA", "TEAM_ERA"):
+        elif etype in ("ERA", "TEAM_ERA", "TEAMERA"):
             entity_name = snap.get("registered_name") or entity_name
         elif etype in ("LINEAGE", "LINEAGE_EVENT"):
             pid = snap.get("predecessor_id")
