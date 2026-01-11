@@ -69,7 +69,13 @@ WIKIPEDIA CONTENT:
 AVAILABLE TEAMS IN DATABASE:
 {available_teams}
 
-TASK: Extract any lineage events mentioned in the Wikipedia content.
+TASK: Extract lineage events that occurred in {year} or {year_plus_one}.
+
+**CRITICAL YEAR FILTERING**:
+- ONLY extract events from {year} or {year_plus_one}
+- The Wikipedia content contains the full team history across many years
+- You MUST ignore events from other years (e.g., years before {year} or after {year_plus_one})
+- Focus ONLY on what happened during this specific transition period
 
 EVENT TYPES:
 For ENDING teams (context="ending"):
@@ -84,21 +90,23 @@ For STARTING teams (context="starting"):
 - MERGER_OF: Team was formed by merging multiple predecessor teams
 
 INSTRUCTIONS:
-1. Look for explicit mentions of succession, mergers, joins, or breakaways
+1. Look for explicit mentions of succession, mergers, joins, or breakaways **in {year} or {year_plus_one}**
 2. Extract the NAME of the other team(s) involved
 3. IMPORTANT: For target_name, PREFER names from the AVAILABLE TEAMS list above.
    Wikipedia may use old names (e.g., "Lotto") - match these to current DB names (e.g., "Lotto - Intermarché").
 4. Set confidence based on how explicit the Wikipedia content is:
-   - 0.9+: Explicit statement ("succeeded by", "was formed by merging")
-   - 0.7-0.9: Strong implication with named teams
+   - 0.9+: Explicit statement with year match ("succeeded by X in {year}")
+   - 0.7-0.9: Strong implication with named teams in correct year
    - <0.7: Vague references or uncertain connections
-5. If no lineage events are found, return empty events list with a reason
+5. If no lineage events are found **in {year} or {year_plus_one}**, return empty events list with a reason
 
 EXAMPLES OF WHAT TO LOOK FOR:
-- "The team was succeeded by Team XYZ in 2026"
-- "In 2025, the team merged with ABC Racing"
-- "Team NSN acquired the license from Israel Premier Tech"
-- "Formed following the dissolution of Former Team"
+- "The team was succeeded by Team XYZ in {year}"
+- "In {year_plus_one}, the team merged with ABC Racing"
+- "Team NSN acquired the license in {year}"
+- "Formed following the dissolution of Former Team in {year}"
+
+**IMPORTANT**: Ignore events from other years, even if they seem relevant. We are ONLY interested in {year}/{year_plus_one}.
 
 Return structured data with events found.
 """
@@ -357,6 +365,7 @@ class ScraperPrompts:
             team_name=team_name,
             context=context,
             year=year,
+            year_plus_one=year + 1,
             wikipedia_content=wikipedia_content[:8000],  # Limit to avoid token limits
             available_teams=teams_str
         )
