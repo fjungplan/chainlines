@@ -1,5 +1,6 @@
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useTeamHistory } from '../hooks/useTeamData';
+import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from '../components/Loading';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import CenteredPageLayout from '../components/layout/CenteredPageLayout';
@@ -12,6 +13,10 @@ import { getCountryCode } from '../utils/countryUtils';
 function TeamDetailPage() {
   const { nodeId } = useParams();
   const { data, isLoading, error, refetch } = useTeamHistory(nodeId);
+  const { isEditor, isAdmin } = useAuth();
+
+  // Helper: Check if user can edit
+  const canEdit = isEditor() || isAdmin();
 
   if (isLoading) {
     return (
@@ -53,7 +58,18 @@ function TeamDetailPage() {
                     <div className="era-year">{era.year}</div>
                     <div className="era-content">
                       <div className="era-info">
-                        <h4>{era.name}</h4>
+                        <h4>
+                          {era.name}
+                          {canEdit && era.era_id && (
+                            <Link
+                              to={`/maintenance/teams?nodeId=${nodeId}&eraId=${era.era_id}`}
+                              className="admin-edit-link"
+                              title="Edit this era"
+                            >
+                              ✎
+                            </Link>
+                          )}
+                        </h4>
                         <div className="era-meta-pills">
                           {(() => {
                             const cCode = getCountryCode(era.country_code);
@@ -78,18 +94,34 @@ function TeamDetailPage() {
                       <div className="era-sponsors-container">
                         {era.sponsors && era.sponsors.length > 0 && (
                           <div className="era-sponsors">
-                            {era.sponsors.map((sponsor, sIndex) => (
-                              <div
-                                key={sIndex}
-                                className="sponsor-badge"
-                                style={{
-                                  backgroundColor: sponsor.color || '#ccc',
-                                  borderLeft: `3px solid ${sponsor.color ? 'rgba(0,0,0,0.2)' : 'transparent'}`
-                                }}
-                              >
-                                {sponsor.brand_name}
-                              </div>
-                            ))}
+                            {era.sponsors.map((sponsor, sIndex) => {
+                              const badge = (
+                                <div
+                                  key={sIndex}
+                                  className={`sponsor-badge ${canEdit && sponsor.master_id ? 'clickable' : ''}`}
+                                  style={{
+                                    backgroundColor: sponsor.color || '#ccc',
+                                    borderLeft: `3px solid ${sponsor.color ? 'rgba(0,0,0,0.2)' : 'transparent'}`
+                                  }}
+                                >
+                                  {sponsor.brand_name}
+                                </div>
+                              );
+
+                              // Wrap in Link if user can edit and master_id is present
+                              return canEdit && sponsor.master_id ? (
+                                <Link
+                                  key={sIndex}
+                                  to={`/maintenance/sponsors?edit=${sponsor.master_id}`}
+                                  className="sponsor-badge-link"
+                                  title="Edit this sponsor"
+                                >
+                                  {badge}
+                                </Link>
+                              ) : (
+                                badge
+                              );
+                            })}
                           </div>
                         )}
                       </div>
