@@ -161,7 +161,7 @@ async def list_audit_log(
             entity_name = snap.get("brand_name") or snap.get("name") or entity_name
         elif etype in ("ERA", "TEAM_ERA", "TEAMERA"):
             entity_name = snap.get("registered_name") or entity_name
-        elif etype in ("LINEAGE", "LINEAGE_EVENT"):
+        elif etype in ("LINEAGE", "LINEAGE_EVENT", "LINEAGEEVENT"):
             pid = snap.get("predecessor_id")
             sid = snap.get("successor_id")
             l_type = snap.get("type", "EVENT")

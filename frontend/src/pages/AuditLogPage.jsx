@@ -351,8 +351,12 @@ export default function AuditLogPage() {
                                                     {edit.status}
                                                 </span>
                                             </td>
-                                            <td className="entity-cell">
-                                                <span className="entity-name">{edit.entity_name}</span>
+                                            <td>
+                                                <div className="entity-cell">
+                                                    {/* Optional: Add Type indicator if needed, currently just name */}
+                                                    {/* <span className="entity-type">{edit.entity_type}</span> */}
+                                                    <span className="entity-name">{edit.entity_name}</span>
+                                                </div>
                                             </td>
                                             <td>{edit.action}</td>
                                             <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>
