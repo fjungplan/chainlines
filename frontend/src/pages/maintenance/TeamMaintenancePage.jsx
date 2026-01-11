@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../../components/Loading';
@@ -12,6 +13,7 @@ import Button from '../../components/common/Button';
 
 export default function TeamMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'node' | 'era'
@@ -44,8 +46,22 @@ export default function TeamMaintenancePage() {
         }
     };
 
+    // Deep Link: Check for ?nodeId=ID and ?eraId=ID on mount
     useEffect(() => {
-        // fetchTeams is now handled by the debounced searchQuery useEffect
+        const nodeId = searchParams.get('nodeId');
+        const eraId = searchParams.get('eraId');
+
+        if (nodeId) {
+            setSelectedNodeId(nodeId);
+            if (eraId) {
+                setSelectedEraId(eraId);
+                setViewMode('era');
+            } else {
+                setViewMode('node');
+            }
+            // Clear params so back navigation doesn't re-trigger
+            setSearchParams({}, { replace: true });
+        }
     }, []);
 
     // Debounced search logic
