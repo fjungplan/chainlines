@@ -98,7 +98,8 @@ export default function AuditLogPage() {
         try {
             const params = {};
             if (debouncedSearch) params.search = debouncedSearch;
-            if (statusFilters.length > 0) params.status = statusFilters;
+            // Always send status to prevent backend from defaulting to PENDING
+            params.status = statusFilters;
             if (entityTypeFilter !== 'ALL') params.entity_type = entityTypeFilter;
             if (startDate) params.start_date = new Date(startDate).toISOString();
             if (endDate) {
