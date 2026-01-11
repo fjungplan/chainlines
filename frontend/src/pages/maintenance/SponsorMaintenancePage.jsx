@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { sponsorsApi } from '../../api/sponsors';
 import { LoadingSpinner } from '../../components/Loading';
@@ -9,6 +10,7 @@ import Button from '../../components/common/Button';
 
 export default function SponsorMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const [masters, setMasters] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,6 +20,17 @@ export default function SponsorMaintenancePage() {
     // Editor State
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [selectedMasterId, setSelectedMasterId] = useState(null); // null = Create Mode
+
+    // Deep Link: Check for ?edit=ID on mount
+    useEffect(() => {
+        const editId = searchParams.get('edit');
+        if (editId) {
+            setSelectedMasterId(editId);
+            setIsEditorOpen(true);
+            // Clear the param so back navigation doesn't re-trigger
+            setSearchParams({}, { replace: true });
+        }
+    }, []);
 
     const fetchMasters = async () => {
         setLoading(true);
