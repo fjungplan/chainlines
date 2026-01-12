@@ -7,6 +7,21 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Custom parameter serialization for FastAPI (handles arrays as repeated keys: status=A&status=B)
+  paramsSerializer: {
+    serialize: (params) => {
+      const searchParams = new URLSearchParams();
+      for (const key in params) {
+        const value = params[key];
+        if (Array.isArray(value)) {
+          value.forEach(v => searchParams.append(key, v));
+        } else if (value !== undefined && value !== null) {
+          searchParams.append(key, value);
+        }
+      }
+      return searchParams.toString();
+    }
+  },
 });
 
 let isRefreshing = false;

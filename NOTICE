@@ -1,10 +1,10 @@
-ChainLines / Copyright 2025 fjungplan / Licensed under the Apache License, Version 2.0
+ChainLines / Copyright 2025 fjungplan / Licensed under the GNU Affero General Public License, Version 3.0
 
-This product is licensed under the Apache License, Version 2.0 (the "License").
+This product is licensed under the GNU Affero General Public License, Version 3.0 (the "License").
 You may not use this product except in compliance with the License.
 You may obtain a copy of the License at:
 
-    http://www.apache.org/licenses/LICENSE-2.0
+https://www.gnu.org/licenses/agpl-3.0.txt
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,8 +26,8 @@ with their respective license terms.
    Version: v31
    Copyright: (c) 2011-2024 Julieta Ulanovsky, Sol Matas, Juan Pablo del Peral, Jacques Le Bailly
    License: SIL Open Font License 1.1 (OFL-1.1)
-   License Text: https://opensource.org/licenses/OFL-1.1
-   Source: https://github.com/JulietaUlanova/Montserrat
+   License Text: <https://opensource.org/licenses/OFL-1.1>
+   Source: <https://github.com/JulietaUlanova/Montserrat>
    
    Description: Self-hosted typeface for GDPR compliance (avoids Google Fonts CDN).
    Used Weights: 100, 200, 300, 500, 600, 700, 800, 900 (regular and italic).
@@ -35,16 +35,16 @@ with their respective license terms.
 
 2. caniuse-lite
    License: Creative Commons Attribution 4.0 International (CC-BY-4.0)
-   License Text: https://creativecommons.org/licenses/by/4.0/
-   Source: https://github.com/browserslist/caniuse-lite
+   License Text: <https://creativecommons.org/licenses/by/4.0/>
+   Source: <https://github.com/browserslist/caniuse-lite>
    
    Description: Browser compatibility database used by build tooling.
    Used by: Vite/browserslist for frontend build optimization.
 
 3. psycopg2-binary
    License: GNU Lesser General Public License v3.0 (LGPL-3.0-or-later) with OpenSSL exception
-   License Text: https://www.gnu.org/licenses/lgpl-3.0.html
-   Source: https://pypi.org/project/psycopg2-binary/
+   License Text: <https://www.gnu.org/licenses/lgpl-3.0.html>
+   Source: <https://pypi.org/project/psycopg2-binary/>
    
    Description: PostgreSQL database adapter for Python.
    Used by: Backend for database connectivity (SQLAlchemy + asyncpg primary, psycopg2 fallback).
@@ -55,12 +55,36 @@ with their respective license terms.
 4. Beautiful Soup 4
    Version: 4.12.2
    License: MIT License
-   License Text: https://opensource.org/licenses/MIT
-   Source: https://www.crummy.com/software/BeautifulSoup/
-   PyPI: https://pypi.org/project/beautifulsoup4/
+   License Text: <https://opensource.org/licenses/MIT>
+   Source: <https://www.crummy.com/software/BeautifulSoup/>
+   PyPI: <https://pypi.org/project/beautifulsoup4/>
    
    Description: Python library for parsing HTML and XML documents.
-   Used by: Backend web scraper (gentle data collection from ProCyclingStats, Wikipedia, FirstCycling).
+   Used by: Backend web scraper.
+
+5. rapidfuzz
+   License: MIT License
+   License Text: <https://opensource.org/licenses/MIT>
+   Source: <https://github.com/rapidfuzz/RapidFuzz>
+   
+   Description: Rapid fuzzy string matching library.
+   Used by: Backend for team and brand name matching.
+
+6. instructor
+   License: Apache License 2.0
+   License Text: <https://www.apache.org/licenses/LICENSE-2.0>
+   Source: <https://github.com/jxnl/instructor>
+   
+   Description: Python library for structured LLM outputs.
+   Used by: Backend for data extraction and arbitration.
+
+7. flag-icons
+   License: MIT License
+   License Text: <https://opensource.org/licenses/MIT>
+   Source: <https://github.com/lipis/flag-icons>
+   
+   Description: A curated collection of all country flags in SVG.
+   Used by: Frontend for displaying team and rider nationalities.
 
 ================================================================================
 
@@ -83,7 +107,14 @@ Backend (Python):
 - google-auth-oauthlib (Apache-2.0)
 - pytest (MIT)
 - pytest-asyncio (Apache-2.0)
+- pytest-mock (MIT)
+- instructor (Apache-2.0)
+- google-generativeai (Apache-2.0)
+- openai (MIT)
 - httpx (BSD-3-Clause)
+- python-multipart (Apache-2.0)
+- rapidfuzz (MIT)
+- email-validator (MIT)
 
 Frontend (JavaScript/React):
 - React (MIT)
@@ -94,8 +125,10 @@ Frontend (JavaScript/React):
 - TanStack Query (MIT)
 - @react-oauth/google (MIT)
 - jwt-decode (MIT)
+- flag-icons (MIT)
 - Vitest (MIT)
 - Testing Library (MIT)
+- jsdom (MIT)
 
 Infrastructure:
 - PostgreSQL (PostgreSQL License - permissive, BSD-like)
@@ -107,7 +140,7 @@ Infrastructure:
 ATTRIBUTION REQUIREMENTS
 
 If you redistribute this software or derivative works:
-1. Include a copy of the LICENSE file (Apache 2.0)
+1. Include a copy of the LICENSE file (GNU AGPLv3)
 2. Include this NOTICE file with all attribution notices intact
 3. State any significant changes made to the original software
 4. Comply with all third-party license requirements listed above
@@ -126,15 +159,48 @@ must use a different font name.
 PROJECT INFORMATION
 
 Project Name: ChainLines
-Repository: https://github.com/fjungplan/chainlines
+Repository: <https://github.com/fjungplan/chainlines>
 Description: Open-source visualization of professional cycling team history (1900-present)
-License: Apache License 2.0
+License: GNU Affero General Public License 3.0
 Author: fjungplan
 Year: 2025
 
 This is a non-commercial, open-source personal project created for educational
 and historical documentation purposes. It is not affiliated with any commercial
 entity or professional cycling organization.
+
+================================================================================
+
+DATA SOURCE ACKNOWLEDGMENTS
+
+This project utilizes historical data and metadata from the following sources
+for educational and non-commercial documentation purposes:
+
+1. CyclingFlash (<https://cyclingflash.com>)
+2. Wikipedia & Wikidata (<https://www.wikipedia.org> / <https://www.wikidata.org>)
+3. Mémoires du Cyclisme (<https://www.memoire-du-cyclisme.eu>)
+4. CyclingRanking.com (<https://www.cyclingranking.com>)
+5. FirstCycling.com (<https://firstcycling.com>)
+
+We express our gratitude to these platforms for their comprehensive documentation
+of cycling history.
+
+================================================================================
+
+PROJECT DATA LICENSE
+
+1. Compilation: The curated database of cycling team lineages, structural 
+   relationships, and historical arrangements contained in this project is 
+   licensed under the Creative Commons Attribution-ShareAlike 4.0 
+   International (CC-BY-SA 4.0).
+   
+2. Individual Facts: The individual historical facts (names, dates, results)
+   are considered public domain facts. This license applies to the effort of 
+   selection, coordination, and arrangement of these facts into the 
+   ChainLines lineage model.
+
+3. Third-Party Data: Seed data remains subject to the original terms of the 
+   respective sources listed in the "Seed Data Source Acknowledgments" section.
 
 ================================================================================
 

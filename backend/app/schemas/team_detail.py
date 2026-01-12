@@ -1,5 +1,6 @@
 """Schemas for mobile-optimized team detail/history responses."""
 from typing import Optional, List
+from uuid import UUID
 from pydantic import BaseModel, Field
 from app.schemas.sponsor import SponsorLinkResponse
 
@@ -13,6 +14,7 @@ class TransitionInfo(BaseModel):
 
 class TeamHistoryEra(BaseModel):
     """Single era in the team's chronological history."""
+    era_id: UUID = Field(..., description="Unique identifier for the era")
     year: int = Field(..., description="Season year")
     name: str = Field(..., description="Registered team name")
     tier: Optional[int] = Field(None, description="UCI tier level (1, 2, 3)")

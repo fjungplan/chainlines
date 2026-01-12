@@ -20,7 +20,7 @@ class UserAdminRead(UserRead):
     """
     admin-only fields
     """
-    email: EmailStr
+    email: str
     google_id: str
     is_banned: bool
     banned_reason: Optional[str] = None

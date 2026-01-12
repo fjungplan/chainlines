@@ -23,8 +23,8 @@ async def test_gemini_client_returns_structured():
         mock_genai.GenerativeModel.return_value = mock_model
         
         with patch('app.scraper.llm.gemini.instructor') as mock_instructor:
-            mock_client = AsyncMock()
-            mock_client.chat.completions.create = AsyncMock(
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = MagicMock(
                 return_value=SimpleResponse(answer="test")
             )
             mock_instructor.from_gemini.return_value = mock_client

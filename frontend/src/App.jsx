@@ -8,6 +8,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import AuditLogPage from './pages/AuditLogPage';
 import AuditLogEditor from './pages/AuditLogEditor';
 import MyEditsPage from './pages/MyEditsPage';
+import { auditLogApi } from './api/auditLog';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SponsorMaintenancePage from './pages/maintenance/SponsorMaintenancePage';
 import TeamMaintenancePage from './pages/maintenance/TeamMaintenancePage';
@@ -33,6 +34,7 @@ function App() {
             <Route path="audit-log" element={<AuditLogPage />} />
             <Route path="audit-log/:editId" element={<AuditLogEditor />} />
             <Route path="me/edits" element={<MyEditsPage />} />
+            <Route path="me/edits/:editId" element={<AuditLogEditor backPath="/me/edits" apiMethod={auditLogApi.getMyDetail} />} />
             <Route path="admin" element={<AdminPanelPage />} />
             <Route path="maintenance/sponsors" element={<SponsorMaintenancePage />} />
             <Route path="maintenance/teams" element={<TeamMaintenancePage />} />

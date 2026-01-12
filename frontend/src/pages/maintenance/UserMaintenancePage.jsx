@@ -6,11 +6,10 @@ import { LoadingSpinner } from '../../components/Loading';
 import { ErrorDisplay } from '../../components/ErrorDisplay';
 import Button from '../../components/common/Button';
 import UserEditor from '../../components/maintenance/UserEditor';
-import { useDebounce } from '../../hooks/useDebounce';
 import './UserMaintenancePage.css';
 
 export default function UserMaintenancePage() {
-    const { isAdmin } = useAuth();
+    const { isAdmin, loading: authLoading } = useAuth();
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'editor'
@@ -21,16 +20,16 @@ export default function UserMaintenancePage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const debouncedSearch = useDebounce(searchQuery, 500);
+    // Removed useDebounce hook to match TeamMaintenancePage pattern
 
     // Sorting State
     const [sortConfig, setSortConfig] = useState({ key: 'display_name', direction: 'asc' });
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (search = '') => {
         setLoading(true);
         setError(null);
         try {
-            const data = await getUsers({ search: debouncedSearch, limit: 100 });
+            const data = await getUsers({ search, limit: 100 });
             setUsers(data.items);
         } catch (err) {
             console.error("Failed to fetch users:", err);
@@ -40,11 +39,13 @@ export default function UserMaintenancePage() {
         }
     };
 
+    // Debounced search effect
     useEffect(() => {
-        if (isAdmin()) {
-            fetchUsers();
-        }
-    }, [debouncedSearch]);
+        const timer = setTimeout(() => {
+            fetchUsers(searchQuery);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // --- Sorting Logic ---
     const handleSort = (key) => {

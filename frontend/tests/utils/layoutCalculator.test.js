@@ -53,9 +53,10 @@ describe('LayoutCalculator', () => {
       const graphData = createMockGraphData();
       const calculator = new LayoutCalculator(graphData, 1000, 800);
       const yearRange = calculator.calculateYearRange();
+      const currentYear = new Date().getFullYear();
 
       expect(yearRange.min).toBe(1900);
-      expect(yearRange.max).toBe(2026);
+      expect(yearRange.max).toBe(currentYear + 1);
     });
 
     it('should handle single node', () => {
@@ -71,9 +72,10 @@ describe('LayoutCalculator', () => {
       };
       const calculator = new LayoutCalculator(graphData, 1000, 800);
       const yearRange = calculator.calculateYearRange();
+      const currentYear = new Date().getFullYear();
 
       expect(yearRange.min).toBe(1900);
-      expect(yearRange.max).toBe(2026);
+      expect(yearRange.max).toBe(currentYear + 1);
     });
   });
 

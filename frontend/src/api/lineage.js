@@ -19,5 +19,10 @@ export const lineageApi = {
     updateEvent: async (eventId, data) => {
         const response = await api.put(`/api/v1/edits/lineage/${eventId}`, data);
         return response.data;
+    },
+
+    deleteEvent: async (eventId) => {
+        const response = await api.delete(`/api/v1/lineage/${eventId}`);
+        return response.data;
     }
 };

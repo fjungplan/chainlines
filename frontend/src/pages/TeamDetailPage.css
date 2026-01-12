@@ -178,6 +178,49 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
+.sponsor-badge.clickable {
+  cursor: pointer;
+}
+
+.sponsor-badge.clickable:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.sponsor-badge-link {
+  text-decoration: none;
+}
+
+/* Admin Edit Link (pencil icon) */
+.admin-edit-link {
+  margin-left: 8px;
+  font-size: 0.9rem;
+  opacity: 0.6;
+  text-decoration: none;
+  color: inherit;
+}
+
+.admin-edit-link:hover {
+  opacity: 1;
+  color: var(--color-accent, #646cff);
+}
+
+/* Admin Edit Link (Name Wrapper) */
+.admin-edit-link-name {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-edit-link-name:hover {
+  text-decoration: none;
+  color: var(--color-primary);
+  filter: brightness(1.2);
+  /* Slight pop if primary matches background poorly */
+}
+
 .era-status {
   font-style: italic;
   color: #888;

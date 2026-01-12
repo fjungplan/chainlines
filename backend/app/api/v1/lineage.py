@@ -7,6 +7,8 @@ from app.db.database import get_db
 from app.services.lineage_service import LineageService
 from app.schemas.lineage import LineageListResponse
 from app.core.etag import compute_etag
+from app.api.dependencies import require_admin
+from app.models.user import User
 
 router = APIRouter(prefix="/api/v1/lineage", tags=["lineage"])
 
@@ -60,3 +62,20 @@ async def get_lineage_event(
         raise HTTPException(status_code=404, detail="Lineage event not found")
     
     return event
+
+
+@router.delete("/{event_id}", status_code=204)
+async def delete_lineage_event(
+    event_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """
+    Delete a lineage event.
+    Admins only.
+    """
+    service = LineageService(db)
+    success = await service.delete_event(event_id)
+    if not success:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Lineage event not found")

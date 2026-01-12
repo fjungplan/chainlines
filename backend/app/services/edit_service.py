@@ -12,6 +12,7 @@ from app.models.team import TeamEra, TeamNode
 from app.models.lineage import LineageEvent
 from app.models.enums import LineageEventType, EditAction, EditStatus
 from app.models.user import User, UserRole
+from app.models.sponsor import SponsorBrand, SponsorMaster
 from app.schemas.edits import (
     EditMetadataRequest,
     EditMetadataResponse,

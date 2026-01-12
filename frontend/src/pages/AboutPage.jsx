@@ -65,15 +65,6 @@ export default function AboutPage() {
         </section>
 
         <section>
-          <h2>Data Sources</h2>
-          <p>
-            Historical cycling data is collected through gentle web scraping from trusted sources including <strong>ProCyclingStats</strong>,
-            <strong>Wikipedia</strong>, and <strong>FirstCycling</strong>. We respect rate limits and robots.txt guidelines, and
-            supplement automated collection with community contributions and manual verification.
-          </p>
-        </section>
-
-        <section>
           <h2>Community-Driven & Open Source</h2>
           <p>
             ChainLines is built by the cycling community, for the cycling community. This is a <strong>non-commercial, personal,
@@ -81,11 +72,14 @@ export default function AboutPage() {
             transparent knowledge sharing and welcome contributions from anyone passionate about cycling history.
           </p>
           <p>
-            Our wiki-style editing system allows community members to propose changes, corrections, and additions. All edits are
+            Our editing system allows community members to propose changes, corrections, and additions. All edits are
             reviewed through a moderation system to maintain data quality while encouraging broad participation.
           </p>
           <p>
-            The entire codebase is licensed under the <strong>Apache License 2.0</strong> and is available on GitHub. Researchers,
+            The entire codebase is licensed under the <strong>GNU Affero General Public License v3.0</strong>.
+            The curated database of team lineages and historical arrangements is licensed under the
+            <strong>Creative Commons Attribution-ShareAlike 4.0 International (CC-BY-SA 4.0)</strong>.
+            We believe in keeping code and data open and accessible. Researchers,
             developers, and fans are free to contribute, fork, and build upon our work. We're committed to maintaining transparency
             and accessibility in all aspects of the project.
           </p>
@@ -130,7 +124,8 @@ export default function AboutPage() {
           </p>
           <p>
             <strong>Project Owner:</strong> fjungplan<br />
-            <strong>License:</strong> Apache License 2.0<br />
+            <strong>Code License:</strong> GNU AGPLv3<br />
+            <strong>Data License:</strong> CC-BY-SA 4.0<br />
             <strong>Year:</strong> 2025
           </p>
         </section>

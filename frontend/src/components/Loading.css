@@ -141,3 +141,57 @@
     background-color: var(--color-bg-secondary, #1a1a1a);
   }
 }
+
+/* Drivetrain Spinner Animations */
+.drivetrain-spinner {
+  width: 120px;
+  height: auto;
+  overflow: visible;
+  color: var(--color-text-primary);
+}
+
+.spinner-sm .drivetrain-spinner {
+  width: 60px;
+}
+
+.spinner-lg .drivetrain-spinner {
+  width: 180px;
+}
+
+.chainring {
+  /* Rotate around the group's local origin (0,0) to prevent wobble from asymmetric crank */
+  transform-origin: 0 0;
+  animation: spin 4s linear infinite;
+}
+
+.cassette {
+  transform-origin: 0 0;
+  animation: spin 1.5s linear infinite;
+  /* Faster spin */
+}
+
+/* Chain Animation - Dynamic for Multi-Color */
+@keyframes chain-flow {
+  from {
+    stroke-dashoffset: var(--start-offset);
+  }
+
+  to {
+    stroke-dashoffset: calc(var(--start-offset) - 70px);
+    /* 14px * 5 colors = 70px loop */
+  }
+}
+
+.chain {
+  animation: chain-flow 1.5s linear infinite reverse;
+  /* Slower for visibility */
+}
+
+/* Pulleys Spin */
+/* Pulleys Spin */
+.pulley {
+  transform-origin: 0 0;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Derailleur Float Animation Removed - Static Position */

@@ -64,6 +64,26 @@ async def test_list_users_admin_success(
     assert len(data["items"]) >= 1
 
 @pytest.mark.asyncio
+async def test_list_users_empty_search(
+    test_client: AsyncClient,
+    test_user_admin: User,
+    test_user: User
+):
+    """
+    Test explicitly sending search="" to see if it causes 500.
+    """
+    from app.api.dependencies import get_current_user, require_admin
+    from main import app
+    
+    app.dependency_overrides[get_current_user] = lambda: test_user_admin
+    app.dependency_overrides[require_admin] = lambda: test_user_admin
+
+    response = await test_client.get("/api/v1/admin/users?limit=10&search=")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) >= 1
+
+@pytest.mark.asyncio
 async def test_list_users_non_admin_forbidden(
     test_client: AsyncClient,
     test_user_new: User

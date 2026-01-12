@@ -1,0 +1,103 @@
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.modal-content.delete-account-modal {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    /* max-height: 90vh; */
+    overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+/* Scoped Header */
+.delete-account-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px 0 24px;
+    margin-bottom: 20px;
+    border: none;
+    background: transparent;
+}
+
+.delete-account-modal .modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.delete-account-modal .modal-header button.close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.delete-account-modal .modal-header button.close-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Scoped Body */
+.delete-account-modal .modal-body {
+    padding: 0 24px 24px 24px;
+    color: #cfcfcf;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.delete-account-modal .modal-description {
+    color: #cfcfcf;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.delete-account-modal .modal-subtext {
+    font-size: 0.875rem;
+    color: #a0a0a0;
+}
+
+.delete-account-modal .error-banner {
+    background-color: rgba(239, 83, 80, 0.1);
+    color: #ef5350;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    border: 1px solid rgba(239, 83, 80, 0.2);
+}
+
+/* Scoped Footer */
+.delete-account-modal .modal-footer {
+    padding: 16px 24px 24px 24px;
+    border: none;
+    background: transparent;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
