@@ -26,6 +26,12 @@ export class LayoutCalculator {
     // The yearRange parameter (filterYearRange) is ignored; we use the real data
     this.yearRange = this.calculateYearRange();
     this.xScale = this.createXScale();
+
+    // Calculate pixelsPerYear for proportional vertical scaling
+    const padding = 50;
+    const availableWidth = this.width - 2 * padding;
+    const span = this.yearRange.max - this.yearRange.min;
+    this.pixelsPerYear = (availableWidth / span) * this.stretchFactor;
   }
 
   calculateYearRange() {
@@ -101,16 +107,17 @@ export class LayoutCalculator {
     const nodesWithX = this.assignXPositions();
 
     // Step 2: Assign Y positions to minimize crossings
-    const nodesWithXY = this.assignYPositions(nodesWithX);
+    const { positioned, rowHeight } = this.assignYPositions(nodesWithX);
 
     // Step 3: Calculate link paths
-    const linkPaths = this.calculateLinkPaths(nodesWithXY);
+    const linkPaths = this.calculateLinkPaths(positioned);
 
     return {
-      nodes: nodesWithXY,
+      nodes: positioned,
       links: linkPaths,
       yearRange: this.yearRange,
-      xScale: this.xScale
+      xScale: this.xScale,
+      rowHeight
     };
   }
 
@@ -222,8 +229,9 @@ export class LayoutCalculator {
       return earliestA - earliestB;
     });
 
-    // NEW: Improved swimlane assignment with sharing for linear chains
-    const rowHeight = VISUALIZATION.NODE_HEIGHT + 20;
+    // PROPORTIONAL SCALING: rowHeight based on pixelsPerYear for consistent aspect ratio
+    const ASPECT_RATIO_MULTIPLIER = 1; // Square aspect ratio (height = width)
+    const rowHeight = this.pixelsPerYear * ASPECT_RATIO_MULTIPLIER;
     const positioned = [];
     const nodePositions = new Map();
     let swimlaneIndex = 0;
@@ -282,7 +290,7 @@ export class LayoutCalculator {
       swimlaneIndex += uniqueLanes.length;
     });
 
-    return positioned;
+    return { positioned, rowHeight };
   }
 
   /**

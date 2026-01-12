@@ -191,4 +191,62 @@ describe('LayoutCalculator', () => {
       expect(layout.links.length).toBe(0);
     });
   });
+
+  describe('Proportional Scaling', () => {
+    it('should calculate pixelsPerYear correctly', () => {
+      const graphData = { nodes: [], links: [] };
+      // width=1000, padding=50, availableWidth=900
+      // With empty nodes, year range defaults to 1900 - currentYear+1 (127 years)
+      const calculator = new LayoutCalculator(graphData, 1000, 600, null, 1);
+
+      // availableWidth = 1000 - 2*50 = 900
+      // span = 127 years (1900 to 2027)
+      // pixelsPerYear = 900 / 127 * 1 ≈ 7.0866
+      expect(calculator.pixelsPerYear).toBeCloseTo(7.0866, 3);
+    });
+
+    it('should calculate pixelsPerYear proportional to width', () => {
+      const graphData = { nodes: [], links: [] };
+
+      // Same year range, different widths
+      const calc1 = new LayoutCalculator(graphData, 1000, 600, null, 1);
+      const calc2 = new LayoutCalculator(graphData, 2000, 600, null, 1);
+
+      // Double width should give double pixelsPerYear
+      expect(calc2.pixelsPerYear).toBeGreaterThan(calc1.pixelsPerYear);
+      expect(calc2.pixelsPerYear / calc1.pixelsPerYear).toBeCloseTo(1900 / 900, 1);
+    });
+
+    it('should have rowHeight proportional to pixelsPerYear', () => {
+      const graphData = {
+        nodes: [
+          { id: 'node1', founding_year: 2010, eras: [{ year: 2010, name: 'Team', tier: 1 }] },
+          { id: 'node2', founding_year: 2015, eras: [{ year: 2015, name: 'Team2', tier: 1 }] }
+        ],
+        links: []
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600, null, 1);
+      const layout = calculator.calculateLayout();
+
+      // With ASPECT_RATIO_MULTIPLIER = 1, rowHeight should equal pixelsPerYear
+      expect(layout.rowHeight).toBe(calculator.pixelsPerYear);
+    });
+
+    it('should maintain aspect ratio = 1 (square)', () => {
+      const graphData = {
+        nodes: [{ id: 'node1', founding_year: 2010, eras: [{ year: 2010, name: 'Team', tier: 1 }] }],
+        links: []
+      };
+
+      const calc1 = new LayoutCalculator(graphData, 1000, 600, null, 1);
+      const calc2 = new LayoutCalculator(graphData, 2000, 600, null, 1);
+
+      const layout1 = calc1.calculateLayout();
+      const layout2 = calc2.calculateLayout();
+
+      // Aspect ratio should be 1 for both (rowHeight / pixelsPerYear = 1)
+      expect(layout1.rowHeight / calc1.pixelsPerYear).toBe(1);
+      expect(layout2.rowHeight / calc2.pixelsPerYear).toBe(1);
+    });
+  });
 });

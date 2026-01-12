@@ -96,32 +96,24 @@ export default function TimelineGraph({
   }, []);
 
   // Helper to compute responsive minimum zoom
-  // This is the "fit everything" scale - can't zoom out further than this
+  // This is the "horizontal fit" scale - can't zoom out further than this
+  // User should never see empty space left/right of the timeline
   const computeMinScale = useCallback((layout) => {
     const containerWidth = containerRef.current?.clientWidth || 1;
-    const containerHeight = containerRef.current?.clientHeight || 1;
 
     const spanX = layout?.xScale
       ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min)
       : 0;
-    const nodes = layout?.nodes || [];
-    const maxNodeBottom = nodes.length
-      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
-      : 0;
-    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
-    const paddedMinY = minNodeTop - VERTICAL_PADDING;
-    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
-    const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
     if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
 
-    // Minimum scale is the one that fits BOTH dimensions
-    // (the smaller of the two - more zoomed out)
+    // Minimum scale = horizontal fit only
+    // This ensures the full timeline width always fills the viewport
+    // Vertical content may extend beyond viewport (user pans to see it)
     const scaleX = containerWidth / spanX;
-    const scaleY = containerHeight / spanY;
 
     // Add safety floor of 0.01 to prevent invalid transforms
-    return Math.max(0.01, Math.min(scaleX, scaleY));
+    return Math.max(0.01, scaleX);
   }, []);
 
   // Log performance metrics in development
@@ -212,6 +204,7 @@ export default function TimelineGraph({
 
     const layout = currentLayout.current;
     const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
 
     const x1 = layout.xScale(startYear);
     const x2 = layout.xScale(endYear);
@@ -224,7 +217,13 @@ export default function TimelineGraph({
 
     const centerX = (x1 + x2) / 2;
     const targetX = containerWidth / 2 - centerX * targetScale;
-    const targetY = 0;
+
+    // Bottom-align: show most recent teams (bottom of canvas)
+    const nodes = layout.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : containerHeight;
+    const targetY = containerHeight - (maxNodeBottom + VERTICAL_PADDING) * targetScale;
 
     const svg = d3.select(svgRef.current);
     const transform = d3.zoomIdentity
@@ -499,32 +498,30 @@ export default function TimelineGraph({
       const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
 
       const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
-      const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
-      // Initial scale: fit ALL content (both width and height)
+      // Initial scale: fit horizontal only (timeline width fills viewport)
+      // Vertical content extends beyond viewport - user pans to see it
       const scaleX = width / spanX;
-      const scaleY = height / spanY;
-      const targetScale = Math.max(0.01, Math.min(scaleX, scaleY));
+      const targetScale = Math.max(0.01, scaleX);
 
-      // Center the content in the viewport using padded bounds so labels don't overlap
+      // Horizontal: center the content
       const centerX = (layout.xScale(layout.yearRange.min) + layout.xScale(layout.yearRange.max)) / 2;
-      const centerY = (paddedMinY + paddedMaxY) / 2;
       const targetX = width / 2 - centerX * targetScale;
-      const targetY = height / 2 - centerY * targetScale;
+
+      // Vertical: align BOTTOM of content with bottom of viewport (show most recent teams)
+      // paddedMaxY * targetScale = height (align bottom of scaled content to bottom of viewport)
+      const targetY = height - paddedMaxY * targetScale;
 
       console.log('🎯 INITIAL TRANSFORM CALC:', {
         nodeCount: nodes.length,
         yearRange: [layout.yearRange.min, layout.yearRange.max],
         spanX,
-        spanY,
         containerWidth: width,
         containerHeight: height,
         scaleX,
-        scaleY,
         targetScale,
         minScale,
         centerX,
-        centerY,
         targetX,
         targetY,
         minNodeTop,
