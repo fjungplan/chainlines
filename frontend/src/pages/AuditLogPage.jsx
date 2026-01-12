@@ -98,7 +98,8 @@ export default function AuditLogPage() {
         try {
             const params = {};
             if (debouncedSearch) params.search = debouncedSearch;
-            if (statusFilters.length > 0) params.status = statusFilters;
+            // Always send status to prevent backend from defaulting to PENDING
+            params.status = statusFilters;
             if (entityTypeFilter !== 'ALL') params.entity_type = entityTypeFilter;
             if (startDate) params.start_date = new Date(startDate).toISOString();
             if (endDate) {
@@ -350,8 +351,12 @@ export default function AuditLogPage() {
                                                     {edit.status}
                                                 </span>
                                             </td>
-                                            <td className="entity-cell">
-                                                <span className="entity-name">{edit.entity_name}</span>
+                                            <td>
+                                                <div className="entity-cell">
+                                                    {/* Optional: Add Type indicator if needed, currently just name */}
+                                                    {/* <span className="entity-type">{edit.entity_type}</span> */}
+                                                    <span className="entity-name">{edit.entity_name}</span>
+                                                </div>
                                             </td>
                                             <td>{edit.action}</td>
                                             <td>{edit.submitted_by?.display_name || edit.submitted_by?.email}</td>

@@ -24,7 +24,9 @@ class GeminiClient:
         temperature: float = 0.1
     ) -> T:
         """Generate structured response."""
-        return await self._client.chat.completions.create(
+        # Note: instructor.from_gemini creates a sync client, so we don't await the create call
+        # but we keep the method async for interface compatibility.
+        return self._client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
             response_model=response_model,
             generation_config={"temperature": temperature}

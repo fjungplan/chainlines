@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../../components/Loading';
@@ -12,6 +13,7 @@ import Button from '../../components/common/Button';
 
 export default function TeamMaintenancePage() {
     const { user, isEditor, isAdmin } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'node' | 'era'
@@ -27,11 +29,13 @@ export default function TeamMaintenancePage() {
     // Sorting State
     const [sortConfig, setSortConfig] = useState({ key: 'legal_name', direction: 'asc' });
 
-    const fetchTeams = async () => {
+    const fetchTeams = async (search = '') => {
         setLoading(true);
         setError(null);
         try {
-            const data = await teamsApi.getTeams({ limit: 100 });
+            const params = { limit: 100 };
+            if (search) params.search = search;
+            const data = await teamsApi.getTeams(params);
             setTeams(data.items);
             setTotal(data.total);
         } catch (err) {
@@ -42,9 +46,32 @@ export default function TeamMaintenancePage() {
         }
     };
 
+    // Deep Link: Check for ?nodeId=ID and ?eraId=ID on mount
     useEffect(() => {
-        fetchTeams();
+        const nodeId = searchParams.get('nodeId');
+        const eraId = searchParams.get('eraId');
+
+        if (nodeId) {
+            setSelectedNodeId(nodeId);
+            if (eraId) {
+                setSelectedEraId(eraId);
+                setViewMode('era');
+            } else {
+                setViewMode('node');
+            }
+            // Clear params so back navigation doesn't re-trigger
+            setSearchParams({}, { replace: true });
+        }
     }, []);
+
+    // Debounced search logic
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchTeams(searchQuery);
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // --- Sorting Logic ---
     const handleSort = (key) => {
@@ -174,8 +201,7 @@ export default function TeamMaintenancePage() {
                             placeholder="Search teams..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            // removed team-search-input to use global default
-                            disabled
+                        // removed team-search-input to use global default
                         />
                         {(isEditor() || isAdmin()) && (
                             <Button variant="primary" onClick={handleCreateTeam}>

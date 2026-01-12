@@ -255,7 +255,20 @@ class LineageExtractor:
             else:
                 logger.warning(f"    ✗ No confident match for '{target_name}' (best: {best_match.legal_name if best_match else 'None'}, score: {best_score:.2f})")
         
-        # Step 2: Calculate event year and lineage type for idempotency check
+        # Step 2: Validate - check for self-referencing events
+        if target_node:
+            source_node_id = str(source_node.get("node_id", ""))
+            target_node_id = str(target_node.node_id)
+            
+            if source_node_id == target_node_id:
+                logger.warning(
+                    f"    ⚠️ Skipping self-referencing lineage event: "
+                    f"{source_node['name']} → {target_node.legal_name} "
+                    f"(same node_id: {source_node_id})"
+                )
+                return None
+        
+        # Step 3: Calculate event year and lineage type for idempotency check
         event_year = event_year_override if event_year_override is not None else source_node["year"]
         event_type_map = {
             "JOINED": LineageEventType.MERGE,
@@ -270,7 +283,7 @@ class LineageExtractor:
         }
         lineage_type = event_type_map.get(event.get("event_type"), LineageEventType.LEGAL_TRANSFER)
         
-        # Step 3: [IDEMPOTENCY] Check for existing duplicate event BEFORE creating audit log
+        # Step 4: [IDEMPOTENCY] Check for existing duplicate event BEFORE creating audit log
         if target_node:
             stmt_dup = select(LineageEvent).where(
                 LineageEvent.predecessor_node_id == source_node["node_id"],
@@ -281,7 +294,7 @@ class LineageExtractor:
             dup_result = await self._session.execute(stmt_dup)
             if dup_result.scalar_one_or_none():
                 logger.warning(f"    ⏩ Skipping duplicate LineageEvent: {source_node['name']} → {target_node.legal_name} ({event_year})")
-                return
+                return None
         
         # Step 4: Create audit log entry
         status = EditStatus.APPROVED if event.get("confidence", 0) >= CONFIDENCE_THRESHOLD else EditStatus.PENDING

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAuditLog } from '../../contexts/AuditLogContext';
 import NotificationBadge from '../common/NotificationBadge';
+import DeleteAccountModal from '../DeleteAccountModal';
 import '../UserMenu.css';
 
 export default function UserMenu() {
   const { user, logout, isAdmin, isModerator, canEdit, needsModeration } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
 
@@ -117,11 +119,21 @@ export default function UserMenu() {
             </>
           )}
 
+          <button className="menu-item delete-account text-red-600 hover:bg-red-50" onClick={() => { setIsOpen(false); setIsDeleteModalOpen(true); }}>
+            Delete Account
+          </button>
+
           <button className="menu-item logout" onClick={handleLogout}>
             Sign Out
           </button>
         </div>
       )}
+
+      <DeleteAccountModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onDeleteSuccess={handleLogout}
+      />
     </div>
   );
 }

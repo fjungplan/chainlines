@@ -62,19 +62,30 @@ async def list_audit_log(
             )
         )
     
-    # Status filter - default to PENDING only if not specified
-    if status:
-        status_values = [EditStatus(s) for s in status]
-        stmt = stmt.where(EditHistory.status.in_(status_values))
+    # Status filter
+    # - If status is provided and non-empty: filter by those statuses
+    # - If status is provided but empty: return no results (user deselected all)
+    # - If status is None (not provided): default to PENDING (backward compatibility)
+    if status is not None:
+        if len(status) > 0:
+            status_values = [EditStatus(s) for s in status]
+            stmt = stmt.where(EditHistory.status.in_(status_values))
+        else:
+            # Empty array means user deselected all statuses - return no results
+            stmt = stmt.where(False)
     elif not search:
         # If searching, we likely want to see everything unless status is explicit
-        # But if no search and no status, default to pending?
-        # Let's keep existing behavior: default to PENDING if no status specified
+        # But if no search and no status parameter, default to PENDING
         stmt = stmt.where(EditHistory.status == EditStatus.PENDING)
     
-    # Entity type filter
+    # Entity type filter - normalize for case-insensitive match (handles snake_case vs PascalCase)
     if entity_type:
-        stmt = stmt.where(EditHistory.entity_type == entity_type)
+        # Normalize by removing underscores and lowercasing for comparison
+        # This allows "team_node" to match "TeamNode"
+        normalized_input = entity_type.replace("_", "").lower()
+        stmt = stmt.where(
+            func.replace(func.lower(EditHistory.entity_type), "_", "") == normalized_input
+        )
     
     # User filter
     if user_id:
@@ -142,15 +153,15 @@ async def list_audit_log(
         # Normalize type for checks (handle TEAM, TEAM_NODE, team_node, etc.)
         etype = edit.entity_type.upper()
         
-        if etype in ("TEAM", "TEAM_NODE"):
+        if etype in ("TEAM", "TEAM_NODE", "TEAMNODE"):
             entity_name = snap.get("display_name") or snap.get("legal_name") or entity_name
-        elif etype in ("SPONSOR", "SPONSOR_MASTER"):
+        elif etype in ("SPONSOR", "SPONSOR_MASTER", "SPONSORMASTER"):
             entity_name = snap.get("legal_name") or entity_name
-        elif etype in ("BRAND", "SPONSOR_BRAND"):
+        elif etype in ("BRAND", "SPONSOR_BRAND", "SPONSORBRAND"):
             entity_name = snap.get("brand_name") or snap.get("name") or entity_name
-        elif etype in ("ERA", "TEAM_ERA"):
+        elif etype in ("ERA", "TEAM_ERA", "TEAMERA"):
             entity_name = snap.get("registered_name") or entity_name
-        elif etype in ("LINEAGE", "LINEAGE_EVENT"):
+        elif etype in ("LINEAGE", "LINEAGE_EVENT", "LINEAGEEVENT"):
             pid = snap.get("predecessor_id")
             sid = snap.get("successor_id")
             l_type = snap.get("type", "EVENT")

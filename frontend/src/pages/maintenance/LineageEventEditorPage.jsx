@@ -169,6 +169,23 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
         }
     };
 
+    const handleDelete = async () => {
+        if (!isEditMode) return;
+        if (!window.confirm("Are you sure you want to delete this lineage event? This action cannot be undone.")) return;
+
+        setSubmitting(true);
+        setError(null);
+        try {
+            await lineageApi.deleteEvent(eventId);
+            if (onClose) onClose();
+            if (onSuccess) onSuccess();
+        } catch (err) {
+            console.error("Delete failed:", err);
+            setError(err.response?.data?.detail || "Failed to delete lineage event.");
+            setSubmitting(false);
+        }
+    };
+
     if (!user) {
         return <div className="sponsor-inner-container">Please log in to access this page.</div>;
     }
@@ -334,16 +351,28 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                 </div>
             </div>
 
-            {/* FOOTER */}
             <div className="editor-footer">
-                <Button
-                    variant="secondary"
-                    className="footer-btn"
-                    onClick={onClose}
-                    disabled={submitting}
-                >
-                    Cancel
-                </Button>
+                <div className="footer-actions-left">
+                    {isEditMode && isAdmin && (
+                        <Button
+                            variant="outline"
+                            className="footer-btn"
+                            style={{ borderColor: '#991b1b', color: '#fca5a5' }}
+                            onClick={handleDelete}
+                            disabled={submitting}
+                        >
+                            Delete Event
+                        </Button>
+                    )}
+                    <Button
+                        variant="secondary"
+                        className="footer-btn"
+                        onClick={onClose}
+                        disabled={submitting}
+                    >
+                        Cancel
+                    </Button>
+                </div>
                 <div className="footer-actions-right">
                     <Button
                         variant="primary"

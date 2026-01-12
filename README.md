@@ -13,9 +13,9 @@ ChainLines is a non-commercial, open-source personal project that tracks the lin
 
 - **Interactive Timeline Visualization**: Desktop D3.js "river" chart showing team evolution from 1900 to present
 - **Mobile-Optimized List View**: Chronological team history optimized for mobile devices
-- **Community-Driven**: Wiki-style editing with moderation system for collaborative data maintenance
+- **Community-Driven**: Editing with moderation system for collaborative data maintenance
 - **Data Integrity**: Comprehensive tracking of team eras, sponsors, and structural events (mergers/splits)
-- **Gentle Web Scraping**: Automated data collection from ProCyclingStats, Wikipedia, and FirstCycling
+- **Gentle Web Scraping**: Automated seed data collection
 - **GDPR Compliance**: Self-hosted fonts, transparent data handling, German legal compliance
 
 ### Core Concepts
@@ -275,7 +275,7 @@ See `.env.example` for complete configuration template.
 - **Sponsors**: Companies/entities sponsoring teams
 - **Lineage Events**: Structural changes (mergers, splits, transfers)
 - **Users**: Authentication and authorization
-- **Edits**: Wiki-style change tracking with moderation
+- **Edits**: Change tracking with moderation
 
 ### API Structure
 - `/api/v1/teams` - Team and era management
@@ -358,10 +358,12 @@ This is a **non-commercial, open-source personal project** created for education
 See `frontend/src/pages/ImprintPage.jsx` for complete Impressum and Datenschutzerklärung (German legal notices).
 
 ### Open Source Licenses
-This project is licensed under the **Apache License 2.0**.
 
-- See `LICENSE` for the full license text
-- See `NOTICE` for third-party attributions and license compliance details
+ChainLines is a dual-licensed project:
+- **Code**: Licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPLv3).
+- **Data**: The curated database of team lineages is licensed under [Creative Commons Attribution-ShareAlike 4.0 International](NOTICE) (CC-BY-SA 4.0).
+
+See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details and third-party attributions.
 
 Key dependencies:
 - **Montserrat fonts** (OFL-1.1) - Self-hosted typeface
@@ -402,6 +404,6 @@ For licensing questions or attribution clarifications, please open an issue on G
 
 ## Acknowledgments
 
-- Historical cycling data sourced from ProCyclingStats, Wikipedia, and FirstCycling
+- Seed data sourced from CyclingFlash, Wikipedia, Mémoires du Cyclisme, CyclingRanking, and FirstCycling
 - Inspired by the rich history of professional cycling and its complex team genealogies
 - Built with open-source tools and libraries (see `NOTICE` for complete attributions)

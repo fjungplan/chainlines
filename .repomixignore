@@ -1,0 +1,77 @@
+# Version Control
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project Config
+repomix.config.json
+repomix-output.xml
+.repomixignore
+LICENSE
+NOTICE
+README.md
+USER_GUIDE.md
+GEMINI.md
+docker-compose.yml
+docker-compose.override.yml
+Caddyfile
+Makefile
+backups/
+docs/
+plans/
+prompts/
+scripts/
+
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/logs/
+backend/cache/
+backend/alembic/
+backend/test.db
+backend/scraper_checkpoint.json
+backend/scraper_checkpoint.json.bak
+backend/poetry.lock
+backend/pyproject.toml
+backend/requirements.txt
+backend/Dockerfile
+backend/run_tests.ps1
+backend/*.py
+backend/scripts/
+backend/tests/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.pytest_cache/
+frontend/coverage/
+frontend/public/
+frontend/package-lock.json
+frontend/package.json
+frontend/vite.config.js
+frontend/vitest.config.js
+frontend/Dockerfile
+frontend/nginx.conf
+frontend/tests/
+
+# Environment Variables
+.env
+.env.example
+backend/.env
+frontend/.env
+
+# Temporary/Cache
+.pytest_cache/
+htmlcov/
+.coverage
+*.log
+*.pyc

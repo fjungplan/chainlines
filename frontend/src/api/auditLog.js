@@ -51,6 +51,10 @@ export const auditLogApi = {
     // Moderation action
     review: (editId, data) =>
         apiClient.post(`/api/v1/moderation/review/${editId}`, data),
+
+    // My Edits - current user's edit history
+    getMyList: (params) => apiClient.get('/api/v1/my-edits', { params }),
+    getMyDetail: (editId) => apiClient.get(`/api/v1/my-edits/${editId}`),
 };
 
 export default auditLogApi;
