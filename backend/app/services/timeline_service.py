@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 import time
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -25,13 +25,15 @@ class TimelineService:
         end_year: int,
         include_dissolved: bool,
         tier_filter: Optional[List[int]] = None,
+        focus_node_id: Optional[str] = None,
     ) -> Dict:
         # Cache key based on query parameters
         key_parts = [
             f"start:{start_year}",
             f"end:{end_year}",
             f"dissolved:{include_dissolved}",
-            f"tiers:{','.join(map(str, tier_filter))}" if tier_filter else "tiers:"
+            f"tiers:{','.join(map(str, tier_filter))}" if tier_filter else "tiers:",
+            f"focus:{focus_node_id}" if focus_node_id else "focus:"
         ]
         cache_key = "timeline:" + "|".join(key_parts)
 
@@ -72,6 +74,14 @@ class TimelineService:
         # Filter events to range
         events = [e for e in events if (start_year <= e.event_year <= end_year)]
 
+        # Apply focus mode filtering if focus_node_id is provided
+        if focus_node_id:
+            lineage_ids = self._find_lineage(focus_node_id, events)
+            teams = [t for t in teams if str(t.node_id) in lineage_ids]
+            events = [e for e in events if 
+                     str(e.predecessor_node_id) in lineage_ids and 
+                     str(e.successor_node_id) in lineage_ids]
+
         nodes = self.builder.build_nodes(teams)
         links = self.builder.build_links(events)
 
@@ -86,6 +96,37 @@ class TimelineService:
             ttl = getattr(settings, "TIMELINE_CACHE_TTL_SECONDS", self._CACHE_TTL_SECONDS)
             self._cache[cache_key] = (now + ttl, result)
         return result
+
+    def _find_lineage(self, node_id: str, all_events: List[LineageEvent]) -> Set[str]:
+        """Recursively find all connected nodes (predecessors and successors) using BFS.
+        
+        Args:
+            node_id: The ID of the node to find lineage for
+            all_events: List of all lineage events to search through
+            
+        Returns:
+            Set of node IDs that are connected to the given node
+        """
+        lineage = {node_id}
+        queue = [node_id]
+        
+        while queue:
+            current = queue.pop(0)
+            
+            for event in all_events:
+                source = str(event.predecessor_node_id)
+                target = str(event.successor_node_id)
+                
+                # Check if current node is the source (find successors)
+                if source == current and target not in lineage:
+                    lineage.add(target)
+                    queue.append(target)
+                # Check if current node is the target (find predecessors)
+                elif target == current and source not in lineage:
+                    lineage.add(source)
+                    queue.append(source)
+        
+        return lineage
 
     @classmethod
     def invalidate_cache(cls) -> None:

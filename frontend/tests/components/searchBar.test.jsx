@@ -36,7 +36,7 @@ describe('SearchBar', () => {
   it('renders search input', () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     expect(input).toBeDefined();
   });
@@ -44,10 +44,10 @@ describe('SearchBar', () => {
   it('does not show results for searches less than 2 characters', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'T' } });
-    
+
     await waitFor(() => {
       const results = document.querySelector('.search-results');
       expect(results).toBeNull();
@@ -57,10 +57,10 @@ describe('SearchBar', () => {
   it('shows search results for valid query', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Team' } });
-    
+
     await waitFor(() => {
       const results = screen.getByText('Team Ineos');
       expect(results).toBeDefined();
@@ -70,10 +70,10 @@ describe('SearchBar', () => {
   it('searches across all eras', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Sky' } });
-    
+
     await waitFor(() => {
       // Should find the node even though "Sky" appears in an older era
       // Shows the latest matching era name (Team Sky)
@@ -85,10 +85,10 @@ describe('SearchBar', () => {
   it('searches by UCI code', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'AST' } });
-    
+
     await waitFor(() => {
       const results = screen.getByText('Astana Pro Team');
       expect(results).toBeDefined();
@@ -98,10 +98,10 @@ describe('SearchBar', () => {
   it('ranks exact matches higher', async () => {
     const mockOnTeamSelect = vi.fn();
     const { container } = render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Team Ineos' } });
-    
+
     await waitFor(() => {
       const results = container.querySelectorAll('.search-result-item');
       expect(results.length).toBeGreaterThan(0);
@@ -113,42 +113,43 @@ describe('SearchBar', () => {
   it('calls onTeamSelect when result is clicked', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Ineos' } });
-    
+
     await waitFor(() => {
       const result = screen.getByText('Team Ineos');
       fireEvent.click(result.closest('.search-result-item'));
-      
+
       expect(mockOnTeamSelect).toHaveBeenCalledWith(
         expect.objectContaining({ id: '1' })
       );
     });
   });
 
-  it('clears search term after selection', async () => {
+  it('keeps team name in search bar after selection', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Ineos' } });
-    
+
     await waitFor(() => {
       const result = screen.getByText('Team Ineos');
       fireEvent.click(result.closest('.search-result-item'));
     });
-    
-    expect(input.value).toBe('');
+
+    // Should KEEP the team name, not clear it
+    expect(input.value).toBe('Team Ineos');
   });
 
   it('shows dissolution year in metadata', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Astana' } });
-    
+
     await waitFor(() => {
       const meta = screen.getByText('2005 - 2019');
       expect(meta).toBeDefined();
@@ -158,10 +159,10 @@ describe('SearchBar', () => {
   it('shows "present" for active teams', async () => {
     const mockOnTeamSelect = vi.fn();
     render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Ineos' } });
-    
+
     await waitFor(() => {
       const meta = screen.getByText('2010 - present');
       expect(meta).toBeDefined();
@@ -175,16 +176,129 @@ describe('SearchBar', () => {
       dissolution_year: null,
       eras: [{ name: `Team ${i}`, uci_code: `T${i}` }]
     }));
-    
+
     const mockOnTeamSelect = vi.fn();
     const { container } = render(<SearchBar nodes={manyNodes} onTeamSelect={mockOnTeamSelect} />);
-    
+
     const input = screen.getByPlaceholderText('Search teams...');
     fireEvent.change(input, { target: { value: 'Team' } });
-    
+
     await waitFor(() => {
       const results = container.querySelectorAll('.search-result-item');
       expect(results.length).toBeLessThanOrEqual(10);
+    });
+  });
+
+  // New tests for clear button functionality
+  describe('Clear Button', () => {
+    it('shows clear button only when team is selected', async () => {
+      const mockOnTeamSelect = vi.fn();
+      const { container } = render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
+
+      const input = screen.getByPlaceholderText('Search teams...');
+
+      // Initially typing search - no clear button yet
+      fireEvent.change(input, { target: { value: 'Ineos' } });
+      expect(container.querySelector('.search-clear-button')).toBeNull();
+
+      // After selecting - clear button appears
+      await waitFor(() => {
+        const result = screen.getByText('Team Ineos');
+        fireEvent.click(result.closest('.search-result-item'));
+      });
+
+      expect(container.querySelector('.search-clear-button')).toBeDefined();
+    });
+
+    it('clears selection when clear button is clicked', async () => {
+      const mockOnTeamSelect = vi.fn();
+      const { container } = render(<SearchBar nodes={mockNodes} onTeamSelect={mockOnTeamSelect} />);
+
+      const input = screen.getByPlaceholderText('Search teams...');
+
+      // Select a team
+      fireEvent.change(input, { target: { value: 'Ineos' } });
+      await waitFor(() => {
+        const result = screen.getByText('Team Ineos');
+        fireEvent.click(result.closest('.search-result-item'));
+      });
+
+      expect(input.value).toBe('Team Ineos');
+
+      // Click clear button
+      const clearButton = container.querySelector('.search-clear-button');
+      fireEvent.click(clearButton);
+
+      // Should clear and call onTeamSelect with null
+      expect(input.value).toBe('');
+      expect(mockOnTeamSelect).toHaveBeenLastCalledWith(null);
+    });
+  });
+
+  // 7UP - Colorado Cyclist Test Case
+  describe('7UP Test Case', () => {
+    const sevenUpNodes = [
+      {
+        id: 'node-7up',
+        founding_year: 1997,
+        dissolution_year: 2003,
+        eras: [
+          { name: '7UP - Colorado Cyclist', uci_code: '7UP', season_year: 1997 }
+        ]
+      },
+      {
+        id: 'node-fanini',
+        founding_year: 1987,
+        dissolution_year: 1988,
+        eras: [
+          { name: 'Fanini - 7UP', uci_code: 'FAN', season_year: 1987 }
+        ]
+      }
+    ];
+
+    it('finds both 7UP teams', async () => {
+      const mockOnTeamSelect = vi.fn();
+      render(<SearchBar nodes={sevenUpNodes} onTeamSelect={mockOnTeamSelect} />);
+
+      const input = screen.getByPlaceholderText('Search teams...');
+      fireEvent.change(input, { target: { value: '7UP' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('7UP - Colorado Cyclist')).toBeDefined();
+        expect(screen.getByText('Fanini - 7UP')).toBeDefined();
+      });
+    });
+
+    it('persists 7UP - Colorado Cyclist after selection', async () => {
+      const mockOnTeamSelect = vi.fn();
+      render(<SearchBar nodes={sevenUpNodes} onTeamSelect={mockOnTeamSelect} />);
+
+      const input = screen.getByPlaceholderText('Search teams...');
+      fireEvent.change(input, { target: { value: '7UP' } });
+
+      await waitFor(() => {
+        const result = screen.getByText('7UP - Colorado Cyclist');
+        fireEvent.click(result.closest('.search-result-item'));
+      });
+
+      // Search bar should show selected team
+      expect(input.value).toBe('7UP - Colorado Cyclist');
+      expect(mockOnTeamSelect).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'node-7up' })
+      );
+    });
+
+    it('shows correct years for 7UP - Colorado Cyclist', async () => {
+      const mockOnTeamSelect = vi.fn();
+      render(<SearchBar nodes={sevenUpNodes} onTeamSelect={mockOnTeamSelect} />);
+
+      const input = screen.getByPlaceholderText('Search teams...');
+      fireEvent.change(input, { target: { value: '7UP - Colorado' } });
+
+      await waitFor(() => {
+        const meta = screen.getByText('1997 - 2003');
+        expect(meta).toBeDefined();
+      });
     });
   });
 });

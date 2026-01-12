@@ -23,6 +23,7 @@ export default function TimelineGraph({
   data,
   onYearRangeChange,
   onTierFilterChange,
+  onFocusChange,
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
   initialTiers = [1, 2, 3],
@@ -50,6 +51,7 @@ export default function TimelineGraph({
 
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
+  const [highlightedLineage, setHighlightedLineage] = useState(null);
 
 
 
@@ -1049,11 +1051,92 @@ export default function TimelineGraph({
       });
   };
 
+  // Find all nodes in a team's lineage (predecessors and successors)
+  const findLineage = useCallback((selectedNode, allNodes, allLinks) => {
+    if (!selectedNode) return new Set();
+
+    const lineageSet = new Set([selectedNode.id]);
+    const queue = [selectedNode.id];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+
+      // Find all connected links
+      allLinks.forEach(link => {
+        // Handle both string IDs and object references
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (sourceId === currentId && !lineageSet.has(targetId)) {
+          lineageSet.add(targetId);
+          queue.push(targetId);
+        }
+        if (targetId === currentId && !lineageSet.has(sourceId)) {
+          lineageSet.add(sourceId);
+          queue.push(sourceId);
+        }
+      });
+    }
+
+    return lineageSet;
+  }, []);
+
   const handleTeamSelect = useCallback((node) => {
+    if (!node) {
+      // Clear highlighting
+      setHighlightedLineage(null);
+      return;
+    }
+
+    // Find lineage and apply highlighting
+    if (data?.nodes && data?.links) {
+      const lineage = findLineage(node, data.nodes, data.links);
+      setHighlightedLineage(lineage);
+    }
+
+    // Also zoom to node
     if (navigationRef.current) {
       navigationRef.current.focusOnNode(node);
     }
-  }, []);
+  }, [data, findLineage]);
+
+  // Apply visual highlighting when lineage changes
+  // Apply visual highlighting when lineage changes
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const g = svg.select('g');
+
+    if (!highlightedLineage) {
+      // Clear all fading
+      g.selectAll('.node').classed('faded', false);
+      g.selectAll('.link-fill').classed('faded', false);
+      return;
+    }
+
+    // Apply faded class to nodes NOT in lineage
+    g.selectAll('.node').each(function (d) {
+      if (!d) return;
+      const isFaded = !highlightedLineage.has(d.id);
+      d3.select(this).classed('faded', isFaded);
+    });
+
+    // Apply faded class to links NOT connecting nodes in lineage
+    g.selectAll('.link-fill').each(function (d) {
+      if (!d) return;
+      // Handle both string IDs and object references safely
+      const s = d.source;
+      const t = d.target;
+      const sId = (s && typeof s === 'object') ? s.id : s;
+      const tId = (t && typeof t === 'object') ? t.id : t;
+
+      const sourceFaded = !highlightedLineage.has(sId);
+      const targetFaded = !highlightedLineage.has(tId);
+      const isFaded = sourceFaded || targetFaded;
+      d3.select(this).classed('faded', isFaded);
+    });
+  }, [highlightedLineage]);
 
   const handleNodeClick = (node) => {
     // Navigate to team detail page for all users (replacing old Edit wizard)
@@ -1137,6 +1220,7 @@ export default function TimelineGraph({
             onTierFilterChange={onTierFilterChange}
             onZoomReset={handleZoomReset}
             onTeamSelect={handleTeamSelect}
+            onFocusChange={onFocusChange}
             searchNodes={data?.nodes || []}
             initialStartYear={initialStartYear}
             initialEndYear={initialEndYear}

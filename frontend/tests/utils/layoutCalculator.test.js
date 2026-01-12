@@ -249,4 +249,139 @@ describe('LayoutCalculator', () => {
       expect(layout2.rowHeight / calc2.pixelsPerYear).toBe(1);
     });
   });
+
+  describe('NaN Prevention', () => {
+    it('should handle empty node list without producing NaN', () => {
+      const graphData = { nodes: [], links: [] };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // With no nodes, layout should have empty arrays
+      expect(layout.nodes).toEqual([]);
+      expect(layout.links).toEqual([]);
+
+      // Year range should still be valid (not NaN)
+      expect(layout.yearRange.min).not.toBeNaN();
+      expect(layout.yearRange.max).not.toBeNaN();
+    });
+
+    it('should handle single node without producing NaN', () => {
+      const graphData = {
+        nodes: [
+          {
+            id: 'solo-node',
+            founding_year: 2000,
+            eras: [{ year: 2000, name: 'Solo Team', tier: 1 }]
+          }
+        ],
+        links: []
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // Node position should not be NaN
+      expect(layout.nodes).toHaveLength(1);
+      expect(layout.nodes[0].x).not.toBeNaN();
+      expect(layout.nodes[0].y).not.toBeNaN();
+      expect(layout.nodes[0].width).not.toBeNaN();
+      expect(layout.nodes[0].height).not.toBeNaN();
+    });
+
+    it('should handle zero-width container gracefully', () => {
+      const graphData = createMockGraphData();
+      const calculator = new LayoutCalculator(graphData, 0, 600);
+      const layout = calculator.calculateLayout();
+
+      // Should not crash and should not produce NaN
+      layout.nodes.forEach(node => {
+        expect(node.x).not.toBeNaN();
+        expect(node.y).not.toBeNaN();
+      });
+    });
+
+    it('should handle nodes with same founding year', () => {
+      const graphData = {
+        nodes: [
+          { id: 'node1', founding_year: 2000, eras: [{ year: 2000, name: 'A', tier: 1 }] },
+          { id: 'node2', founding_year: 2000, eras: [{ year: 2000, name: 'B', tier: 1 }] },
+          { id: 'node3', founding_year: 2000, eras: [{ year: 2000, name: 'C', tier: 1 }] }
+        ],
+        links: []
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // All nodes should have valid positions
+      layout.nodes.forEach(node => {
+        expect(node.x).not.toBeNaN();
+        expect(node.y).not.toBeNaN();
+      });
+    });
+  });
+
+  describe('Link Validation', () => {
+    it('should filter out links with missing source nodes', () => {
+      const graphData = {
+        nodes: [
+          { id: 'node1', founding_year: 2000, eras: [{ year: 2000, name: 'A', tier: 1 }] }
+        ],
+        links: [
+          { source: 'node1', target: 'node2', year: 2001, type: 'LEGAL_TRANSFER' }, // node2 missing
+          { source: 'node1', target: 'node1', year: 2000, type: 'SPIRITUAL_SUCCESSION' }  // valid self-link
+        ]
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // Should only include the valid link
+      expect(layout.links).toHaveLength(1);
+      expect(layout.links[0].target).toBe('node1');
+    });
+
+    it('should filter out links with missing target nodes', () => {
+      const graphData = {
+        nodes: [
+          { id: 'node1', founding_year: 2000, eras: [{ year: 2000, name: 'A', tier: 1 }] },
+          { id: 'node2', founding_year: 2002, eras: [{ year: 2002, name: 'B', tier: 1 }] }
+        ],
+        links: [
+          { source: 'nonexistent', target: 'node1', year: 2001, type: 'LEGAL_TRANSFER' }, // source missing
+          { source: 'node1', target: 'node2', year: 2002, type: 'LEGAL_TRANSFER' }  // valid
+        ]
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // Should only include the valid link
+      expect(layout.links).toHaveLength(1);
+      expect(layout.links[0].source).toBe('node1');
+      expect(layout.links[0].target).toBe('node2');
+    });
+
+    it('should filter out links with both source and target missing', () => {
+      const graphData = {
+        nodes: [
+          { id: 'node1', founding_year: 2000, eras: [{ year: 2000, name: 'A', tier: 1 }] }
+        ],
+        links: [
+          { source: 'ghost1', target: 'ghost2', year: 2001, type: 'LEGAL_TRANSFER' }, // both missing
+          { source: 'node1', target: 'ghost3', year: 2002, type: 'SPIRITUAL_SUCCESSION' } // target missing
+        ]
+      };
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // Should have no links
+      expect(layout.links).toHaveLength(0);
+    });
+
+    it('should preserve all links when all nodes exist', () => {
+      const graphData = createMockGraphData(); // Has 3 nodes, 2 links
+      const calculator = new LayoutCalculator(graphData, 1000, 600);
+      const layout = calculator.calculateLayout();
+
+      // All links should be preserved
+      expect(layout.links).toHaveLength(2);
+    });
+  });
 });

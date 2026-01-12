@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import SearchBar from './SearchBar';
 import './ControlPanel.css';
 
-export default function ControlPanel({ 
-  onYearRangeChange, 
+export default function ControlPanel({
+  onYearRangeChange,
   onTierFilterChange,
   onZoomReset,
   onTeamSelect,
+  onFocusChange,
   searchNodes = [],
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
@@ -16,6 +17,7 @@ export default function ControlPanel({
   const [startYear, setStartYear] = useState(initialStartYear);
   const [endYear, setEndYear] = useState(initialEndYear);
   const [selectedTiers, setSelectedTiers] = useState(initialTiers);
+  const [focusedNodeId, setFocusedNodeId] = useState(null);
 
   // Keep local state in sync when parent updates
   useEffect(() => {
@@ -23,41 +25,53 @@ export default function ControlPanel({
     setEndYear(initialEndYear);
     setSelectedTiers(initialTiers);
   }, [initialStartYear, initialEndYear, initialTiers]);
-  
+
   const handleApply = () => {
     onYearRangeChange(startYear, endYear);
     onTierFilterChange(selectedTiers);
+    // Call onFocusChange with current focused node (or null if none)
+    onFocusChange?.(focusedNodeId);
   };
-  
+
   const handleReset = () => {
     // Reset to default values
     setStartYear(1900);
     setEndYear(currentYear);
     setSelectedTiers([1, 2, 3]);
+    // Clear focused node
+    setFocusedNodeId(null);
     // Apply reset filters
     onYearRangeChange(1900, currentYear);
     onTierFilterChange([1, 2, 3]);
     // Clear team selection and reset zoom
     onTeamSelect?.(null);
     onZoomReset();
+    // Clear focus
+    onFocusChange?.(null);
   };
-  
+
   const toggleTier = (tier) => {
-    setSelectedTiers(prev => 
-      prev.includes(tier) 
+    setSelectedTiers(prev =>
+      prev.includes(tier)
         ? prev.filter(t => t !== tier)
         : [...prev, tier].sort()
     );
   };
-  
+
+  // Wrap onTeamSelect to track focused node
+  const handleTeamSelectInternal = (node) => {
+    setFocusedNodeId(node?.id || null);
+    onTeamSelect?.(node);
+  };
+
   return (
     <div className="control-panel">
       {searchNodes.length > 0 && (
         <div className="control-section">
           <h3>Find Team</h3>
-          <SearchBar 
+          <SearchBar
             nodes={searchNodes}
-            onTeamSelect={onTeamSelect}
+            onTeamSelect={handleTeamSelectInternal}
           />
         </div>
       )}
@@ -67,9 +81,9 @@ export default function ControlPanel({
         <div className="year-inputs">
           <label>
             Start:
-            <input 
-              type="number" 
-              value={startYear} 
+            <input
+              type="number"
+              value={startYear}
               onChange={(e) => setStartYear(parseInt(e.target.value))}
               min={1900}
               max={endYear}
@@ -77,9 +91,9 @@ export default function ControlPanel({
           </label>
           <label>
             End:
-            <input 
-              type="number" 
-              value={endYear} 
+            <input
+              type="number"
+              value={endYear}
               onChange={(e) => setEndYear(parseInt(e.target.value))}
               min={startYear}
               max={currentYear}
@@ -87,14 +101,14 @@ export default function ControlPanel({
           </label>
         </div>
       </div>
-      
+
       <div className="control-section">
         <h3>Tier Filters</h3>
         <div className="tier-checkboxes">
           {[1, 2, 3].map(tier => (
             <label key={tier}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={selectedTiers.includes(tier)}
                 onChange={() => toggleTier(tier)}
               />
@@ -103,7 +117,7 @@ export default function ControlPanel({
           ))}
         </div>
       </div>
-      
+
       <div className="control-actions">
         <button onClick={handleApply}>Apply Filters</button>
         <button onClick={handleReset}>Reset Filters</button>

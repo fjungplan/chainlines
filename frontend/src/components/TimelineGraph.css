@@ -189,6 +189,27 @@
   pointer-events: auto;
 }
 
+/* Focus Mode: Fade out non-lineage elements */
+.node.faded {
+  opacity: 0.15;
+  transition: opacity 0.3s ease;
+}
+
+.link-fill.faded {
+  opacity: 0.1;
+  transition: opacity 0.3s ease;
+}
+
+.node:not(.faded) {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.link-fill:not(.faded) {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
 
 
 @media (max-width: 768px) {

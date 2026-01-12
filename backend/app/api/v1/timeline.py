@@ -20,6 +20,7 @@ async def get_timeline(
     end_year: int = Query(datetime.utcnow().year, ge=1900, le=2100),
     include_dissolved: bool = True,
     tier_filter: Optional[List[int]] = Query(None),
+    focus_node_id: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
 ):
     service = TimelineService(session)
@@ -28,6 +29,7 @@ async def get_timeline(
         end_year=end_year,
         include_dissolved=include_dissolved,
         tier_filter=tier_filter,
+        focus_node_id=focus_node_id,
     )
     body = jsonable_encoder(data)
     etag = compute_etag(body)

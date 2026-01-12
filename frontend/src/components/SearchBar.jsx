@@ -5,19 +5,20 @@ export default function SearchBar({ nodes, onTeamSelect }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
+  const [selectedNode, setSelectedNode] = useState(null);
   const searchRef = useRef(null);
-  
+
   useEffect(() => {
     if (searchTerm.length < 2) {
       setResults([]);
       return;
     }
-    
+
     const filtered = searchTeams(nodes, searchTerm);
     setResults(filtered.slice(0, 10)); // Limit to 10 results
     setShowResults(true);
   }, [searchTerm, nodes]);
-  
+
   // Close results when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -25,14 +26,14 @@ export default function SearchBar({ nodes, onTeamSelect }) {
         setShowResults(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-  
+
   const searchTeams = (nodes, term) => {
     const lowerTerm = term.toLowerCase();
-    
+
     return nodes
       .map(node => {
         // Search across all eras
@@ -40,9 +41,9 @@ export default function SearchBar({ nodes, onTeamSelect }) {
           era.name.toLowerCase().includes(lowerTerm) ||
           era.uci_code?.toLowerCase().includes(lowerTerm)
         );
-        
+
         if (matchingEras.length === 0) return null;
-        
+
         return {
           node,
           primaryName: matchingEras[matchingEras.length - 1].name,
@@ -53,42 +54,62 @@ export default function SearchBar({ nodes, onTeamSelect }) {
       .filter(Boolean)
       .sort((a, b) => b.score - a.score);
   };
-  
+
   const calculateRelevance = (eras, term) => {
     let score = 0;
     const lowerTerm = term.toLowerCase();
-    
+
     eras.forEach(era => {
       const name = era.name.toLowerCase();
       if (name === lowerTerm) score += 100;
       else if (name.startsWith(lowerTerm)) score += 50;
       else if (name.includes(lowerTerm)) score += 25;
-      
+
       if (era.uci_code?.toLowerCase() === lowerTerm) score += 100;
     });
-    
+
     return score;
   };
-  
+
   const handleSelect = (result) => {
     onTeamSelect(result.node);
-    setSearchTerm('');
+    setSearchTerm(result.primaryName); // Persist the team name
+    setSelectedNode(result.node);
     setShowResults(false);
   };
-  
+
+  const handleClear = () => {
+    setSearchTerm('');
+    setSelectedNode(null);
+    onTeamSelect(null);
+    setShowResults(false);
+  };
+
   return (
     <div className="search-bar" ref={searchRef}>
-      <input
-        type="text"
-        placeholder="Search teams..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        onFocus={() => results.length > 0 && setShowResults(true)}
-      />
+      <div className="search-input-wrapper">
+        <input
+          type="text"
+          placeholder="Search teams..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onFocus={() => results.length > 0 && setShowResults(true)}
+        />
+        {selectedNode && (
+          <button
+            className="search-clear-button"
+            onClick={handleClear}
+            aria-label="clear"
+            title="Clear selection"
+          >
+            ×
+          </button>
+        )}
+      </div>
       {showResults && results.length > 0 && (
         <div className="search-results">
           {results.map((result, index) => (
-            <div 
+            <div
               key={result.node.id}
               className="search-result-item"
               onClick={() => handleSelect(result)}
