@@ -32,6 +32,19 @@ export class LayoutCalculator {
     const availableWidth = this.width - 2 * padding;
     const span = this.yearRange.max - this.yearRange.min;
     this.pixelsPerYear = (availableWidth / span) * this.stretchFactor;
+
+    // Dynamic Vertical Scaling
+    // Node Height = pixelsPerYear * HEIGHT_FACTOR
+    // Row Height = Node Height * 1.5
+    this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
+    this.rowHeight = this.nodeHeight * 2;
+
+    console.log('LayoutCalculator Vertical Scaling:', {
+      pixelsPerYear: this.pixelsPerYear,
+      nodeHeight: this.nodeHeight,
+      rowHeight: this.rowHeight,
+      factor: VISUALIZATION.HEIGHT_FACTOR
+    });
   }
 
   calculateYearRange() {
@@ -229,9 +242,8 @@ export class LayoutCalculator {
       return earliestA - earliestB;
     });
 
-    // PROPORTIONAL SCALING: rowHeight based on pixelsPerYear for consistent aspect ratio
-    const ASPECT_RATIO_MULTIPLIER = 1; // Square aspect ratio (height = width)
-    const rowHeight = this.pixelsPerYear * ASPECT_RATIO_MULTIPLIER;
+    // PROPORTIONAL SCALING: rowHeight and nodeHeight are now dynamic based on pixelsPerYear
+    // this.rowHeight was calculated in constructor
     const positioned = [];
     const nodePositions = new Map();
     let swimlaneIndex = 0;
@@ -276,11 +288,12 @@ export class LayoutCalculator {
       // Assign Y positions based on swimlane assignments and temporal ordering
       nodesPerLane.forEach((laneNodes, relativeLane) => {
         laneNodes.forEach(node => {
-          const y = 50 + (swimlaneIndex + relativeLane) * rowHeight;
+          // Use dynamic rowHeight
+          const y = 50 + (swimlaneIndex + relativeLane) * this.rowHeight;
           nodePositions.set(node.id, {
             ...node,
             y,
-            height: VISUALIZATION.NODE_HEIGHT
+            height: this.nodeHeight // Use dynamic nodeHeight
           });
           positioned.push(nodePositions.get(node.id));
         });
@@ -290,7 +303,7 @@ export class LayoutCalculator {
       swimlaneIndex += uniqueLanes.length;
     });
 
-    return { positioned, rowHeight };
+    return { positioned, rowHeight: this.rowHeight };
   }
 
   /**

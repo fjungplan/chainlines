@@ -228,8 +228,8 @@ describe('LayoutCalculator', () => {
       const calculator = new LayoutCalculator(graphData, 1000, 600, null, 1);
       const layout = calculator.calculateLayout();
 
-      // With ASPECT_RATIO_MULTIPLIER = 1, rowHeight should equal pixelsPerYear
-      expect(layout.rowHeight).toBe(calculator.pixelsPerYear);
+      // With ASPECT_RATIO_MULTIPLIER = 1, rowHeight should equal pixelsPerYear * 1.5
+      expect(layout.rowHeight).toBe(calculator.pixelsPerYear * 1.5);
     });
 
     it('should maintain aspect ratio = 1 (square)', () => {
@@ -244,9 +244,9 @@ describe('LayoutCalculator', () => {
       const layout1 = calc1.calculateLayout();
       const layout2 = calc2.calculateLayout();
 
-      // Aspect ratio should be 1 for both (rowHeight / pixelsPerYear = 1)
-      expect(layout1.rowHeight / calc1.pixelsPerYear).toBe(1);
-      expect(layout2.rowHeight / calc2.pixelsPerYear).toBe(1);
+      // Aspect ratio should be 1.5 for both (rowHeight / pixelsPerYear = 1.5)
+      expect(layout1.rowHeight / calc1.pixelsPerYear).toBeCloseTo(1.5);
+      expect(layout2.rowHeight / calc2.pixelsPerYear).toBeCloseTo(1.5);
     });
   });
 
