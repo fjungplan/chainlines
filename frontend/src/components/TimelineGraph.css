@@ -1,21 +1,26 @@
 .timeline-layout {
-  display: flex;
+  display: block;
+  /* Was flex, now using absolute positioning for children */
+  position: relative;
+  /* Context for absolute children */
   width: 100%;
   height: 100%;
   padding: 0;
   overflow: hidden;
   margin-top: 0;
-  gap: 0;
 }
 
 .timeline-graph-container {
-  position: relative;
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background-color: #1a1a1a;
   padding: 0;
   touch-action: none;
+  z-index: 10;
 }
 
 .timeline-graph-container svg {
@@ -23,28 +28,37 @@
 }
 
 .timeline-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   width: 240px;
   min-width: 240px;
   padding: 12px;
-  background-color: #2a2a2a;
+  background-color: rgba(42, 42, 42, 0.95);
+  /* Slightly transparent background for overlay feel */
+  border-right: 1px solid #444;
+  /* Default border styles */
+  backdrop-filter: blur(5px);
   display: flex;
   flex-direction: column;
   gap: 10px;
   align-items: stretch;
-  align-items: stretch;
   overflow: hidden;
-  /* Was auto - making this a frame */
-  transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease;
-  position: relative;
-  z-index: 20;
+  transition: transform 0.3s ease, width 0.3s ease, min-width 0.3s ease;
+  z-index: 50;
+  /* Above graph container */
+}
+
+/* Specific positioning */
+.timeline-sidebar.left {
+  left: 0;
+  border-right: 1px solid #444;
 }
 
 .timeline-sidebar.right {
+  right: 0;
   border-left: 1px solid #444;
-}
-
-.timeline-sidebar.left {
-  border-right: 1px solid #444;
+  border-right: none;
 }
 
 .timeline-sidebar.collapsed {
