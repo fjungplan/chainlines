@@ -31,8 +31,9 @@
   flex-direction: column;
   gap: 10px;
   align-items: stretch;
-  overflow-y: auto;
-  overflow-x: hidden;
+  align-items: stretch;
+  overflow: hidden;
+  /* Was auto - making this a frame */
   transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease;
   position: relative;
   z-index: 20;
@@ -47,10 +48,12 @@
 }
 
 .timeline-sidebar.collapsed {
-  width: 48px;
-  min-width: 48px;
-  padding: 12px 6px;
+  width: 16px;
+  min-width: 16px;
+  padding: 0;
   align-items: center;
+  overflow: visible;
+  /* Allow button to retain z-index/visibility context */
 }
 
 .timeline-sidebar.collapsed .sidebar-content {
@@ -64,44 +67,64 @@
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  width: 100%;
   transition: opacity 0.2s ease;
   opacity: 1;
+  flex: 1;
+  /* Take available height */
+  overflow-y: auto;
+  /* Scroll internally */
+  overflow-x: hidden;
 }
 
 .sidebar-toggle-btn {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  /* Full vertical click area */
+  width: 12px;
+  /* Narrower hit strip to avoid content bleed */
+  transform: none;
   background: transparent;
   border: none;
-  color: #888;
+  color: #555;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  margin-bottom: 8px;
-  transition: all 0.2s ease;
+  z-index: 100;
+  transition: background 0.2s ease, color 0.2s ease;
+  margin: 0;
 }
 
 .sidebar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  /* Subtle strip highlight */
   color: #fff;
 }
 
+.sidebar-toggle-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Inner edge positioning */
 .timeline-sidebar.left .sidebar-toggle-btn {
-  align-self: flex-end;
-  /* Align to right (inner edge) for Left Sidebar */
+  right: 0;
+  /* Right edge of the left sidebar */
 }
 
-.timeline-sidebar.right.collapsed .sidebar-toggle-btn {
-  align-self: center;
-  margin-bottom: 0;
+.timeline-sidebar.right .sidebar-toggle-btn {
+  left: 0;
+  /* Left edge of the right sidebar */
 }
 
-.timeline-sidebar.left.collapsed .sidebar-toggle-btn {
-  align-self: center;
-  /* Center the button when collapsed */
-  margin-bottom: 0;
+/* When COLLAPSED, the button fills the 16px width */
+.timeline-sidebar.collapsed .sidebar-toggle-btn {
+  width: 100%;
+  right: 0;
+  left: 0;
 }
 
 /* Ensure minimap wrapper takes full width */

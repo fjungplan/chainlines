@@ -66,7 +66,7 @@ export default function TimelineGraph({
     startYear: currentStartYear || initialStartYear,
     endYear: currentEndYear || initialEndYear,
     isSidebarCollapsed: true,
-    isLeftSidebarCollapsed: false
+    isLeftSidebarCollapsed: true
   });
 
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
