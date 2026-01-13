@@ -71,7 +71,7 @@ export default function TimelineGraph({
 
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
 
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   // Note: props-change effect moved below zoomToYearRange definition to avoid TDZ
@@ -1262,40 +1262,42 @@ export default function TimelineGraph({
         <svg ref={svgRef}></svg>
       </div>
 
-      <div className={`timeline-sidebar right ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <button
-          className="sidebar-toggle-btn"
-          onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
-          aria-label={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {currentFilters.isSidebarCollapsed ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg> // Left arrow (expand) - assumes sidebar on right
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg> // Right arrow (collapse) - assumes sidebar on right
-          )}
-        </button>
+      {isAdmin() && (
+        <div className={`timeline-sidebar right ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
+            aria-label={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {currentFilters.isSidebarCollapsed ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 18l-6-6 6-6" />
+              </svg> // Left arrow (expand) - assumes sidebar on right
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" />
+              </svg> // Right arrow (collapse) - assumes sidebar on right
+            )}
+          </button>
 
-        <div className="sidebar-content">
-          <ControlPanel
-            onYearRangeChange={onYearRangeChange}
-            onTierFilterChange={onTierFilterChange}
-            onZoomReset={handleZoomReset}
-            onTeamSelect={handleTeamSelect}
-            onFocusChange={onFocusChange}
-            searchNodes={data?.nodes || []}
-            initialStartYear={initialStartYear}
-            initialEndYear={initialEndYear}
-            initialTiers={initialTiers}
-          />
+          <div className="sidebar-content">
+            <ControlPanel
+              onYearRangeChange={onYearRangeChange}
+              onTierFilterChange={onTierFilterChange}
+              onZoomReset={handleZoomReset}
+              onTeamSelect={handleTeamSelect}
+              onFocusChange={onFocusChange}
+              searchNodes={data?.nodes || []}
+              initialStartYear={initialStartYear}
+              initialEndYear={initialEndYear}
+              initialTiers={initialTiers}
+            />
 
 
+          </div>
         </div>
-      </div>
+      )}
 
       <Tooltip
         content={tooltip.content}
