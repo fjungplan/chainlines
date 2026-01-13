@@ -12,6 +12,7 @@ import Tooltip from './Tooltip';
 import { TooltipBuilder } from '../utils/tooltipBuilder';
 import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
+import Minimap from './Minimap';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { OptimizedRenderer } from '../utils/optimizedRenderer';
 
@@ -21,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function TimelineGraph({
   data,
+  fullData,
   onYearRangeChange,
   onTierFilterChange,
   onFocusChange,
@@ -47,11 +49,15 @@ export default function TimelineGraph({
   const optimizedRenderer = useRef(null);
   const currentTransform = useRef(d3.zoomIdentity);
   const graphDataRef = useRef(null);
+  const fullLayoutRef = useRef(null); // Full unfiltered layout for Minimap
   const virtualizationTimeout = useRef(null);
 
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
   const [highlightedLineage, setHighlightedLineage] = useState(null);
+  const [transformVersion, setTransformVersion] = useState(0); // Increment to force Minimap re-render on zoom/pan
+  const [layoutVersion, setLayoutVersion] = useState(0); // Increment to force Minimap re-render on layout change
+
 
 
 
@@ -59,7 +65,8 @@ export default function TimelineGraph({
   const [currentFilters, setCurrentFilters] = useState({
     startYear: currentStartYear || initialStartYear,
     endYear: currentEndYear || initialEndYear,
-    isSidebarCollapsed: true
+    isSidebarCollapsed: true,
+    isLeftSidebarCollapsed: false
   });
 
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
@@ -147,6 +154,22 @@ export default function TimelineGraph({
       console.error('Graph render error:', error);
     }
   }, [data]);
+
+  // Calculate full layout for Minimap when fullData is available
+  useEffect(() => {
+    if (!fullData || !fullData.nodes || fullData.nodes.length === 0) return;
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Calculate layout from full data (no year filtering)
+    const calculator = new LayoutCalculator(fullData, width, height, null);
+    const layout = calculator.calculateLayout();
+    fullLayoutRef.current = layout;
+    console.log('Calculated full layout for Minimap:', layout.nodes.length, 'nodes');
+  }, [fullData]);
 
   // Recalculate layout/zoom bounds on resize so minimum zoom remains responsive
   useEffect(() => {
@@ -468,6 +491,7 @@ export default function TimelineGraph({
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
     performanceMonitor.current.metrics.linkCount = layout.links.length;
     currentLayout.current = layout;
+    setLayoutVersion(v => v + 1); // Force re-render of dependents (Minimap)
     graphDataRef.current = graphData;
 
     // Perform actual rendering (will be called after all render functions are defined)
@@ -692,6 +716,7 @@ export default function TimelineGraph({
       .on('zoom', (event) => {
         console.log('🎯 ZOOM EVENT:', { k: event.transform.k, x: event.transform.x, y: event.transform.y });
         currentTransform.current = event.transform;
+        setTransformVersion(v => v + 1); // Trigger Minimap re-render
         g.attr('transform', event.transform);
 
         // Zoom level manager and LOD updates
@@ -1185,6 +1210,46 @@ export default function TimelineGraph({
 
   return (
     <div className="timeline-layout">
+      <div className={`timeline-sidebar left ${currentFilters.isLeftSidebarCollapsed ? 'collapsed' : ''}`}>
+        <button
+          className="sidebar-toggle-btn"
+          onClick={() => setCurrentFilters(prev => ({ ...prev, isLeftSidebarCollapsed: !prev.isLeftSidebarCollapsed }))}
+          aria-label={currentFilters.isLeftSidebarCollapsed ? "Expand minimap" : "Collapse minimap"}
+          title={currentFilters.isLeftSidebarCollapsed ? "Expand minimap" : "Collapse minimap"}
+        >
+          {currentFilters.isLeftSidebarCollapsed ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" />
+            </svg> // Right arrow (expand)
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg> // Left arrow (collapse)
+          )}
+        </button>
+
+        <div className="sidebar-content minimap-wrapper">
+          {/* Minimap embedded here - uses FULL layout for complete timeline view */}
+          {fullLayoutRef.current && currentLayout.current && containerRef.current && !currentFilters.isLeftSidebarCollapsed && (
+            <Minimap
+              layout={fullLayoutRef.current}
+              mainLayout={currentLayout.current} // For viewport coordinate mapping
+              transform={currentTransform.current}
+              containerDimensions={{
+                width: containerRef.current.clientWidth,
+                height: containerRef.current.clientHeight
+              }}
+              onNavigate={(newTransform) => {
+                if (svgRef.current && zoomBehavior.current) {
+                  const svg = d3.select(svgRef.current);
+                  svg.call(zoomBehavior.current.transform, newTransform);
+                }
+              }}
+            />
+          )}
+        </div>
+      </div>
+
       <div
         ref={containerRef}
         className="timeline-graph-container"
@@ -1196,7 +1261,8 @@ export default function TimelineGraph({
         </div>
         <svg ref={svgRef}></svg>
       </div>
-      <div className={`timeline-sidebar ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
+
+      <div className={`timeline-sidebar right ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
         <button
           className="sidebar-toggle-btn"
           onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
