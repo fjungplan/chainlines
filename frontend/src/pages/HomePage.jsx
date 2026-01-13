@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTimeline } from '../hooks/useTeamData';
 import { useResponsive } from '../hooks/useResponsive';
 import { LoadingSpinner } from '../components/Loading';
@@ -10,15 +10,25 @@ function HomePage() {
   const { isMobile } = useResponsive();
   const currentYear = new Date().getFullYear();
   const [filtersVersion, setFiltersVersion] = useState(0);
-  
+  const [fullData, setFullData] = useState(null); // State for full unfiltered data (for Minimap)
+
   const [filters, setFilters] = useState({
     start_year: 1900,
     end_year: currentYear,
-    tier_filter: [1, 2, 3]
+    tier_filter: [1, 2, 3],
+    focus_node_id: null
   });
-  
+
   const { data, isLoading, error, refetch } = useTimeline(filters);
-  
+
+  // Cache full data on first successful load (initial filters are unfiltered range)
+  useEffect(() => {
+    if (data && !fullData && data.nodes?.length > 0) {
+      setFullData(data);
+      console.log('Cached full data for Minimap:', data.nodes.length, 'nodes');
+    }
+  }, [data, fullData]);
+
   const handleYearRangeChange = (startYear, endYear) => {
     setFilters(prev => ({
       ...prev,
@@ -27,11 +37,18 @@ function HomePage() {
     }));
     setFiltersVersion(v => v + 1); // force downstream refresh even if values unchanged
   };
-  
+
   const handleTierFilterChange = (tiers) => {
     setFilters(prev => ({
       ...prev,
       tier_filter: tiers.length > 0 ? tiers : null
+    }));
+  };
+
+  const handleFocusChange = (nodeId) => {
+    setFilters(prev => ({
+      ...prev,
+      focus_node_id: nodeId
     }));
   };
 
@@ -59,10 +76,12 @@ function HomePage() {
       </div>
     </div>
   ) : (
-    <TimelineGraph 
-      data={data} 
+    <TimelineGraph
+      data={data}
+      fullData={fullData}
       onYearRangeChange={handleYearRangeChange}
       onTierFilterChange={handleTierFilterChange}
+      onFocusChange={handleFocusChange}
       filtersVersion={filtersVersion}
       initialStartYear={filters.start_year}
       initialEndYear={filters.end_year}

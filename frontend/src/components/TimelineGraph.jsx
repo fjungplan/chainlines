@@ -12,6 +12,7 @@ import Tooltip from './Tooltip';
 import { TooltipBuilder } from '../utils/tooltipBuilder';
 import { GraphNavigation } from '../utils/graphNavigation';
 import { ViewportManager } from '../utils/virtualization';
+import Minimap from './Minimap';
 import { PerformanceMonitor } from '../utils/performanceMonitor';
 import { OptimizedRenderer } from '../utils/optimizedRenderer';
 
@@ -21,8 +22,10 @@ import { useNavigate } from 'react-router-dom';
 
 export default function TimelineGraph({
   data,
+  fullData,
   onYearRangeChange,
   onTierFilterChange,
+  onFocusChange,
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
   initialTiers = [1, 2, 3],
@@ -46,10 +49,15 @@ export default function TimelineGraph({
   const optimizedRenderer = useRef(null);
   const currentTransform = useRef(d3.zoomIdentity);
   const graphDataRef = useRef(null);
+  const fullLayoutRef = useRef(null); // Full unfiltered layout for Minimap
   const virtualizationTimeout = useRef(null);
 
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
+  const [highlightedLineage, setHighlightedLineage] = useState(null);
+  const [transformVersion, setTransformVersion] = useState(0); // Increment to force Minimap re-render on zoom/pan
+  const [layoutVersion, setLayoutVersion] = useState(0); // Increment to force Minimap re-render on layout change
+
 
 
 
@@ -57,12 +65,13 @@ export default function TimelineGraph({
   const [currentFilters, setCurrentFilters] = useState({
     startYear: currentStartYear || initialStartYear,
     endYear: currentEndYear || initialEndYear,
-    isSidebarCollapsed: true
+    isSidebarCollapsed: true,
+    isLeftSidebarCollapsed: true
   });
 
   const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
 
-  const { user, canEdit } = useAuth();
+  const { user, canEdit, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   // Note: props-change effect moved below zoomToYearRange definition to avoid TDZ
@@ -96,32 +105,24 @@ export default function TimelineGraph({
   }, []);
 
   // Helper to compute responsive minimum zoom
-  // This is the "fit everything" scale - can't zoom out further than this
+  // This is the "horizontal fit" scale - can't zoom out further than this
+  // User should never see empty space left/right of the timeline
   const computeMinScale = useCallback((layout) => {
     const containerWidth = containerRef.current?.clientWidth || 1;
-    const containerHeight = containerRef.current?.clientHeight || 1;
 
     const spanX = layout?.xScale
       ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min)
       : 0;
-    const nodes = layout?.nodes || [];
-    const maxNodeBottom = nodes.length
-      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
-      : 0;
-    const minNodeTop = nodes.length ? Math.min(...nodes.map(n => n.y || 0)) : 0;
-    const paddedMinY = minNodeTop - VERTICAL_PADDING;
-    const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
-    const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
     if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
 
-    // Minimum scale is the one that fits BOTH dimensions
-    // (the smaller of the two - more zoomed out)
+    // Minimum scale = horizontal fit only
+    // This ensures the full timeline width always fills the viewport
+    // Vertical content may extend beyond viewport (user pans to see it)
     const scaleX = containerWidth / spanX;
-    const scaleY = containerHeight / spanY;
 
     // Add safety floor of 0.01 to prevent invalid transforms
-    return Math.max(0.01, Math.min(scaleX, scaleY));
+    return Math.max(0.01, scaleX);
   }, []);
 
   // Log performance metrics in development
@@ -153,6 +154,22 @@ export default function TimelineGraph({
       console.error('Graph render error:', error);
     }
   }, [data]);
+
+  // Calculate full layout for Minimap when fullData is available
+  useEffect(() => {
+    if (!fullData || !fullData.nodes || fullData.nodes.length === 0) return;
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Calculate layout from full data (no year filtering)
+    const calculator = new LayoutCalculator(fullData, width, height, null);
+    const layout = calculator.calculateLayout();
+    fullLayoutRef.current = layout;
+    console.log('Calculated full layout for Minimap:', layout.nodes.length, 'nodes');
+  }, [fullData]);
 
   // Recalculate layout/zoom bounds on resize so minimum zoom remains responsive
   useEffect(() => {
@@ -212,6 +229,7 @@ export default function TimelineGraph({
 
     const layout = currentLayout.current;
     const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
 
     const x1 = layout.xScale(startYear);
     const x2 = layout.xScale(endYear);
@@ -224,7 +242,13 @@ export default function TimelineGraph({
 
     const centerX = (x1 + x2) / 2;
     const targetX = containerWidth / 2 - centerX * targetScale;
-    const targetY = 0;
+
+    // Bottom-align: show most recent teams (bottom of canvas)
+    const nodes = layout.nodes || [];
+    const maxNodeBottom = nodes.length
+      ? Math.max(...nodes.map(n => (n.y || 0) + (n.height || 0)))
+      : containerHeight;
+    const targetY = containerHeight - (maxNodeBottom + VERTICAL_PADDING) * targetScale;
 
     const svg = d3.select(svgRef.current);
     const transform = d3.zoomIdentity
@@ -467,6 +491,7 @@ export default function TimelineGraph({
     performanceMonitor.current.metrics.nodeCount = layout.nodes.length;
     performanceMonitor.current.metrics.linkCount = layout.links.length;
     currentLayout.current = layout;
+    setLayoutVersion(v => v + 1); // Force re-render of dependents (Minimap)
     graphDataRef.current = graphData;
 
     // Perform actual rendering (will be called after all render functions are defined)
@@ -499,32 +524,30 @@ export default function TimelineGraph({
       const paddedMaxY = maxNodeBottom + VERTICAL_PADDING;
 
       const spanX = layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min);
-      const spanY = Math.max(1, paddedMaxY - paddedMinY);
 
-      // Initial scale: fit ALL content (both width and height)
+      // Initial scale: fit horizontal only (timeline width fills viewport)
+      // Vertical content extends beyond viewport - user pans to see it
       const scaleX = width / spanX;
-      const scaleY = height / spanY;
-      const targetScale = Math.max(0.01, Math.min(scaleX, scaleY));
+      const targetScale = Math.max(0.01, scaleX);
 
-      // Center the content in the viewport using padded bounds so labels don't overlap
+      // Horizontal: center the content
       const centerX = (layout.xScale(layout.yearRange.min) + layout.xScale(layout.yearRange.max)) / 2;
-      const centerY = (paddedMinY + paddedMaxY) / 2;
       const targetX = width / 2 - centerX * targetScale;
-      const targetY = height / 2 - centerY * targetScale;
+
+      // Vertical: align BOTTOM of content with bottom of viewport (show most recent teams)
+      // paddedMaxY * targetScale = height (align bottom of scaled content to bottom of viewport)
+      const targetY = height - paddedMaxY * targetScale;
 
       console.log('🎯 INITIAL TRANSFORM CALC:', {
         nodeCount: nodes.length,
         yearRange: [layout.yearRange.min, layout.yearRange.max],
         spanX,
-        spanY,
         containerWidth: width,
         containerHeight: height,
         scaleX,
-        scaleY,
         targetScale,
         minScale,
         centerX,
-        centerY,
         targetX,
         targetY,
         minNodeTop,
@@ -693,6 +716,7 @@ export default function TimelineGraph({
       .on('zoom', (event) => {
         console.log('🎯 ZOOM EVENT:', { k: event.transform.k, x: event.transform.x, y: event.transform.y });
         currentTransform.current = event.transform;
+        setTransformVersion(v => v + 1); // Trigger Minimap re-render
         g.attr('transform', event.transform);
 
         // Zoom level manager and LOD updates
@@ -1052,11 +1076,92 @@ export default function TimelineGraph({
       });
   };
 
+  // Find all nodes in a team's lineage (predecessors and successors)
+  const findLineage = useCallback((selectedNode, allNodes, allLinks) => {
+    if (!selectedNode) return new Set();
+
+    const lineageSet = new Set([selectedNode.id]);
+    const queue = [selectedNode.id];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+
+      // Find all connected links
+      allLinks.forEach(link => {
+        // Handle both string IDs and object references
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (sourceId === currentId && !lineageSet.has(targetId)) {
+          lineageSet.add(targetId);
+          queue.push(targetId);
+        }
+        if (targetId === currentId && !lineageSet.has(sourceId)) {
+          lineageSet.add(sourceId);
+          queue.push(sourceId);
+        }
+      });
+    }
+
+    return lineageSet;
+  }, []);
+
   const handleTeamSelect = useCallback((node) => {
+    if (!node) {
+      // Clear highlighting
+      setHighlightedLineage(null);
+      return;
+    }
+
+    // Find lineage and apply highlighting
+    if (data?.nodes && data?.links) {
+      const lineage = findLineage(node, data.nodes, data.links);
+      setHighlightedLineage(lineage);
+    }
+
+    // Also zoom to node
     if (navigationRef.current) {
       navigationRef.current.focusOnNode(node);
     }
-  }, []);
+  }, [data, findLineage]);
+
+  // Apply visual highlighting when lineage changes
+  // Apply visual highlighting when lineage changes
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const g = svg.select('g');
+
+    if (!highlightedLineage) {
+      // Clear all fading
+      g.selectAll('.node').classed('faded', false);
+      g.selectAll('.link-fill').classed('faded', false);
+      return;
+    }
+
+    // Apply faded class to nodes NOT in lineage
+    g.selectAll('.node').each(function (d) {
+      if (!d) return;
+      const isFaded = !highlightedLineage.has(d.id);
+      d3.select(this).classed('faded', isFaded);
+    });
+
+    // Apply faded class to links NOT connecting nodes in lineage
+    g.selectAll('.link-fill').each(function (d) {
+      if (!d) return;
+      // Handle both string IDs and object references safely
+      const s = d.source;
+      const t = d.target;
+      const sId = (s && typeof s === 'object') ? s.id : s;
+      const tId = (t && typeof t === 'object') ? t.id : t;
+
+      const sourceFaded = !highlightedLineage.has(sId);
+      const targetFaded = !highlightedLineage.has(tId);
+      const isFaded = sourceFaded || targetFaded;
+      d3.select(this).classed('faded', isFaded);
+    });
+  }, [highlightedLineage]);
 
   const handleNodeClick = (node) => {
     // Navigate to team detail page for all users (replacing old Edit wizard)
@@ -1105,6 +1210,46 @@ export default function TimelineGraph({
 
   return (
     <div className="timeline-layout">
+      <div className={`timeline-sidebar left ${currentFilters.isLeftSidebarCollapsed ? 'collapsed' : ''}`}>
+        <button
+          className="sidebar-toggle-btn"
+          onClick={() => setCurrentFilters(prev => ({ ...prev, isLeftSidebarCollapsed: !prev.isLeftSidebarCollapsed }))}
+          aria-label={currentFilters.isLeftSidebarCollapsed ? "Expand minimap" : "Collapse minimap"}
+          title={currentFilters.isLeftSidebarCollapsed ? "Expand minimap" : "Collapse minimap"}
+        >
+          {currentFilters.isLeftSidebarCollapsed ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" />
+            </svg> // Right arrow (expand)
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 18l-6-6 6-6" />
+            </svg> // Left arrow (collapse)
+          )}
+        </button>
+
+        <div className="sidebar-content minimap-wrapper">
+          {/* Minimap embedded here - uses FULL layout for complete timeline view */}
+          {fullLayoutRef.current && currentLayout.current && containerRef.current && !currentFilters.isLeftSidebarCollapsed && (
+            <Minimap
+              layout={fullLayoutRef.current}
+              mainLayout={currentLayout.current} // For viewport coordinate mapping
+              transform={currentTransform.current}
+              containerDimensions={{
+                width: containerRef.current.clientWidth,
+                height: containerRef.current.clientHeight
+              }}
+              onNavigate={(newTransform) => {
+                if (svgRef.current && zoomBehavior.current) {
+                  const svg = d3.select(svgRef.current);
+                  svg.call(zoomBehavior.current.transform, newTransform);
+                }
+              }}
+            />
+          )}
+        </div>
+      </div>
+
       <div
         ref={containerRef}
         className="timeline-graph-container"
@@ -1112,43 +1257,47 @@ export default function TimelineGraph({
         <div className="timeline-ruler top" ref={rulerTopRef} aria-hidden="true" />
         <div className="timeline-ruler bottom" ref={rulerBottomRef} aria-hidden="true" />
         <div className="timeline-copyright" aria-label="Copyright">
-          © 2025 - {new Date().getFullYear()} ChainLines
+          © 2025-{new Date().getFullYear()} ChainLines <span style={{ opacity: 0.4 }}>|</span> Code: <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPLv3</a> • Content: <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC-BY-SA 4.0</a> • <a href="https://github.com/fjungplan/chainlines" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
         </div>
         <svg ref={svgRef}></svg>
       </div>
-      <div className={`timeline-sidebar ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <button
-          className="sidebar-toggle-btn"
-          onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
-          aria-label={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {currentFilters.isSidebarCollapsed ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 18l-6-6 6-6" />
-            </svg> // Left arrow (expand) - assumes sidebar on right
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 18l6-6-6-6" />
-            </svg> // Right arrow (collapse) - assumes sidebar on right
-          )}
-        </button>
 
-        <div className="sidebar-content">
-          <ControlPanel
-            onYearRangeChange={onYearRangeChange}
-            onTierFilterChange={onTierFilterChange}
-            onZoomReset={handleZoomReset}
-            onTeamSelect={handleTeamSelect}
-            searchNodes={data?.nodes || []}
-            initialStartYear={initialStartYear}
-            initialEndYear={initialEndYear}
-            initialTiers={initialTiers}
-          />
+      {isAdmin() && (
+        <div className={`timeline-sidebar right ${currentFilters.isSidebarCollapsed ? 'collapsed' : ''}`}>
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setCurrentFilters(prev => ({ ...prev, isSidebarCollapsed: !prev.isSidebarCollapsed }))}
+            aria-label={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={currentFilters.isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {currentFilters.isSidebarCollapsed ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 18l-6-6 6-6" />
+              </svg> // Left arrow (expand) - assumes sidebar on right
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" />
+              </svg> // Right arrow (collapse) - assumes sidebar on right
+            )}
+          </button>
+
+          <div className="sidebar-content">
+            <ControlPanel
+              onYearRangeChange={onYearRangeChange}
+              onTierFilterChange={onTierFilterChange}
+              onZoomReset={handleZoomReset}
+              onTeamSelect={handleTeamSelect}
+              onFocusChange={onFocusChange}
+              searchNodes={data?.nodes || []}
+              initialStartYear={initialStartYear}
+              initialEndYear={initialEndYear}
+              initialTiers={initialTiers}
+            />
 
 
+          </div>
         </div>
-      </div>
+      )}
 
       <Tooltip
         content={tooltip.content}

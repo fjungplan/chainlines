@@ -377,3 +377,170 @@ async def sample_teams(isolated_session):
     for node in nodes:
         await isolated_session.refresh(node)
     return nodes
+
+
+@pytest_asyncio.fixture
+async def sample_lineage_data(isolated_session):
+    """Create a simple lineage: NodeA -> NodeB -> NodeC, plus unrelated NodeD.
+    
+    Returns dict with node IDs for easy testing.
+    """
+    from datetime import date
+    
+    # Create nodes with eras so they appear in timeline
+    node_a = TeamNode(founding_year=1990, legal_name="Node A Team")
+    node_b = TeamNode(founding_year=1995, legal_name="Node B Team")
+    node_c = TeamNode(founding_year=2000, legal_name="Node C Team")
+    node_d = TeamNode(founding_year=2005, legal_name="Node D Team (Unrelated)")
+    
+    isolated_session.add_all([node_a, node_b, node_c, node_d])
+    await isolated_session.commit()
+    await isolated_session.refresh(node_a)
+    await isolated_session.refresh(node_b)
+    await isolated_session.refresh(node_c)
+    await isolated_session.refresh(node_d)
+    
+    # Add eras for each node
+    era_a = TeamEra(
+        node_id=node_a.node_id,
+        season_year=1995,
+        valid_from=date(1995, 1, 1),
+        registered_name="Node A Era",
+        tier_level=2
+    )
+    era_b = TeamEra(
+        node_id=node_b.node_id,
+        season_year=2000,
+        valid_from=date(2000, 1, 1),
+        registered_name="Node B Era",
+        tier_level=2
+    )
+    era_c = TeamEra(
+        node_id=node_c.node_id,
+        season_year=2005,
+        valid_from=date(2005, 1, 1),
+        registered_name="Node C Era",
+        tier_level=2
+    )
+    era_d = TeamEra(
+        node_id=node_d.node_id,
+        season_year=2010,
+        valid_from=date(2010, 1, 1),
+        registered_name="Node D Era",
+        tier_level=2
+    )
+    isolated_session.add_all([era_a, era_b, era_c, era_d])
+    
+    # Create lineage events: A -> B -> C
+    event_ab = LineageEvent(
+        predecessor_node_id=node_a.node_id,
+        successor_node_id=node_b.node_id,
+        event_year=1995,
+        event_type=LineageEventType.LEGAL_TRANSFER
+    )
+    event_bc = LineageEvent(
+        predecessor_node_id=node_b.node_id,
+        successor_node_id=node_c.node_id,
+        event_year=2000,
+        event_type=LineageEventType.LEGAL_TRANSFER
+    )
+    
+    isolated_session.add_all([event_ab, event_bc])
+    await isolated_session.commit()
+    
+    return {
+        "node_a_id": str(node_a.node_id),
+        "node_b_id": str(node_b.node_id),
+        "node_c_id": str(node_c.node_id),
+        "node_d_id": str(node_d.node_id),
+    }
+
+
+@pytest_asyncio.fixture
+async def complex_lineage_data(isolated_session):
+    """Create complex lineage with branching: A -> B -> C
+                                                    ↘ D ↗
+    
+    Returns dict with node IDs for easy testing.
+    """
+    from datetime import date
+    
+    node_a = TeamNode(founding_year=1990, legal_name="Node A Team")
+    node_b = TeamNode(founding_year=1995, legal_name="Node B Team")
+    node_c = TeamNode(founding_year=2000, legal_name="Node C Team")
+    node_d = TeamNode(founding_year=1998, legal_name="Node D Team")
+    
+    isolated_session.add_all([node_a, node_b, node_c, node_d])
+    await isolated_session.commit()
+    await isolated_session.refresh(node_a)
+    await isolated_session.refresh(node_b)
+    await isolated_session.refresh(node_c)
+    await isolated_session.refresh(node_d)
+    
+    # Add eras
+    era_a = TeamEra(
+        node_id=node_a.node_id,
+        season_year=1995,
+        valid_from=date(1995, 1, 1),
+        registered_name="Node A Era",
+        tier_level=2
+    )
+    era_b = TeamEra(
+        node_id=node_b.node_id,
+        season_year=2000,
+        valid_from=date(2000, 1, 1),
+        registered_name="Node B Era",
+        tier_level=2
+    )
+    era_c = TeamEra(
+        node_id=node_c.node_id,
+        season_year=2005,
+        valid_from=date(2005, 1, 1),
+        registered_name="Node C Era",
+        tier_level=2
+    )
+    era_d = TeamEra(
+        node_id=node_d.node_id,
+        season_year=2002,
+        valid_from=date(2002, 1, 1),
+        registered_name="Node D Era",
+        tier_level=2
+    )
+    isolated_session.add_all([era_a, era_b, era_c, era_d])
+    
+    # Create branching lineage: A -> B -> C, B -> D, D -> C
+    event_ab = LineageEvent(
+        predecessor_node_id=node_a.node_id,
+        successor_node_id=node_b.node_id,
+        event_year=1995,
+        event_type=LineageEventType.LEGAL_TRANSFER
+    )
+    event_bc = LineageEvent(
+        predecessor_node_id=node_b.node_id,
+        successor_node_id=node_c.node_id,
+        event_year=2000,
+        event_type=LineageEventType.LEGAL_TRANSFER
+    )
+    event_bd = LineageEvent(
+        predecessor_node_id=node_b.node_id,
+        successor_node_id=node_d.node_id,
+        event_year=1998,
+        event_type=LineageEventType.SPLIT
+    )
+    event_dc = LineageEvent(
+        predecessor_node_id=node_d.node_id,
+        successor_node_id=node_c.node_id,
+        event_year=2001,
+        event_type=LineageEventType.MERGE
+    )
+    
+    isolated_session.add_all([event_ab, event_bc, event_bd, event_dc])
+    await isolated_session.commit()
+    
+    return {
+        "node_a_id": str(node_a.node_id),
+        "node_b_id": str(node_b.node_id),
+        "node_c_id": str(node_c.node_id),
+        "node_d_id": str(node_d.node_id),
+    }
+

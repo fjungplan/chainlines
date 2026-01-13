@@ -1,21 +1,26 @@
 .timeline-layout {
-  display: flex;
+  display: block;
+  /* Was flex, now using absolute positioning for children */
+  position: relative;
+  /* Context for absolute children */
   width: 100%;
   height: 100%;
   padding: 0;
   overflow: hidden;
   margin-top: 0;
-  gap: 0;
 }
 
 .timeline-graph-container {
-  position: relative;
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background-color: #1a1a1a;
   padding: 0;
   touch-action: none;
+  z-index: 10;
 }
 
 .timeline-graph-container svg {
@@ -23,26 +28,46 @@
 }
 
 .timeline-sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
   width: 240px;
   min-width: 240px;
   padding: 12px;
-  background-color: #2a2a2a;
-  border-left: 1px solid #444;
+  background-color: rgba(42, 42, 42, 0.95);
+  /* Slightly transparent background for overlay feel */
+  border-right: 1px solid #444;
+  /* Default border styles */
+  backdrop-filter: blur(5px);
   display: flex;
   flex-direction: column;
   gap: 10px;
   align-items: stretch;
-  overflow-y: auto;
-  overflow-x: hidden;
-  transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease;
-  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, width 0.3s ease, min-width 0.3s ease;
+  z-index: 50;
+  /* Above graph container */
+}
+
+/* Specific positioning */
+.timeline-sidebar.left {
+  left: 0;
+  border-right: 1px solid #444;
+}
+
+.timeline-sidebar.right {
+  right: 0;
+  border-left: 1px solid #444;
+  border-right: none;
 }
 
 .timeline-sidebar.collapsed {
-  width: 48px;
-  min-width: 48px;
-  padding: 12px 6px;
+  width: 16px;
+  min-width: 16px;
+  padding: 0;
   align-items: center;
+  overflow: visible;
+  /* Allow button to retain z-index/visibility context */
 }
 
 .timeline-sidebar.collapsed .sidebar-content {
@@ -56,33 +81,76 @@
   flex-direction: column;
   gap: 10px;
   width: 100%;
+  width: 100%;
   transition: opacity 0.2s ease;
   opacity: 1;
+  flex: 1;
+  /* Take available height */
+  overflow-y: auto;
+  /* Scroll internally */
+  overflow-x: hidden;
 }
 
 .sidebar-toggle-btn {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  /* Full vertical click area */
+  width: 12px;
+  /* Narrower hit strip to avoid content bleed */
+  transform: none;
   background: transparent;
   border: none;
-  color: #888;
+  color: #555;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  margin-bottom: 8px;
-  transition: all 0.2s ease;
+  z-index: 100;
+  transition: background 0.2s ease, color 0.2s ease;
+  margin: 0;
 }
 
 .sidebar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  /* Subtle strip highlight */
   color: #fff;
 }
 
+.sidebar-toggle-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Inner edge positioning */
+.timeline-sidebar.left .sidebar-toggle-btn {
+  right: 0;
+  /* Right edge of the left sidebar */
+}
+
+.timeline-sidebar.right .sidebar-toggle-btn {
+  left: 0;
+  /* Left edge of the right sidebar */
+}
+
+/* When COLLAPSED, the button fills the 16px width */
 .timeline-sidebar.collapsed .sidebar-toggle-btn {
-  align-self: center;
-  margin-bottom: 0;
+  width: 100%;
+  right: 0;
+  left: 0;
+}
+
+/* Ensure minimap wrapper takes full width */
+.minimap-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  /* Hide overflow from wrapper, let internal container handle it or just fit */
+  min-height: 200px;
+  /* If content (Minimap) is taller, sidebar's overflow-y: auto handles it */
 }
 
 /* Expand main container to full width for the timeline view */
@@ -142,17 +210,29 @@
 
 .timeline-copyright {
   position: absolute;
-  bottom: 26px;
-  left: 12px;
-  font-size: 11px;
+  bottom: 0px;
+  left: 0px;
+  right: auto;
+  font-size: 9px;
+  color: #777;
+  background: rgba(26, 26, 26, 0.85);
+  /* Matches container background */
+  padding: 2px 5px;
+  pointer-events: auto;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  border-top-right-radius: 4px;
+}
+
+.timeline-copyright a {
   color: #888;
-  background: rgba(42, 42, 42, 0.9);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid #555;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  z-index: 2;
+  text-decoration: none;
+}
+
+.timeline-copyright a:hover {
+  color: #bbb;
+  text-decoration: underline;
 }
 
 .timeline-ruler-label {
@@ -177,6 +257,27 @@
   pointer-events: auto;
 }
 
+/* Focus Mode: Fade out non-lineage elements */
+.node.faded {
+  opacity: 0.15;
+  transition: opacity 0.3s ease;
+}
+
+.link-fill.faded {
+  opacity: 0.1;
+  transition: opacity 0.3s ease;
+}
+
+.node:not(.faded) {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.link-fill:not(.faded) {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
 
 
 @media (max-width: 768px) {
@@ -195,88 +296,8 @@
     width: 100%;
     min-width: 100%;
     border-left: none;
+    border-right: none;
     border-top: 1px solid #ddd;
-  }
-}
-
-/* Toast Notification */
-.toast {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 12px 20px;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 10000;
-  animation: slideIn 0.3s ease-out forwards;
-  max-width: 400px;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slideOut {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-
-  to {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-}
-
-.toast.toast-success {
-  background-color: #10b981;
-  color: white;
-  border-left: 4px solid #059669;
-}
-
-.toast.toast-info {
-  background-color: #3b82f6;
-  color: white;
-  border-left: 4px solid #1d4ed8;
-}
-
-.toast.toast-error {
-  background-color: #ef4444;
-  color: white;
-  border-left: 4px solid #dc2626;
-}
-
-.toast-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.toast-icon {
-  flex-shrink: 0;
-  font-size: 16px;
-  font-weight: bold;
-}
-
-.toast-message {
-  flex: 1;
-}
-
-@media (max-width: 640px) {
-  .toast {
-    top: 10px;
-    right: 10px;
-    left: 10px;
-    max-width: none;
+    border-bottom: 1px solid #ddd;
   }
 }

@@ -26,6 +26,25 @@ export class LayoutCalculator {
     // The yearRange parameter (filterYearRange) is ignored; we use the real data
     this.yearRange = this.calculateYearRange();
     this.xScale = this.createXScale();
+
+    // Calculate pixelsPerYear for proportional vertical scaling
+    const padding = 50;
+    const availableWidth = this.width - 2 * padding;
+    const span = this.yearRange.max - this.yearRange.min;
+    this.pixelsPerYear = (availableWidth / span) * this.stretchFactor;
+
+    // Dynamic Vertical Scaling
+    // Node Height = pixelsPerYear * HEIGHT_FACTOR
+    // Row Height = Node Height * 1.5
+    this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
+    this.rowHeight = this.nodeHeight * 2;
+
+    console.log('LayoutCalculator Vertical Scaling:', {
+      pixelsPerYear: this.pixelsPerYear,
+      nodeHeight: this.nodeHeight,
+      rowHeight: this.rowHeight,
+      factor: VISUALIZATION.HEIGHT_FACTOR
+    });
   }
 
   calculateYearRange() {
@@ -101,16 +120,17 @@ export class LayoutCalculator {
     const nodesWithX = this.assignXPositions();
 
     // Step 2: Assign Y positions to minimize crossings
-    const nodesWithXY = this.assignYPositions(nodesWithX);
+    const { positioned, rowHeight } = this.assignYPositions(nodesWithX);
 
     // Step 3: Calculate link paths
-    const linkPaths = this.calculateLinkPaths(nodesWithXY);
+    const linkPaths = this.calculateLinkPaths(positioned);
 
     return {
-      nodes: nodesWithXY,
+      nodes: positioned,
       links: linkPaths,
       yearRange: this.yearRange,
-      xScale: this.xScale
+      xScale: this.xScale,
+      rowHeight
     };
   }
 
@@ -222,8 +242,8 @@ export class LayoutCalculator {
       return earliestA - earliestB;
     });
 
-    // NEW: Improved swimlane assignment with sharing for linear chains
-    const rowHeight = VISUALIZATION.NODE_HEIGHT + 20;
+    // PROPORTIONAL SCALING: rowHeight and nodeHeight are now dynamic based on pixelsPerYear
+    // this.rowHeight was calculated in constructor
     const positioned = [];
     const nodePositions = new Map();
     let swimlaneIndex = 0;
@@ -268,11 +288,12 @@ export class LayoutCalculator {
       // Assign Y positions based on swimlane assignments and temporal ordering
       nodesPerLane.forEach((laneNodes, relativeLane) => {
         laneNodes.forEach(node => {
-          const y = 50 + (swimlaneIndex + relativeLane) * rowHeight;
+          // Use dynamic rowHeight
+          const y = 50 + (swimlaneIndex + relativeLane) * this.rowHeight;
           nodePositions.set(node.id, {
             ...node,
             y,
-            height: VISUALIZATION.NODE_HEIGHT
+            height: this.nodeHeight // Use dynamic nodeHeight
           });
           positioned.push(nodePositions.get(node.id));
         });
@@ -282,7 +303,7 @@ export class LayoutCalculator {
       swimlaneIndex += uniqueLanes.length;
     });
 
-    return positioned;
+    return { positioned, rowHeight: this.rowHeight };
   }
 
   /**
