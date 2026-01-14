@@ -1112,14 +1112,21 @@ export default function TimelineGraph({
         const group = d3.select(this);
 
         // 0. Ensure Labels (if not present - e.g. virtualization edge cases, though join should handle)
+        // 0. Ensure Labels (if not present)
         if (group.select('text').empty()) {
           JerseyRenderer.addNodeLabel(group, d);
+          // Make labels click-through (ghosts)
+          group.select('text').style('pointer-events', 'none');
+        } else {
+          // Ensure existing labels are also click-through (e.g. on re-render)
+          group.select('text').style('pointer-events', 'none');
         }
 
         // 1. Toggle Labels
-        // Visible if scale < HIGH_DETAIL (1.2)
-        const isLabelVisible = scale < thresholds.HIGH_DETAIL;
-        group.selectAll('text').style('display', isLabelVisible ? null : 'none');
+        // User requested labels be visible "much longer", even when jersey slices appear.
+        // We effectively make them always visible within practical zoom limits.
+        const isLabelVisible = true; // Was: scale < thresholds.HIGH_DETAIL
+        group.selectAll('text').style('display', null); // Always show
 
         // 2. Base Node Rect (Solid Color) - Nested Join
         // Visible only if NOT high detail
