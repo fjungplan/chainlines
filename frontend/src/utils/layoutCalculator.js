@@ -37,7 +37,7 @@ export class LayoutCalculator {
     // Node Height = pixelsPerYear * HEIGHT_FACTOR
     // Row Height = Node Height * 1.5
     this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
-    this.rowHeight = this.nodeHeight * 2;
+    this.rowHeight = this.nodeHeight * 1.5;
 
     console.log('LayoutCalculator Vertical Scaling:', {
       pixelsPerYear: this.pixelsPerYear,
@@ -130,7 +130,8 @@ export class LayoutCalculator {
       links: linkPaths,
       yearRange: this.yearRange,
       xScale: this.xScale,
-      rowHeight
+      rowHeight,
+      pixelsPerYear: this.pixelsPerYear
     };
   }
 

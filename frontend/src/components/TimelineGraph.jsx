@@ -114,7 +114,7 @@ export default function TimelineGraph({
       ? layout.xScale(layout.yearRange.max) - layout.xScale(layout.yearRange.min)
       : 0;
 
-    if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN;
+    if (!spanX || spanX <= 0) return VISUALIZATION.ZOOM_MIN_FALLBACK;
 
     // Minimum scale = horizontal fit only
     // This ensures the full timeline width always fills the viewport
@@ -123,6 +123,54 @@ export default function TimelineGraph({
 
     // Add safety floor of 0.01 to prevent invalid transforms
     return Math.max(0.01, scaleX);
+  }, []);
+
+  // Helper to compute responsive maximum zoom
+  // Dual constraints: show at least 10 years width AND 2 swimlanes height
+  // Uses whichever constraint is MORE RESTRICTIVE (lower scale = more content visible)
+  const computeMaxScale = useCallback((layout) => {
+    const containerWidth = containerRef.current?.clientWidth || 1;
+    const containerHeight = containerRef.current?.clientHeight || 1;
+
+    if (!layout?.xScale) return VISUALIZATION.ZOOM_MAX_FALLBACK;
+
+    // CONSTRAINT 1: Horizontal - show at least 10 years width
+    const targetYearSpan = VISUALIZATION.MAX_ZOOM_YEAR_SPAN;
+    const spanX = layout.xScale(targetYearSpan) - layout.xScale(0);
+    const maxScaleX = spanX > 0 ? containerWidth / spanX : VISUALIZATION.ZOOM_MAX_FALLBACK;
+
+    // CONSTRAINT 2: Vertical - show at least 2 swimlanes (rows) height
+    const nodes = layout?.nodes || [];
+    let maxScaleY = VISUALIZATION.ZOOM_MAX_FALLBACK;
+
+    if (nodes.length > 0) {
+      // Get a representative node to determine row height
+      const sampleNode = nodes[0];
+      const rowHeight = sampleNode?.height ? sampleNode.height * 1.5 : 100; // Fallback if height missing
+      const targetHeightSpan = rowHeight * VISUALIZATION.MAX_ZOOM_SWIMLANES;
+      maxScaleY = containerHeight / targetHeightSpan;
+    }
+
+    // Use the MORE RESTRICTIVE constraint (lower scale = more content visible)
+    const maxScale = Math.min(maxScaleX, maxScaleY);
+
+    // Safety ceiling to prevent extreme zoom
+    const finalMaxScale = Math.min(maxScale, 50); // Cap at 50x to prevent performance issues
+
+    console.log('🔍 MAX SCALE CALC:', {
+      maxScaleX: maxScaleX.toFixed(2),
+      maxScaleY: maxScaleY.toFixed(2),
+      chosen: finalMaxScale.toFixed(2),
+      constraint: maxScaleX < maxScaleY ? 'horizontal (10y)' : 'vertical (2 rows)'
+    });
+
+    return finalMaxScale;
+  }, []);
+
+  // Helper to get current dynamic thresholds
+  // Falls back to static ZOOM_THRESHOLDS if zoomManager not initialized
+  const getThresholds = useCallback(() => {
+    return zoomManager.current?.getThresholds() || ZOOM_THRESHOLDS;
   }, []);
 
   // Log performance metrics in development
@@ -183,7 +231,14 @@ export default function TimelineGraph({
 
           const layout = currentLayout.current;
           const minScale = computeMinScale(layout);
-          zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
+          const maxScale = computeMaxScale(layout);
+
+          // Update dynamic thresholds in zoom manager
+          if (zoomManager.current) {
+            zoomManager.current.setThresholds(minScale, maxScale, layout.pixelsPerYear);
+          }
+
+          zoomBehavior.current?.scaleExtent([minScale, maxScale]);
 
           // Trigger full re-render
           renderGraph(graphDataRef.current);
@@ -192,7 +247,7 @@ export default function TimelineGraph({
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [computeMinScale]);
+  }, [computeMinScale, computeMaxScale]);
 
   // Prevent browser zoom on SVG container
   useEffect(() => {
@@ -238,7 +293,8 @@ export default function TimelineGraph({
     const padding = 80;
     const rawScale = (containerWidth - 2 * padding) / yearRangeWidth;
     const minScale = computeMinScale(layout);
-    const targetScale = Math.min(VISUALIZATION.ZOOM_MAX, Math.max(minScale, rawScale));
+    const maxScale = computeMaxScale(layout);
+    const targetScale = Math.min(maxScale, Math.max(minScale, rawScale));
 
     const centerX = (x1 + x2) / 2;
     const targetX = containerWidth / 2 - centerX * targetScale;
@@ -273,13 +329,15 @@ export default function TimelineGraph({
   }, [currentStartYear, currentEndYear, filtersVersion, zoomToYearRange]);
 
   const getGridInterval = (scale) => {
+    const thresholds = getThresholds();
     // Only years or decades based on zoom level (grid switches earlier)
-    return scale >= ZOOM_THRESHOLDS.HIGH_DETAIL ? 1 : 10;
+    return scale >= thresholds.HIGH_DETAIL ? 1 : 10;
   };
 
   const getLabelInterval = (scale) => {
+    const thresholds = getThresholds();
     // Labels switch later to avoid overlap; stay on decades until more zoomed in
-    return scale >= ZOOM_THRESHOLDS.RULER_DETAIL ? 1 : 10;
+    return scale >= thresholds.RULER_DETAIL ? 1 : 10;
   };
 
   // --- Viscous connector fill styling (opaque + node-color gradient) ---
@@ -408,7 +466,8 @@ export default function TimelineGraph({
     for (let year = start; year <= end; year += gridSpacingYears) {
       const x = xScale(year);
       const isDecade = Math.abs(year % 10) < 0.1; // Float safety
-      const isHighDetail = scale >= ZOOM_THRESHOLDS.HIGH_DETAIL;
+      const thresholds = getThresholds();
+      const isHighDetail = scale >= thresholds.HIGH_DETAIL;
       const highlightDecade = isDecade && isHighDetail;
 
       gridGroup.append('line')
@@ -418,7 +477,7 @@ export default function TimelineGraph({
         .attr('y2', paddedMaxY + 100)
         .attr('stroke', highlightDecade ? '#777' : '#444')
         .attr('stroke-width', highlightDecade ? Math.max(1.2, 1.2 / scale) : Math.max(0.7, 0.7 / scale))
-        .attr('stroke-dasharray', scale >= ZOOM_THRESHOLDS.GRID_DENSITY ? '1,3' : '3,3');
+        .attr('stroke-dasharray', scale >= thresholds.GRID_DENSITY ? '1,3' : '3,3');
     }
   };
 
@@ -505,9 +564,16 @@ export default function TimelineGraph({
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // Update zoom min scale when layout recalculates
+    // Update zoom bounds when layout recalculates
     const minScale = computeMinScale(layout);
-    zoomBehavior.current?.scaleExtent([minScale, VISUALIZATION.ZOOM_MAX]);
+    const maxScale = computeMaxScale(layout);
+
+    // Update dynamic thresholds in zoom manager
+    if (zoomManager.current) {
+      zoomManager.current.setThresholds(minScale, maxScale, layout.pixelsPerYear);
+    }
+
+    zoomBehavior.current?.scaleExtent([minScale, maxScale]);
 
     // Calculate initial transform if this is first render (identity transform)
     if (currentTransform.current.k === 1 && currentTransform.current.x === 0 && currentTransform.current.y === 0) {
@@ -691,9 +757,17 @@ export default function TimelineGraph({
       [yearMax, paddedMaxY]
     ];
 
+    const maxScale = computeMaxScale(layout);
+
+    // Update dynamic thresholds in zoom manager
+    if (zoomManager.current) {
+      zoomManager.current.setThresholds(minScale, maxScale, layout.pixelsPerYear);
+    }
+
     console.log('🔧 ZOOM SETUP:', {
       minScale,
-      maxScale: VISUALIZATION.ZOOM_MAX,
+      maxScale,
+      dynamicRange: (maxScale / minScale).toFixed(2),
       extent,
       currentTransform: { k: currentTransform.current.k, x: currentTransform.current.x, y: currentTransform.current.y },
       containerWidth,
@@ -705,7 +779,7 @@ export default function TimelineGraph({
 
     const zoom = d3
       .zoom()
-      .scaleExtent([minScale, VISUALIZATION.ZOOM_MAX])
+      .scaleExtent([minScale, maxScale])
       .translateExtent(extent)
       .filter((event) => {
         // Allow mouse wheel, touch gestures, but block right-click drag
@@ -998,7 +1072,8 @@ export default function TimelineGraph({
 
 
   const renderNodes = (g, nodes, svg, scale) => {
-    const isHighDetail = scale >= ZOOM_THRESHOLDS.DETAIL_VISIBLE;
+    const thresholds = getThresholds();
+    const isHighDetail = scale >= thresholds.DETAIL_VISIBLE;
 
     // Ensure container exists
     const container = g.select('.nodes').empty() ? g.append('g').attr('class', 'nodes') : g.select('.nodes');
@@ -1043,7 +1118,7 @@ export default function TimelineGraph({
 
         // 1. Toggle Labels
         // Visible if scale < HIGH_DETAIL (1.2)
-        const isLabelVisible = scale < ZOOM_THRESHOLDS.HIGH_DETAIL;
+        const isLabelVisible = scale < thresholds.HIGH_DETAIL;
         group.selectAll('text').style('display', isLabelVisible ? null : 'none');
 
         // 2. Base Node Rect (Solid Color) - Nested Join
@@ -1069,7 +1144,7 @@ export default function TimelineGraph({
 
         // 3. Eras (High Detail) - DetailRenderer handles internal 1.2 threshold for gradients
         if (isHighDetail) {
-          DetailRenderer.renderEraTimeline(group, d, scale, svg, handleEraHover, handleEraHoverEnd);
+          DetailRenderer.renderEraTimeline(group, d, scale, svg, handleEraHover, handleEraHoverEnd, thresholds);
         } else {
           group.selectAll('.era-segment').remove();
         }
@@ -1182,7 +1257,8 @@ export default function TimelineGraph({
     // If scale < HIGH_DETAIL, show Node Summary.
     // If scale >= HIGH_DETAIL, eras handles interaction (or no tooltip if hovering gap).
     const currentScale = currentTransform.current ? currentTransform.current.k : 1;
-    if (currentScale < ZOOM_THRESHOLDS.HIGH_DETAIL) {
+    const thresholds = getThresholds();
+    if (currentScale < thresholds.HIGH_DETAIL) {
       const content = TooltipBuilder.buildNodeTooltip(node);
       setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
     }

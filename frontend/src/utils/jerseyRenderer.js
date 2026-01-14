@@ -152,31 +152,140 @@ export class JerseyRenderer {
   static addNodeLabel(nodeGroup, node) {
     const latestEra = node.eras[node.eras.length - 1];
     const name = latestEra.name || 'Unknown Team';
-    const displayName = name.length > 25 ? name.substring(0, 22) + '...' : name;
-    const teamNameText = nodeGroup.append('text')
-      .attr('x', node.width / 2)
-      .attr('y', node.height / 2)
+    const cleanName = name.length > 30 ? name.substring(0, 27) + '...' : name; // Hard clip safety
+
+    // 1. Calculate available dimensions
+    const w = node.width; // Virtual coordinates
+    const h = node.height;
+
+    // 2. Define sizing constants relative to node height
+    // Standard ratio: Text takes up ~35% of height
+    const baseFontSize = Math.max(h * 0.35, 1);
+    const minFontSize = baseFontSize * 0.6; // Allow shrinking to 60% of base
+
+    const yearFontSize = baseFontSize * 0.7;
+    const lineHeight = 1.1; // em
+
+    // 3. Helper to measure text width (approximate heuristic for standard fonts)
+    // Avg char width is roughly 0.6em for mixed case
+    const measureText = (text, size) => text.length * (size * 0.6);
+
+    // 4. Fitting strategy
+    // Strategy A: Single Line
+    // Strategy B: Wrapped (2 lines)
+    // Strategy C: Shrink Single Line
+    // Strategy D: Shrink Wrapped
+
+    let lines = [cleanName];
+    let finalFontSize = baseFontSize;
+    let isWrapped = false;
+
+    const singleLineWidth = measureText(cleanName, baseFontSize);
+    const availableWidth = w * 0.9; // 10% padding
+
+    if (singleLineWidth > availableWidth) {
+      // Try Wrapping
+      const words = cleanName.split(/\s+/);
+      if (words.length > 1) {
+        const mid = Math.ceil(words.length / 2);
+        const line1 = words.slice(0, mid).join(' ');
+        const line2 = words.slice(mid).join(' ');
+
+        // Check if wrapped fits at base size
+        const w1 = measureText(line1, baseFontSize);
+        const w2 = measureText(line2, baseFontSize);
+
+        if (Math.max(w1, w2) <= availableWidth) {
+          lines = [line1, line2];
+          isWrapped = true;
+        } else {
+          // Wrapped still too big? Try shrinking wrapped
+          // Calculate scale factor needed
+          const maxLineW = Math.max(w1, w2);
+          const scale = availableWidth / maxLineW;
+          if (baseFontSize * scale >= minFontSize) {
+            finalFontSize = baseFontSize * scale;
+            lines = [line1, line2];
+            isWrapped = true;
+          } else {
+            // Too small even wrapped? Fallback to single line shrunk (or truncated eventually)
+            const scaleSingle = availableWidth / singleLineWidth;
+            finalFontSize = Math.max(baseFontSize * scaleSingle, minFontSize);
+            lines = [cleanName]; // Revert to single line
+          }
+        }
+      } else {
+        // Single word, just shrink
+        const scale = availableWidth / singleLineWidth;
+        finalFontSize = Math.max(baseFontSize * scale, minFontSize);
+      }
+    }
+
+    // 5. Render Team Name
+    const textGroup = nodeGroup.append('text')
+      .attr('x', w / 2)
       .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'middle')
       .attr('fill', 'white')
       .attr('font-family', 'Montserrat, sans-serif')
-      .attr('font-size', '11px')
       .attr('font-weight', '700')
-      .text(displayName);
-    // Font: Montserrat bold (weight 700), size 11px
-    const yearRange = node.dissolution_year
-      ? `${node.founding_year}-${node.dissolution_year}`
-      : `${node.founding_year}-`;
-    nodeGroup.append('text')
-      .attr('x', node.width / 2)
-      .attr('y', node.height / 2 + 14)
-      .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'middle')
-      .attr('fill', 'white')
-      .attr('font-family', 'Montserrat, sans-serif')
-      .attr('font-size', '9px')
-      .attr('font-weight', '400')
-      .text(yearRange);
-    // Font: Montserrat regular (weight 400), size 9px
+      .attr('font-size', `${finalFontSize}px`); // Use unitless? SVG text usually needs px or user units. D3 attr accepts number as px usually.
+
+    if (isWrapped) {
+      // Center vertical: -0.5 line height lift
+      textGroup.append('tspan')
+        .attr('x', w / 2)
+        .attr('dy', `-${(finalFontSize * lineHeight) / 2}`)
+        .text(lines[0]);
+
+      textGroup.append('tspan')
+        .attr('x', w / 2)
+        .attr('dy', `${finalFontSize * lineHeight}`)
+        .text(lines[1]);
+
+      // Center the whole group vertically
+      textGroup.attr('y', h / 2);
+    } else {
+      textGroup.attr('y', h / 2)
+        .attr('dominant-baseline', 'middle')
+        .text(lines[0]);
+    }
+
+    // 6. Render Year Range (Only if there's space)
+    // If we wrapped, we used more vertical space.
+    // If node is very short, skip year range.
+
+    // Height Check:
+    // Wrapped takes: 2 lines * 1.1 = 2.2em
+    // Year range needs: 1 line ~ 1em
+    // Total needed: ~3.5em (with gap)
+
+    // Available height is h.
+    // finalFontSize is our 'em'.
+    // If h < 3.5 * finalFontSize, hide years?
+
+    const requiredHeightForYears = isWrapped
+      ? (finalFontSize * 3.5)
+      : (finalFontSize * 2.5);
+
+    if (h > requiredHeightForYears) {
+      const yearRange = node.dissolution_year
+        ? `${node.founding_year}-${node.dissolution_year}`
+        : `${node.founding_year}-`;
+
+      const yearY = isWrapped
+        ? (h / 2) + (finalFontSize * lineHeight * 1.5) // Push down below 2nd line
+        : (h / 2) + (finalFontSize * 1.2);             // Push down below single line
+
+      nodeGroup.append('text')
+        .attr('x', w / 2)
+        .attr('y', yearY)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('fill', 'rgba(255,255,255,0.8)') // Slightly dimmed
+        .attr('font-family', 'Montserrat, sans-serif')
+        .attr('font-size', `${yearFontSize}px`)
+        .attr('font-weight', '400')
+        .text(yearRange);
+    }
   }
 }
