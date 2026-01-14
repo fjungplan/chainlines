@@ -144,7 +144,10 @@ async def list_my_edits(
         # Resolve entity name using shared service logic
         # This ensures consistency with Audit Log and Detail views
         entity_name = await AuditLogService.resolve_entity_name(
-            session, edit.entity_type, edit.entity_id
+            session, 
+            edit.entity_type, 
+            edit.entity_id,
+            snapshot=edit.snapshot_after
         )
         
         items.append(AuditLogEntryResponse(
@@ -206,7 +209,7 @@ async def get_my_edit_detail(
     
     # Resolve entity name
     entity_name = await AuditLogService.resolve_entity_name(
-        session, edit.entity_type, edit.entity_id
+        session, edit.entity_type, edit.entity_id, snapshot=edit.snapshot_after
     )
     
     # Permission flags - only moderators can perform moderation actions

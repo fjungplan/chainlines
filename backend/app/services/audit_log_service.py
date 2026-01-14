@@ -30,10 +30,12 @@ class AuditLogService:
     """
     
     @staticmethod
+    @staticmethod
     async def resolve_entity_name(
         session: AsyncSession,
         entity_type: str,
-        entity_id: Union[UUID, str]
+        entity_id: Union[UUID, str],
+        snapshot: Optional[Dict] = None
     ) -> str:
         """
         Resolve an entity UUID to a human-readable name.
@@ -42,6 +44,7 @@ class AuditLogService:
             session: Database session
             entity_type: Type of entity (team_node, team_era, sponsor_master, etc.)
             entity_id: UUID of the entity
+            snapshot: Optional snapshot data (used as fallback for PENDING CREATEs)
             
         Returns:
             Human-readable name string, or "Unknown" if not found
@@ -57,17 +60,17 @@ class AuditLogService:
             etype = entity_type.lower()
             
             if etype in ("team", "team_node", "teamnode"):
-                return await AuditLogService._resolve_team_node(session, entity_id)
+                return await AuditLogService._resolve_team_node(session, entity_id, snapshot)
             elif etype in ("era", "team_era", "teamera"):
-                return await AuditLogService._resolve_team_era(session, entity_id)
+                return await AuditLogService._resolve_team_era(session, entity_id, snapshot)
             elif etype in ("sponsor", "sponsor_master", "sponsormaster"):
-                return await AuditLogService._resolve_sponsor_master(session, entity_id)
+                return await AuditLogService._resolve_sponsor_master(session, entity_id, snapshot)
             elif etype in ("brand", "sponsor_brand", "sponsorbrand"):
-                return await AuditLogService._resolve_sponsor_brand(session, entity_id)
+                return await AuditLogService._resolve_sponsor_brand(session, entity_id, snapshot)
             elif etype in ("link", "team_sponsor_link", "teamsponsorlink"):
-                return await AuditLogService._resolve_sponsor_link(session, entity_id)
+                return await AuditLogService._resolve_sponsor_link(session, entity_id, snapshot)
             elif etype in ("lineage", "lineage_event", "lineageevent"):
-                return await AuditLogService._resolve_lineage_event(session, entity_id)
+                return await AuditLogService._resolve_lineage_event(session, entity_id, snapshot)
             else:
                 # Unknown entity type - return ID as string
                 return str(entity_id)
@@ -75,74 +78,133 @@ class AuditLogService:
             return "Unknown"
     
     @staticmethod
-    async def _resolve_team_node(session: AsyncSession, node_id: UUID) -> str:
+    async def _resolve_team_node(session: AsyncSession, node_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamNode to display_name or legal_name."""
         node = await session.get(TeamNode, node_id)
-        if not node:
-            return "Unknown"
-        return node.display_name or node.legal_name
+        if node:
+            return node.display_name or node.legal_name
+            
+        # Fallback to snapshot
+        if snapshot:
+            return snapshot.get("display_name") or snapshot.get("legal_name") or "Unknown"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_team_era(session: AsyncSession, era_id: UUID) -> str:
+    async def _resolve_team_era(session: AsyncSession, era_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamEra to 'registered_name (year)'."""
         era = await session.get(TeamEra, era_id)
-        if not era:
-            return "Unknown"
-        return f"{era.registered_name} ({era.season_year})"
+        if era:
+            return f"{era.registered_name} ({era.season_year})"
+            
+        # Fallback to snapshot
+        if snapshot:
+            name = snapshot.get("registered_name") or "Unknown"
+            year = snapshot.get("season_year") or "?"
+            return f"{name} ({year})"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_master(session: AsyncSession, master_id: UUID) -> str:
+    async def _resolve_sponsor_master(session: AsyncSession, master_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve SponsorMaster to display_name or legal_name."""
         master = await session.get(SponsorMaster, master_id)
-        if not master:
-            return "Unknown"
-        return master.display_name or master.legal_name
+        if master:
+            return master.display_name or master.legal_name
+            
+        # Fallback to snapshot
+        if snapshot:
+            return snapshot.get("display_name") or snapshot.get("legal_name") or "Unknown"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_brand(session: AsyncSession, brand_id: UUID) -> str:
+    async def _resolve_sponsor_brand(session: AsyncSession, brand_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve SponsorBrand to 'brand_name (master_name)'."""
         brand = await session.get(SponsorBrand, brand_id)
-        if not brand:
-            return "Unknown"
-        
-        # Get parent master name
-        master = await session.get(SponsorMaster, brand.master_id)
-        master_name = (master.display_name or master.legal_name) if master else "Unknown"
-        
-        return f"{brand.brand_name} ({master_name})"
+        if brand:
+            # Get parent master name
+            master = await session.get(SponsorMaster, brand.master_id)
+            master_name = (master.display_name or master.legal_name) if master else "Unknown"
+            return f"{brand.brand_name} ({master_name})"
+            
+        # Fallback to snapshot
+        if snapshot:
+            brand_name = snapshot.get("brand_name") or "Unknown"
+            # We assume we can't easily resolve master name from snapshot ID here without extra query
+            # but usually brand name is enough for identification
+            return brand_name
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_link(session: AsyncSession, link_id: UUID) -> str:
+    async def _resolve_sponsor_link(session: AsyncSession, link_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamSponsorLink to 'brand → era (year)'."""
         link = await session.get(TeamSponsorLink, link_id)
-        if not link:
-            return "Unknown"
-        
-        # Get brand and era names
-        brand = await session.get(SponsorBrand, link.brand_id)
-        era = await session.get(TeamEra, link.era_id)
-        
-        brand_name = brand.brand_name if brand else "Unknown Brand"
-        era_name = era.registered_name if era else "Unknown Era"
-        year = era.season_year if era else "?"
-        
-        return f"{brand_name} → {era_name} ({year})"
+        if link:
+            # Get brand and era names
+            brand = await session.get(SponsorBrand, link.brand_id)
+            era = await session.get(TeamEra, link.era_id)
+            
+            brand_name = brand.brand_name if brand else "Unknown Brand"
+            era_name = era.registered_name if era else "Unknown Era"
+            year = era.season_year if era else "?"
+            return f"{brand_name} → {era_name} ({year})"
+            
+        # Fallback: snapshot for link creation usually contains brand_id/era_id
+        # We could resolve them, but it's complex. Return "New Sponsorship" or similar?
+        return "Sponsorship Link"
     
     @staticmethod
-    async def _resolve_lineage_event(session: AsyncSession, event_id: UUID) -> str:
+    async def _resolve_lineage_event(session: AsyncSession, event_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve LineageEvent to 'predecessor → successor (year)'."""
+        # Try DB first
         event = await session.get(LineageEvent, event_id)
-        if not event:
+        
+        pred_id = None
+        succ_id = None
+        year = "?"
+        
+        if event:
+            pred_id = event.predecessor_node_id
+            succ_id = event.successor_node_id
+            year = event.event_year
+        elif snapshot:
+            # Fallback to snapshot for PENDING CREATE
+            # Snapshot keys for lineage create might be "predecessor_id", "successor_id"
+            # OR "source_node", "target_team" (names directly) as seen in screenshots
+            try:
+                # 1. Try ID based resolution
+                p_str = snapshot.get("predecessor_id")
+                s_str = snapshot.get("successor_id")
+                if p_str: pred_id = UUID(p_str)
+                if s_str: succ_id = UUID(s_str)
+                
+                # 2. Try Name based resolution (if IDs missing)
+                if not pred_id and "source_node" in snapshot:
+                    pred_name = snapshot["source_node"]
+                if not succ_id and "target_team" in snapshot:
+                    succ_name = snapshot["target_team"]
+                    
+                year = snapshot.get("event_year") or snapshot.get("year") or "?"
+            except ValueError:
+                pass
+        
+        if not pred_id and not succ_id and not event and pred_name == "Unknown Team" and succ_name == "Unknown Team":
             return "Unknown"
+
+        # Resolve Node Names from IDs if we have them
+        if pred_id:
+            predecessor = await session.get(TeamNode, pred_id)
+            if predecessor:
+                pred_name = predecessor.display_name or predecessor.legal_name
         
-        # Get predecessor and successor node names
-        predecessor = await session.get(TeamNode, event.predecessor_node_id)
-        successor = await session.get(TeamNode, event.successor_node_id)
+        if succ_id:
+            successor = await session.get(TeamNode, succ_id)
+            if successor:
+                succ_name = successor.display_name or successor.legal_name
         
-        pred_name = (predecessor.display_name or predecessor.legal_name) if predecessor else "Unknown Team"
-        succ_name = (successor.display_name or successor.legal_name) if successor else "Unknown Team"
-        
-        return f"{pred_name} → {succ_name} ({event.event_year})"
+        return f"{pred_name} → {succ_name} ({year})"
     
     # =========================================================================
     # Permission Checking
