@@ -228,13 +228,14 @@ export class JerseyRenderer {
       .attr('fill', 'white')
       .attr('font-family', 'Montserrat, sans-serif')
       .attr('font-weight', '700')
-      .attr('font-size', `${finalFontSize}px`); // Use unitless? SVG text usually needs px or user units. D3 attr accepts number as px usually.
+      .attr('font-size', `${finalFontSize}px`)
+      .style('text-shadow', '0 2px 4px rgba(0,0,0,0.9)'); // Shadow for contrast
 
     if (isWrapped) {
       // Center vertical: -0.5 line height lift
       textGroup.append('tspan')
         .attr('x', w / 2)
-        .attr('dy', `-${(finalFontSize * lineHeight) / 2}`)
+        .attr('dy', `-${(finalFontSize * lineHeight) * 0.55}`) // Slightly higher lift
         .text(lines[0]);
 
       textGroup.append('tspan')
@@ -273,18 +274,19 @@ export class JerseyRenderer {
         : `${node.founding_year}-`;
 
       const yearY = isWrapped
-        ? (h / 2) + (finalFontSize * lineHeight * 1.5) // Push down below 2nd line
-        : (h / 2) + (finalFontSize * 1.2);             // Push down below single line
+        ? (h / 2) + (finalFontSize * lineHeight * 1.2) // Tighter gap (was 1.5)
+        : (h / 2) + (finalFontSize * 1.0);             // Tighter gap (was 1.2)
 
       nodeGroup.append('text')
         .attr('x', w / 2)
         .attr('y', yearY)
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'middle')
-        .attr('fill', 'rgba(255,255,255,0.8)') // Slightly dimmed
+        .attr('fill', 'rgba(255,255,255,0.9)') // Brighter for better contrast
         .attr('font-family', 'Montserrat, sans-serif')
         .attr('font-size', `${yearFontSize}px`)
         .attr('font-weight', '400')
+        .style('text-shadow', '0 2px 4px rgba(0,0,0,0.9)') // Shadow for contrast
         .text(yearRange);
     }
   }
