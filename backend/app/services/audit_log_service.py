@@ -31,6 +31,27 @@ class AuditLogService:
     
     @staticmethod
     @staticmethod
+    def _unwrap_snapshot(data: Optional[Dict]) -> Optional[Dict]:
+        """
+        Unwrap nested snapshot data if present.
+        
+        Handles cases where scrapers wrap payload in entity keys like:
+        { "node": { ... } } or { "lineage_event": { ... } }
+        """
+        if not data:
+            return None
+            
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        flattened = data.copy()
+
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                # Found a wrapper key, return its content
+                return data[key]
+                
+        return flattened
+
+    @staticmethod
     async def resolve_entity_name(
         session: AsyncSession,
         entity_type: str,
@@ -56,21 +77,24 @@ class AuditLogService:
             except ValueError:
                 return str(entity_id)
         
+        # Unwrap snapshot once here so sub-methods don't have to
+        unwrapped_snapshot = AuditLogService._unwrap_snapshot(snapshot)
+        
         try:
             etype = entity_type.lower()
             
             if etype in ("team", "team_node", "teamnode"):
-                return await AuditLogService._resolve_team_node(session, entity_id, snapshot)
+                return await AuditLogService._resolve_team_node(session, entity_id, unwrapped_snapshot)
             elif etype in ("era", "team_era", "teamera"):
-                return await AuditLogService._resolve_team_era(session, entity_id, snapshot)
+                return await AuditLogService._resolve_team_era(session, entity_id, unwrapped_snapshot)
             elif etype in ("sponsor", "sponsor_master", "sponsormaster"):
-                return await AuditLogService._resolve_sponsor_master(session, entity_id, snapshot)
+                return await AuditLogService._resolve_sponsor_master(session, entity_id, unwrapped_snapshot)
             elif etype in ("brand", "sponsor_brand", "sponsorbrand"):
-                return await AuditLogService._resolve_sponsor_brand(session, entity_id, snapshot)
+                return await AuditLogService._resolve_sponsor_brand(session, entity_id, unwrapped_snapshot)
             elif etype in ("link", "team_sponsor_link", "teamsponsorlink"):
-                return await AuditLogService._resolve_sponsor_link(session, entity_id, snapshot)
+                return await AuditLogService._resolve_sponsor_link(session, entity_id, unwrapped_snapshot)
             elif etype in ("lineage", "lineage_event", "lineageevent"):
-                return await AuditLogService._resolve_lineage_event(session, entity_id, snapshot)
+                return await AuditLogService._resolve_lineage_event(session, entity_id, unwrapped_snapshot)
             else:
                 # Unknown entity type - return ID as string
                 return str(entity_id)
@@ -164,6 +188,8 @@ class AuditLogService:
         pred_id = None
         succ_id = None
         year = "?"
+        pred_name = "Unknown Team"
+        succ_name = "Unknown Team"
         
         if event:
             pred_id = event.predecessor_node_id
@@ -174,9 +200,9 @@ class AuditLogService:
             # Snapshot keys for lineage create might be "predecessor_id", "successor_id"
             # OR "source_node", "target_team" (names directly) as seen in screenshots
             try:
-                # 1. Try ID based resolution
-                p_str = snapshot.get("predecessor_id")
-                s_str = snapshot.get("successor_id")
+                # 1. Try ID based resolution (support multiple key variations)
+                p_str = snapshot.get("predecessor_id") or snapshot.get("predecessor_node_id")
+                s_str = snapshot.get("successor_id") or snapshot.get("successor_node_id")
                 if p_str: pred_id = UUID(p_str)
                 if s_str: succ_id = UUID(s_str)
                 
@@ -358,27 +384,9 @@ class AuditLogService:
             await AuditLogService._apply_delete(session, edit)
         elif edit.action == EditAction.UPDATE:
             # Revert UPDATE by applying the before snapshot
-            entity_type = edit.entity_type.lower()
-            entity = None
-            
-            if entity_type in ("team", "team_node", "teamnode"):
-                entity = await session.get(TeamNode, edit.entity_id)
-            elif entity_type in ("era", "team_era", "teamera"):
-                entity = await session.get(TeamEra, edit.entity_id)
-            elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
-                entity = await session.get(SponsorMaster, edit.entity_id)
-            elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
-                entity = await session.get(SponsorBrand, edit.entity_id)
-            elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
-                entity = await session.get(TeamSponsorLink, edit.entity_id)
-            elif entity_type in ("lineage", "lineage_event", "lineageevent"):
-                entity = await session.get(LineageEvent, edit.entity_id)
-            
-            if entity and edit.snapshot_before:
-                # Restore all fields from snapshot_before
-                for key, value in edit.snapshot_before.items():
-                    if hasattr(entity, key):
-                        setattr(entity, key, value)
+            # We reuse _apply_update to handle entity loading, unwrapping, and field setting
+            if edit.snapshot_before:
+                await AuditLogService._apply_update(session, edit, override_data=edit.snapshot_before)
         elif edit.action == EditAction.DELETE:
             # Revert DELETE by recreating the entity from snapshot_before
             # This is complex and edge-case, may need to be implemented later
@@ -569,6 +577,13 @@ class AuditLogService:
         """Apply CREATE action."""
         data = edit.snapshot_after
         
+        # Unwrap nested data if present (consistency with update)
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                data = data[key]
+                break
+        
         if edit.entity_type == "TeamEra":
             node = None
             team_identity_id = data.get("team_identity_id")
@@ -676,10 +691,63 @@ class AuditLogService:
                 )
                 session.add(link)
 
+        elif edit.entity_type in ("lineage", "lineage_event", "lineageevent"):
+            # Create Lineage Event
+            # Snapshot should have: predecessor_id, successor_id, event_year, type, etc.
+            # OR resolved names: source_node, target_team
+            
+            # Try to resolve IDs from names if IDs are missing (Scraper fallback)
+            # Log analysis showed scraper creates 'event' wrapper with keys: predecessor_node_id, successor_node_id
+            pred_id = data.get("predecessor_id") or data.get("predecessor_node_id")
+            succ_id = data.get("successor_id") or data.get("successor_node_id")
+            
+            if not pred_id and "source_node" in data:
+                # Find by display_name or legal_name
+                stmt = select(TeamNode).where(TeamNode.legal_name == data["source_node"])
+                result = await session.execute(stmt)
+                p_node = result.scalar_one_or_none()
+                if p_node:
+                    pred_id = p_node.node_id
+            
+            if not succ_id and "target_team" in data:
+                stmt = select(TeamNode).where(TeamNode.legal_name == data["target_team"])
+                result = await session.execute(stmt)
+                s_node = result.scalar_one_or_none()
+                if s_node:
+                    succ_id = s_node.node_id
+            
+            if pred_id and succ_id:
+                # Ensure UUIDs
+                if isinstance(pred_id, str): pred_id = UUID(pred_id)
+                if isinstance(succ_id, str): succ_id = UUID(succ_id)
+                
+                event = LineageEvent(
+                    event_id=edit.entity_id,
+                    predecessor_node_id=pred_id,
+                    successor_node_id=succ_id,
+                    event_year=data.get("event_year") or data.get("year"),
+                    event_type=data.get("event_type", "MERGE") # Default to MERGE or provided type
+                )
+                session.add(event)
+                await session.flush()
+            else:
+                # Log warning or error? 
+                # If we can't find nodes, we can't create the link.
+                import logging
+                logging.warning(f"Could not resolve nodes for LineageEvent create: {data}")
+
+
     @staticmethod
-    async def _apply_update(session: AsyncSession, edit: EditHistory) -> None:
-        """Apply UPDATE action by updating entity fields from snapshot_after."""
-        data = edit.snapshot_after
+    async def _apply_update(session: AsyncSession, edit: EditHistory, override_data: Optional[Dict] = None) -> None:
+        """
+        Apply UPDATE action by updating entity fields.
+        
+        Args:
+            session: Database session
+            edit: The edit record
+            override_data: Optional data to use instead of edit.snapshot_after (e.g. for reverts)
+        """
+        data = override_data if override_data is not None else edit.snapshot_after
         entity_type = edit.entity_type.lower()
         
         # Load the entity
@@ -700,8 +768,18 @@ class AuditLogService:
         if not entity:
             raise ValueError(f"Entity {edit.entity_id} of type {edit.entity_type} not found")
         
-        # Update fields from snapshot_after
-        for key, value in data.items():
+        # Unwrap nested data if present (e.g. { "node": { ... } } from scraper)
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        flattened_data = data.copy()
+        
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                # If the snapshot contains the wrapper key, use its content
+                flattened_data = data[key]
+                break
+        
+        # Update fields from snapshot (flattened)
+        for key, value in flattened_data.items():
             if hasattr(entity, key):
                 setattr(entity, key, value)
         

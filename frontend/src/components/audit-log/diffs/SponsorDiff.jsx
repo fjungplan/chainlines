@@ -14,11 +14,19 @@ const SPONSOR_LABELS = {
 };
 
 export default function SponsorDiff({ before, after }) {
-    const filterData = (data) => {
+    // Helper: Unwrap { master: params }
+    const unwrap = (data) => {
         if (!data) return null;
+        if (data.master && typeof data.master === 'object' && !data.legal_name) return data.master;
+        return data;
+    };
+
+    const filterData = (data) => {
+        const flatData = unwrap(data);
+        if (!flatData) return null;
         return SPONSOR_FIELDS.reduce((acc, field) => {
-            if (data.hasOwnProperty(field)) {
-                acc[field] = data[field];
+            if (flatData.hasOwnProperty(field)) {
+                acc[field] = flatData[field];
             }
             return acc;
         }, {});

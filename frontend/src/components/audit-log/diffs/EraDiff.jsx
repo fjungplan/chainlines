@@ -20,11 +20,22 @@ const ERA_LABELS = {
 };
 
 export default function EraDiff({ before, after }) {
-    const filterData = (data) => {
+    // Helper to unwrap nested data (e.g. from scraper: { era: { ... } })
+    const unwrap = (data) => {
         if (!data) return null;
+        if (data.era && typeof data.era === 'object' && !data.registered_name) {
+            return data.era;
+        }
+        return data;
+    };
+
+    const filterData = (data) => {
+        const flatData = unwrap(data);
+        if (!flatData) return null;
+
         return ERA_FIELDS.reduce((acc, field) => {
-            if (data.hasOwnProperty(field)) {
-                acc[field] = data[field];
+            if (flatData.hasOwnProperty(field)) {
+                acc[field] = flatData[field];
             }
             return acc;
         }, {});

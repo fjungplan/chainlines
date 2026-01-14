@@ -7,12 +7,25 @@ const BRAND_FIELDS = [
     'default_hex_color'
 ];
 
+const BRAND_LABELS = {
+    brand_name: 'Brand Name',
+    display_name: 'Display Name',
+    default_hex_color: 'Brand Color'
+};
+
 export default function BrandDiff({ before, after }) {
-    const filterData = (data) => {
+    const unwrap = (data) => {
         if (!data) return null;
+        if (data.brand && typeof data.brand === 'object' && !data.brand_name) return data.brand;
+        return data;
+    };
+
+    const filterData = (data) => {
+        const flatData = unwrap(data);
+        if (!flatData) return null;
         return BRAND_FIELDS.reduce((acc, field) => {
-            if (data.hasOwnProperty(field)) {
-                acc[field] = data[field];
+            if (flatData.hasOwnProperty(field)) {
+                acc[field] = flatData[field];
             }
             return acc;
         }, {});
@@ -22,6 +35,7 @@ export default function BrandDiff({ before, after }) {
         <DiffTable
             before={filterData(before)}
             after={filterData(after)}
+            labels={BRAND_LABELS}
         />
     );
 }
