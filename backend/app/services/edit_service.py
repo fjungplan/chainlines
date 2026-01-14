@@ -262,6 +262,122 @@ class EditService:
             status=edit.status.value,
             message=message
         )
+
+    @staticmethod
+    async def update_era_edit(
+        session: AsyncSession,
+        user: User,
+        request: "UpdateEraEditRequest"
+    ) -> EditMetadataResponse:
+        """Update an existing era (supports node_id transfer)."""
+        from app.schemas.edits import UpdateEraEditRequest
+        
+        # Validate era exists
+        try:
+            era_id = UUID(request.era_id)
+        except (ValueError, AttributeError):
+            raise ValueError("Invalid era_id format")
+        
+        era = await session.get(TeamEra, era_id)
+        if not era:
+            raise ValueError("Era not found")
+        
+        # Build changes
+        changes = {}
+        if request.node_id is not None: 
+            changes['node_id'] = UUID(request.node_id)
+        if request.registered_name is not None: 
+            changes['registered_name'] = request.registered_name
+        if request.uci_code is not None: 
+            changes['uci_code'] = request.uci_code
+        if request.country_code is not None:
+            changes['country_code'] = request.country_code
+        if request.tier_level is not None: 
+            changes['tier_level'] = request.tier_level
+        if request.valid_from is not None:
+            changes['valid_from'] = request.valid_from
+        
+        if not changes:
+            raise ValueError("No changes specified")
+        
+        snapshot_before = {
+            "era": {
+                "era_id": str(era.era_id),
+                "node_id": str(era.node_id),
+                "registered_name": era.registered_name,
+                "uci_code": era.uci_code,
+                "tier_level": era.tier_level,
+            }
+        }
+        
+        # Auto-approve for trusted/admin/mod
+        if user.role in [UserRole.TRUSTED_EDITOR, UserRole.ADMIN, UserRole.MODERATOR]:
+            # Apply immediately
+            for k, v in changes.items():
+                setattr(era, k, v)
+            
+            era.last_modified_by = user.user_id
+            era.updated_at = datetime.utcnow()
+            era.is_manual_override = True
+            
+            snapshot_after = {
+                "era": {
+                    "era_id": str(era.era_id),
+                    "node_id": str(era.node_id),
+                    "registered_name": era.registered_name,
+                    "uci_code": era.uci_code,
+                    "tier_level": era.tier_level,
+                }
+            }
+            
+            edit = EditHistory(
+                entity_type="team_era",
+                entity_id=era.era_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            
+            user.approved_edits_count += 1
+            message = "Era updated successfully"
+        else:
+            # Pending update
+            snapshot_after = dict(snapshot_before)
+            for k, v in changes.items():
+                if k == 'node_id':
+                    snapshot_after['era']['node_id'] = str(v)
+                elif k == 'valid_from':
+                    snapshot_after['era']['valid_from'] = v.isoformat()
+                else:
+                    snapshot_after['era'][k] = v
+            
+            edit = EditHistory(
+                entity_type="team_era",
+                entity_id=era.era_id,
+                user_id=user.user_id,
+                action=EditAction.UPDATE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Era update submitted for moderation"
+        
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+        
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+
     @staticmethod
     async def _apply_metadata_changes(
         session: AsyncSession,
@@ -487,19 +603,8 @@ class EditService:
             session.add(node)
             await session.flush()
 
-            era = TeamEra(
-                node_id=node.node_id,
-                season_year=request.founding_year,
-                valid_from=date(request.founding_year, 1, 1),
-                registered_name=request.registered_name,
-                uci_code=request.uci_code,
-                tier_level=request.tier_level,
-                source_origin=f"user_{user.user_id}",
-                is_manual_override=True,
-                created_by=user.user_id
-            )
-            session.add(era)
-            await session.flush()
+            # NOTE: We intentionally DO NOT create an initial era anymore.
+            # This allows users to transfer an existing era from another team for the founding year.
 
             # Capture snapshot_after
             snapshot_after = {
@@ -507,12 +612,6 @@ class EditService:
                     "node_id": str(node.node_id),
                     "legal_name": node.legal_name,
                     "founding_year": node.founding_year
-                },
-                "era": {
-                    "era_id": str(era.era_id),
-                    "registered_name": era.registered_name,
-                    "uci_code": era.uci_code,
-                    "tier_level": era.tier_level
                 }
             }
             
@@ -532,6 +631,7 @@ class EditService:
 
             user.approved_edits_count += 1
             message = "Team created successfully"
+            entity_id_to_return = str(node.node_id)
         else:
             # Pending creation - snapshot_after shows what WILL be created
             snapshot_after = {
@@ -555,6 +655,7 @@ class EditService:
                 source_notes=request.reason or "Team creation pending review"
             )
             message = "Team creation submitted for moderation"
+            entity_id_to_return = None
 
         session.add(edit)
         await session.commit()
@@ -562,6 +663,7 @@ class EditService:
 
         return EditMetadataResponse(
             edit_id=str(edit.edit_id),
+            entity_id=entity_id_to_return,
             status=edit.status.value,
             message=message
         )

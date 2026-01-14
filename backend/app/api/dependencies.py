@@ -154,3 +154,21 @@ async def require_moderator(
             detail="Moderator or admin access required"
         )
     return current_user
+
+
+async def require_trusted_or_higher(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Require TRUSTED_EDITOR, MODERATOR or ADMIN.
+    
+    Use this for destructive actions like deleting eras, which are allowed
+    for trusted users but not standard editors.
+    """
+    allowed = [UserRole.TRUSTED_EDITOR, UserRole.MODERATOR, UserRole.ADMIN]
+    if current_user.role not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Trusted, Moderator or Admin access required"
+        )
+    return current_user

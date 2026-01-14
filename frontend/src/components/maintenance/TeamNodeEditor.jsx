@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../Loading';
 import { useAuth } from '../../contexts/AuthContext';
 import './SponsorEditor.css'; // Reuse Sponsor Editor styles for consistency
 import TeamEraBubbles from './TeamEraBubbles';
+import TeamEraTransferModal from './TeamEraTransferModal';
 
 export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect }) {
     const { isAdmin, isModerator, isTrusted, canEdit } = useAuth();
@@ -14,6 +15,7 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
     const [loading, setLoading] = useState(!!nodeId);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
+    const [showTransferModal, setShowTransferModal] = useState(false);
 
     const [formData, setFormData] = useState({
         legal_name: '',
@@ -109,23 +111,32 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                     tier_level: 3,
                     reason: payload.reason
                 };
-                await editsApi.createTeamEdit(requestData);
-                message = canDirectEdit ? "Team created (see list)" : "Team creation request submitted for moderation";
-            }
+                const response = await editsApi.createTeamEdit(requestData);
+                // If direct edit, we get the entity ID back to switch mode
+                const newNodeId = response.entity_id;
+                message = canDirectEdit ? "Team created" : "Team creation request submitted for moderation";
 
-            if (shouldClose) {
-                onClose();
-            } else {
-                // If we didn't close, we ideally want to switch to Edit mode, but we don't have the new ID.
-                // So we force close or reset.
-                setSubmitting(false);
-                if (!nodeId) {
-                    onClose(); // Force close on create
+                if (shouldClose) {
+                    onClose();
+                    if (onSuccess) onSuccess(newNodeId);
+                } else {
+                    // User wants to stay open
+                    setSubmitting(false);
+                    if (newNodeId && canDirectEdit) {
+                        // Switch to Edit Mode (parent will update prop)
+                        if (onSuccess) onSuccess(newNodeId);
+                        // Optional: alert(message); 
+                    } else if (!nodeId) {
+                        // If pending, we can't edit it yet, so must close
+                        onClose();
+                        alert(message);
+                    } else {
+                        // Updating existing, just alert
+                        alert(message);
+                        if (onSuccess) onSuccess();
+                    }
                 }
-                alert(message);
             }
-            // Trigger refresh
-            if (onSuccess) onSuccess();
         } catch (err) {
             console.error(err);
             setError(err.response?.data?.detail || err.message || "Failed to save team");
@@ -288,9 +299,14 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                             Usually Protection cascades. Let's block Add Era if isProtected on Node.
                         */}
                         {nodeId && !isProtected && (
-                            <button className="secondary-btn small" onClick={() => onEraSelect(null)}>
-                                + Add Era
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button className="secondary-btn small" onClick={() => onEraSelect(null)}>
+                                    + Add Era
+                                </button>
+                                <button className="secondary-btn small" onClick={() => setShowTransferModal(true)}>
+                                    Transfer Eras
+                                </button>
+                            </div>
                         )}
                     </div>
 
@@ -307,6 +323,19 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                     )}
                 </div>
             </div>
+
+            {/* Transfer Modal */}
+            {showTransferModal && (
+                <TeamEraTransferModal
+                    targetNodeId={nodeId}
+                    onClose={() => setShowTransferModal(false)}
+                    onSuccess={() => {
+                        setShowTransferModal(false);
+                        loadNodeData(); // Refresh data
+                        if (onSuccess) onSuccess();
+                    }}
+                />
+            )}
 
             {/* FOOTER */}
             <div className="editor-footer">

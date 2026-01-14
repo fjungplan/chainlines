@@ -6,7 +6,7 @@ from app.api.dependencies import get_current_user, require_editor
 from app.models.user import User
 from app.schemas.edits import (
     EditMetadataRequest, EditMetadataResponse, MergeEventRequest, 
-    SplitEventRequest, CreateTeamRequest, CreateEraEditRequest, 
+    SplitEventRequest, CreateTeamRequest, CreateEraEditRequest, UpdateEraEditRequest,
     UpdateNodeRequest, LineageEditRequest,
     SponsorMasterEditRequest, SponsorBrandEditRequest
 )
@@ -133,10 +133,35 @@ async def create_era(
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/era/{era_id}", response_model=EditMetadataResponse)
+async def update_era(
+    era_id: str,
+    request: UpdateEraEditRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_editor)
+):
+    """
+    Update an existing team era.
+    
+    This endpoint allows updating era fields including node_id for transfers.
+    - NEW_USER: Update goes to moderation queue (PENDING status)
+    - TRUSTED_USER/ADMIN: Update is auto-approved immediately
+    """
+    try:
+        if request.era_id and request.era_id != era_id:
+            raise ValueError("Era ID in path does not match body")
+        request.era_id = era_id
+        
+        result = await EditService.update_era_edit(
+            session,
+            current_user,
+            request
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @router.post("/node", response_model=EditMetadataResponse)
 async def edit_node(

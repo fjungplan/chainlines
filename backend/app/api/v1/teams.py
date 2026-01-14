@@ -21,7 +21,7 @@ from app.schemas.team import (
     TeamEraCreate,
     TeamEraUpdate,
 )
-from app.api.dependencies import get_current_user, require_editor, require_admin
+from app.api.dependencies import get_current_user, require_editor, require_admin, require_trusted_or_higher
 from app.models.user import User
 from app.schemas.team_detail import TeamHistoryResponse
 from app.services.team_detail_service import TeamDetailService
@@ -176,7 +176,7 @@ async def update_team_era(
 async def delete_team_era(
     era_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_trusted_or_higher),
 ):
     """Delete a TeamEra."""
     success = await TeamService.delete_era(db, era_id)
