@@ -285,22 +285,48 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                         </div>
 
                         {/* Row 2: Predecessor / Successor */}
-                        <div className="form-row">
-                            <div className="form-group" style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div style={{ flex: 1 }}>
                                 <TeamSearch
                                     label="Predecessor Team *"
                                     placeholder="Search predecessor..."
-                                    onSelect={setPredecessorNode}
                                     initialSelection={predecessorNode}
+                                    onSelect={setPredecessorNode}
                                     excludeIds={successorNode ? [successorNode.node_id] : []}
                                 />
                             </div>
-                            <div className="form-group" style={{ flex: 1 }}>
+
+                            <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', marginBottom: '1rem' }}>
+                                <Button
+                                    variant="secondary"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        const temp = predecessorNode;
+                                        setPredecessorNode(successorNode);
+                                        setSuccessorNode(temp);
+                                    }}
+                                    title="Swap Predecessor and Successor"
+                                    style={{
+                                        width: '42px',
+                                        height: '42px', // Matches global --input-height
+                                        padding: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M6.99 11L3 15L6.99 19V16H14V14H6.99V11ZM21 9L17.01 5V8H10V10H17.01V13L21 9Z" fill="currentColor" />
+                                    </svg>
+                                </Button>
+                            </div>
+
+                            <div style={{ flex: 1 }}>
                                 <TeamSearch
                                     label="Successor Team *"
                                     placeholder="Search successor..."
-                                    onSelect={setSuccessorNode}
                                     initialSelection={successorNode}
+                                    onSelect={setSuccessorNode}
                                     excludeIds={predecessorNode ? [predecessorNode.node_id] : []}
                                 />
                             </div>
