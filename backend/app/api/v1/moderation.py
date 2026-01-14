@@ -4,7 +4,7 @@ from sqlalchemy import select, and_
 from typing import List, Optional
 
 from app.db.database import get_db
-from app.api.dependencies import require_admin
+from app.api.dependencies import require_moderator
 from app.models.user import User
 from app.models.edit import EditHistory, EditStatus
 from app.schemas.moderation import (
@@ -23,7 +23,7 @@ async def get_pending_edits(
     limit: int = Query(50, ge=1, le=100),
     edit_type: Optional[str] = None,
     session: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin)
+    moderator: User = Depends(require_moderator)
 ):
     """Get list of pending edits for moderation"""
     stmt = select(EditHistory).where(EditHistory.status == EditStatus.PENDING)
@@ -54,7 +54,7 @@ async def review_edit(
     edit_id: str,
     request: ReviewEditRequest,
     session: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin)
+    moderator: User = Depends(require_moderator)
 ):
     """Approve or reject a pending edit"""
     edit = await session.get(EditHistory, edit_id)
@@ -68,7 +68,7 @@ async def review_edit(
     result = await ModerationService.review_edit(
         session,
         edit,
-        admin,
+        moderator,
         request.approved,
         request.notes
     )
@@ -77,7 +77,7 @@ async def review_edit(
 @router.get("/stats", response_model=ModerationStatsResponse)
 async def get_moderation_stats(
     session: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin)
+    moderator: User = Depends(require_moderator)
 ):
     """Get moderation statistics"""
     return await ModerationService.get_stats(session)

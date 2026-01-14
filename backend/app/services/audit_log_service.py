@@ -287,6 +287,43 @@ class AuditLogService:
             else:
                 edit.review_notes = f"Reverted: {notes}"
         
+        # CRITICAL: Rollback the data to previous state
+        # If the edit was CREATE, we need to DELETE
+        # If the edit was UPDATE, we need to restore snapshot_before
+        # If the edit was DELETE, we need to recreate from snapshot_before
+        if edit.action == EditAction.CREATE:
+            # Revert CREATE by deleting the entity
+            await AuditLogService._apply_delete(session, edit)
+        elif edit.action == EditAction.UPDATE:
+            # Revert UPDATE by applying the before snapshot
+            entity_type = edit.entity_type.lower()
+            entity = None
+            
+            if entity_type in ("team", "team_node", "teamnode"):
+                entity = await session.get(TeamNode, edit.entity_id)
+            elif entity_type in ("era", "team_era", "teamera"):
+                entity = await session.get(TeamEra, edit.entity_id)
+            elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
+                entity = await session.get(SponsorMaster, edit.entity_id)
+            elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
+                entity = await session.get(SponsorBrand, edit.entity_id)
+            elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
+                entity = await session.get(TeamSponsorLink, edit.entity_id)
+            elif entity_type in ("lineage", "lineage_event", "lineageevent"):
+                entity = await session.get(LineageEvent, edit.entity_id)
+            
+            if entity and edit.snapshot_before:
+                # Restore all fields from snapshot_before
+                for key, value in edit.snapshot_before.items():
+                    if hasattr(entity, key):
+                        setattr(entity, key, value)
+        elif edit.action == EditAction.DELETE:
+            # Revert DELETE by recreating the entity from snapshot_before
+            # This is complex and edge-case, may need to be implemented later
+            # For now, log a warning
+            import logging
+            logging.warning(f"Reverting DELETE action not fully implemented for edit {edit.edit_id}")
+        
         await session.commit()
         
         return ReviewEditResponse(
@@ -354,6 +391,9 @@ class AuditLogService:
                 edit.review_notes = f"{edit.review_notes}\n\nRe-applied: {notes}"
             else:
                 edit.review_notes = f"Re-applied: {notes}"
+        
+        # Apply the edit to the database (re-apply the snapshot_after changes)
+        await AuditLogService.apply_edit(session, edit)
         
         await session.commit()
         
@@ -457,7 +497,10 @@ class AuditLogService:
 
         if edit.action == EditAction.CREATE:
             await AuditLogService._apply_create(session, edit)
-        # TODO: Implement UPDATE and DELETE logic
+        elif edit.action == EditAction.UPDATE:
+            await AuditLogService._apply_update(session, edit)
+        elif edit.action == EditAction.DELETE:
+            await AuditLogService._apply_delete(session, edit)
 
     @staticmethod
     async def _apply_create(session: AsyncSession, edit: EditHistory) -> None:
@@ -570,3 +613,58 @@ class AuditLogService:
                     rank_order=idx + 1
                 )
                 session.add(link)
+
+    @staticmethod
+    async def _apply_update(session: AsyncSession, edit: EditHistory) -> None:
+        """Apply UPDATE action by updating entity fields from snapshot_after."""
+        data = edit.snapshot_after
+        entity_type = edit.entity_type.lower()
+        
+        # Load the entity
+        entity = None
+        if entity_type in ("team", "team_node", "teamnode"):
+            entity = await session.get(TeamNode, edit.entity_id)
+        elif entity_type in ("era", "team_era", "teamera"):
+            entity = await session.get(TeamEra, edit.entity_id)
+        elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
+            entity = await session.get(SponsorMaster, edit.entity_id)
+        elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
+            entity = await session.get(SponsorBrand, edit.entity_id)
+        elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
+            entity = await session.get(TeamSponsorLink, edit.entity_id)
+        elif entity_type in ("lineage", "lineage_event", "lineageevent"):
+            entity = await session.get(LineageEvent, edit.entity_id)
+        
+        if not entity:
+            raise ValueError(f"Entity {edit.entity_id} of type {edit.entity_type} not found")
+        
+        # Update fields from snapshot_after
+        for key, value in data.items():
+            if hasattr(entity, key):
+                setattr(entity, key, value)
+        
+        await session.flush()
+
+    @staticmethod
+    async def _apply_delete(session: AsyncSession, edit: EditHistory) -> None:
+        """Apply DELETE action by removing the entity."""
+        entity_type = edit.entity_type.lower()
+        
+        # Load the entity
+        entity = None
+        if entity_type in ("team", "team_node", "teamnode"):
+            entity = await session.get(TeamNode, edit.entity_id)
+        elif entity_type in ("era", "team_era", "teamera"):
+            entity = await session.get(TeamEra, edit.entity_id)
+        elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
+            entity = await session.get(SponsorMaster, edit.entity_id)
+        elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
+            entity = await session.get(SponsorBrand, edit.entity_id)
+        elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
+            entity = await session.get(TeamSponsorLink, edit.entity_id)
+        elif entity_type in ("lineage", "lineage_event", "lineageevent"):
+            entity = await session.get(LineageEvent, edit.entity_id)
+        
+        if entity:
+            await session.delete(entity)
+            await session.flush()
