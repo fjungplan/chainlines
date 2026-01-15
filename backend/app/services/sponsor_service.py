@@ -137,10 +137,31 @@ class SponsorService:
 
     @staticmethod
     async def search_masters(session: AsyncSession, query: str, limit: int = 20) -> List[SponsorMaster]:
+        """
+        Search sponsor masters by name or brand name (accent-insensitive).
+        
+        Returns deduplicated results even when multiple brands match.
+        """
+        from sqlalchemy import or_, func, distinct
+        from app.models.sponsor import SponsorBrand
+        
+        # Normalize search term for accent insensitivity
+        search_query = f"%{query}%"
+        unaccented_query = func.unaccent(search_query)
+        
         stmt = (
             select(SponsorMaster)
+            .distinct(SponsorMaster.master_id)  # Prevent duplicates when multiple brands match
             .options(selectinload(SponsorMaster.brands))
-            .where(SponsorMaster.legal_name.ilike(f"%{query}%"))
+            .where(
+                or_(
+                    # Search sponsor master name
+                    func.unaccent(SponsorMaster.legal_name).ilike(unaccented_query),
+                    # Search brand names using relationship
+                    SponsorMaster.brands.any(func.unaccent(SponsorBrand.brand_name).ilike(unaccented_query)),
+                    SponsorMaster.brands.any(func.unaccent(SponsorBrand.display_name).ilike(unaccented_query))
+                )
+            )
             .limit(limit)
         )
         result = await session.execute(stmt)
