@@ -42,6 +42,7 @@ class SponsorMasterUpdate(BaseModel):
     source_notes: Optional[str] = None
 
 class SponsorBrandUpdate(BaseModel):
+    master_id: Optional[UUID] = None  # For brand transfers
     brand_name: Optional[str] = Field(None, min_length=1, max_length=255)
     display_name: Optional[str] = Field(None, max_length=255)
     default_hex_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
