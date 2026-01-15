@@ -574,6 +574,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 onClose={() => setIsSponsorModalOpen(false)}
                 eraId={eraId}
                 seasonYear={formData.season_year}
+                registeredName={formData.registered_name}
                 onUpdate={loadSponsorStats}
             />
         </div >

@@ -4,7 +4,7 @@ import { LoadingSpinner } from '../Loading';
 import './SponsorManagerModal.css';
 import Button from '../common/Button';
 
-export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, seasonYear }) {
+export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, seasonYear, registeredName }) {
     if (!isOpen) return null;
 
     const [links, setLinks] = useState([]);
@@ -227,7 +227,7 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
             <div className="modal-content sponsor-manager-modal">
                 {/* Header ... */}
                 <div className="modal-header">
-                    <h2>Manage Sponsors {seasonYear ? `- ${seasonYear}` : ''}</h2>
+                    <h2>Manage Sponsors - {seasonYear}{registeredName ? ` (${registeredName})` : ''}</h2>
                     <Button variant="ghost" className="close-btn" onClick={handleClose} title="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
