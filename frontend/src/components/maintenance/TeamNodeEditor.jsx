@@ -100,6 +100,22 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                 };
                 await editsApi.updateNode(requestData);
                 message = canDirectEdit ? "Team updated successfully" : "Update request submitted for moderation";
+
+                // Handle close/success callbacks
+                if (shouldClose) {
+                    onClose();
+                    if (onSuccess) onSuccess();
+                } else {
+                    setSubmitting(false);
+                    if (!canDirectEdit) {
+                        // If it's a request, we can't continue editing, so close anyway
+                        alert(message);
+                        onClose();
+                    } else {
+                        // Direct edit, stay open
+                        if (onSuccess) onSuccess();
+                    }
+                }
             } else {
                 // CREATE - Use Edits API to ensure audit log
                 // Warning: We don't get the new ID back easily from Edits API in simplified mode.

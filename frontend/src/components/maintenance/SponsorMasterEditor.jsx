@@ -163,11 +163,16 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 await editsApi.updateSponsorMaster(masterId, requestData);
                 message = canDirectEdit ? "Sponsor updated successfully" : "Update request submitted for moderation";
 
-                if (shouldClose) onSuccess();
-                else {
+                if (shouldClose) {
+                    onClose();
+                    if (onSuccess) onSuccess();
+                } else {
                     setSubmitting(false);
                     alert(message);
-                    if (!canDirectEdit) onSuccess();
+                    if (!canDirectEdit) {
+                        onClose();
+                        if (onSuccess) onSuccess();
+                    }
                 }
             } else {
                 // CREATE
