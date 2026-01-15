@@ -1,0 +1,823 @@
+{
+  "actions": [
+    {
+      "action_type": "merge_brand",
+      "source_id": "3804008c-5c37-48d8-a248-d2dbbf7f0226",
+      "target_id": "da2c0600-10c9-4b00-8f78-8f675880adf8",
+      "reason": "Typo/spelling variation: Flat -> Fiat",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "e3aa24f6-a14a-4185-8143-53a8c309c2cd",
+      "target_id": "f9ff6de3-dcdf-4bf0-96de-4809ec55ae3a",
+      "reason": "Spelling variation: Citroen -> Citroën",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "31e40295-02d2-426c-bb64-08eae34ae1a1",
+      "target_id": "2e172fc4-fe98-43e6-a118-b36da9e273ef",
+      "reason": "Stellantis owns Peugeot; Peugeot primary cycling identity with high usage",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "a026f2bc-df18-48a7-942d-9a4a6960e610",
+      "target_id": "2e172fc4-fe98-43e6-a118-b36da9e273ef",
+      "reason": "Fiat owned by Stellantis/Peugeot group",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "6f0ee360-1fa6-472f-ab86-8030e3723037",
+      "target_id": "41bbabcc-ac4a-4392-a264-b722eac80311",
+      "reason": "Casing variation: hansgrohe -> HansGrohe",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "492a36bf-1790-4b37-b0b2-77c776da70a3",
+      "target_id": "cf8276f7-9724-4986-8a13-4633f2bd28fe",
+      "reason": "Same company (hansgrohe owned by Masco); casing variant",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "92b7b8d2-dc48-4c0f-b6af-917bf33fb6f7",
+      "target_id": "cec7fbea-57a0-43d4-a690-783d42e86c0b",
+      "reason": "Duplicate exact brand name 'Dunlop'; highest usage target",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "094365cf-bc82-43dd-9bdc-f2fe80d29d08",
+      "target_id": "cec7fbea-57a0-43d4-a690-783d42e86c0b",
+      "reason": "Duplicate exact brand name 'Dunlop'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "560862e5-751f-430b-b02d-e2f25b32737c",
+      "target_id": "cec7fbea-57a0-43d4-a690-783d42e86c0b",
+      "reason": "Duplicate exact brand name 'Dunlop'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "ce6ed3fe-bbc5-439f-92e9-1b471b29198f",
+      "target_id": "6afb7509-4f36-409f-bdac-c603ac48cb51",
+      "reason": "Goodyear owns Dunlop tyre brand",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "3c220a12-a86b-44a2-9e55-f971b54355d0",
+      "target_id": "6afb7509-4f36-409f-bdac-c603ac48cb51",
+      "reason": "Dunlop Rubber Company variant",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "4be8ce1f-3e1b-4c45-be76-32c29a303823",
+      "target_id": "6afb7509-4f36-409f-bdac-c603ac48cb51",
+      "reason": "Dunlop Tyres variant",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "ab00588c-2336-4718-a784-51e19668ca79",
+      "target_id": "146c4450-7f90-4a4b-bae8-898348e26c03",
+      "reason": "Dorel Industries owns Cannondale",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "31ce2ca0-bdde-4b38-b9a8-57def5e846a9",
+      "target_id": "2a9caf39-5178-49e5-a058-71edc4aabd20",
+      "reason": "Cheng Shin Rubber owns Maxxis",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "03aaeb4b-2749-4e0b-a15b-f038a8771bd9",
+      "target_id": "a3ebd778-505a-4a5b-b5ff-6d92a5bbadbe",
+      "reason": "Pon Holdings owns Gazelle",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "bd823cca-ee39-4312-b28a-9add3e4fec58",
+      "target_id": "52692c7a-b819-43c8-9354-dd1e975f7194",
+      "reason": "Salomon Group owned Mavic",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "67103107-4af9-4193-b57c-430f551b807e",
+      "target_id": "c10909ec-eb79-42c3-89f5-4d191cbdea64",
+      "reason": "Mohawk Industries owns Unilin (Quick Step flooring)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "3d3ea2aa-97d2-4c88-80ea-e3b32d52c9a3",
+      "target_id": "4e8e8cc9-4b58-46b0-96f1-40479b6c53f7",
+      "reason": "Lampre Group variant of Lampre",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "024206f3-443b-491b-9993-d15ea1dc304e",
+      "target_id": "e0f173d5-3bb6-4225-8760-85772469e2d1",
+      "reason": "Italgas variant/parent of Liquigas",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "a65c9429-b899-4a8d-a32a-f70c31df2610",
+      "target_id": "3f7b0d3c-44ea-48cd-8b9e-16ab82d3c065",
+      "reason": "Royal DSM owns Davitamon",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "0fa152c4-6b96-4218-afe8-5cedf017ff0b",
+      "target_id": "d7cd8a3b-4661-4ce7-94f7-1bf3037da4db",
+      "reason": "Likely misspelling: Orima -> Corima",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "3db97d7b-2f68-4ef2-b55d-a50f7bc9b44d",
+      "target_id": "76f99652-ef2a-46b6-9229-e317b6a6c09c",
+      "reason": "Spelling variation within sponsor: Carerra -> Carrera",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "5b20d61e-3b89-4e70-ad86-fa2e7527469e",
+      "target_id": "a68c1829-3e02-47f5-a037-93ea19bad0d7",
+      "reason": "Cipollini variant of M. Cipollini (higher usage)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "6bc62e9d-217f-4eef-990b-7e41147064eb",
+      "target_id": "eaad89fa-5594-4e76-a96f-efb8a80e7cb7",
+      "reason": "Eurocar variant of Europcar",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "df4d30fe-7f15-4a19-849c-c17a4907c33c",
+      "target_id": "d3c498b3-af22-4125-a52c-643750dff69b",
+      "reason": "Bayer variant of Bayer AG",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "4700b323-ee46-4abd-b06d-b52a233011c4",
+      "target_id": "98d2abcd-42c2-4be0-9e7f-3f9356d10500",
+      "reason": "Spelling variation within sponsor: Acqua e Sapone -> Acqua & Sapone",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "db5174ed-525f-410b-8e53-b448d64a435d",
+      "target_id": "6a71dfb0-4299-4aed-ad93-f0aa12c20f15",
+      "reason": "Spacing variation within sponsor: Active Jet -> Activejet",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "3c48116c-a822-4cea-bbce-f8ce3945210c",
+      "target_id": "6a71dfb0-4299-4aed-ad93-f0aa12c20f15",
+      "reason": "Spelling variation within sponsor: Activjet -> Activejet",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "133489db-a539-4583-97f3-ff0631b25710",
+      "target_id": "a36255bc-65fe-41ba-b162-57e1b08770a6",
+      "reason": "Abbreviation to full name within sponsor: Saxo -> Saxo Bank",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "fda196f2-62d9-47cd-b140-caa5002f9fbc",
+      "target_id": "91da8223-eeda-4ba1-9147-ad4dc584d62a",
+      "reason": "Variation to primary brand within sponsor: Ag2r Prévoyance -> AG2R (highest usage)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "8caffe7b-fa7b-43ba-b0ea-6a986b6bc66a",
+      "target_id": "91da8223-eeda-4ba1-9147-ad4dc584d62a",
+      "reason": "Full name to primary abbreviation within sponsor: AG2R La Mondiale -> AG2R (highest usage)",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "4eefd3d4-ddf4-4619-a54e-90a6ff76c853",
+      "target_id": "19e839cb-3376-413d-9fce-cdd0a81636b2",
+      "reason": "Same company; Amica Chips sponsor refers to the same entity as Amica (wiki confirms Amica Chips)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "1b924cf5-a4d2-4018-9b3c-7236173437ed",
+      "target_id": "d62c60f6-60e6-4a70-b4ae-b0a00a7fd275",
+      "reason": "Same company; Androni is abbreviation/short form of Androni Giocattoli (cycling sponsor identity)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "188aaba9-0331-4f11-ba5d-7baaa02c9bbe",
+      "target_id": "3ad3fb83-4d89-43c8-b353-ead7cb7a951d",
+      "reason": "Same company; Assicurazioni is short form of Assicurazioni Generali",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "86c5828c-f787-4875-b18e-2dbb1aa36ac8",
+      "target_id": "921f9ada-36b0-455b-8762-0dbba1ef78e9",
+      "reason": "Spelling/punctuation variation: Auber '93 -> Auber 93",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "d0a2dbd4-3fa4-4296-9957-0d0f27274169",
+      "target_id": "b9cd201f-f027-402c-bf14-0a24f941e302",
+      "reason": "Spelling variation within same sponsor: BigMat -> Big Mat",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "9856575b-233f-4a79-aa07-c2559eaab0af",
+      "target_id": "cb2ef85c-70ee-4eef-8751-2359015d063a",
+      "reason": "Spelling variation within same sponsor: Cafe Baque -> Cafes Baque",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "207eeba8-3793-4bcb-b912-9194aa134a62",
+      "target_id": "0974cfb3-c8d2-4e83-9156-af94dcf1642c",
+      "reason": "Accent/spelling variation within same sponsor: Caffe Mokambo -> Caffé Mokambo",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "af8f1bf7-c703-40b5-8438-82812c2482c0",
+      "target_id": "1475367a-3a6c-46aa-9ff7-f3bd9729a932",
+      "reason": "Same sponsor; Bom Petisco is short form of Atum Bom Petisco (higher usage on target)",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "a77331ba-0175-4e6f-8336-614ab493b294",
+      "target_id": "6964e1b3-985e-4674-aec4-b7340d7138ee",
+      "reason": "Same sponsor; Asfra Racing Team likely misclassified team reference to Asfra sponsor",
+      "confidence": 0.85,
+      "status": "needs_review"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "3d0ae1ad-e975-4cc2-b02a-e75c9c8601e0",
+      "target_id": "21f752c9-c4d7-47f8-8a78-c97d865aa246",
+      "reason": "Same sponsor; BFB abbreviation of BFB Bruciatore",
+      "confidence": 0.8,
+      "status": "needs_review"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "bd243c08-f746-40fa-8c1a-d225c9ef7bed",
+      "target_id": "cb1bd405-6d7d-4d4e-875f-3d489cf3eaf8",
+      "reason": "Spelling variation: 'Ceramica Panaria' to 'Ceramiche Panaria' (Italian plural form)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "5ccb9462-a52c-4518-94cf-870fbff98517",
+      "target_id": "398129ff-829e-4734-ae14-7f77f677756a",
+      "reason": "Accent variation: 'Clement' to 'Clément'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "55c17946-f88c-467e-b999-13da79abd2c1",
+      "target_id": "d67d7e15-910f-401e-9279-702eb4ad20c4",
+      "reason": "Abbreviation: 'Conti' is short for 'Continental'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "df097bc5-eeaf-4427-8a9b-ff6eec93dc89",
+      "target_id": "fb33fcb8-2079-4e49-a944-7914d8bd3491",
+      "reason": "Same sponsor; 'Crelan' is successor/rebrand of 'Landbouwkrediet' (higher usage)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "238040f2-43b3-48f4-a034-cc5f9ddfc80d",
+      "target_id": "8c459a25-61df-46ff-8a79-de0da25a347e",
+      "reason": "Minor variation: 'Cyclingnews.com' to 'Cyclingnews' (domain extension)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "b2e94b3a-68f1-43bd-9a58-e7d7dac1fbe0",
+      "target_id": "01145225-9ff1-4301-ac26-cf4efdd26556",
+      "reason": "Spelling/capitalization variation: 'D Alessandro' to 'D'Alessandro'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "09062317-496c-4007-898a-4c0795d5ea97",
+      "target_id": "01145225-9ff1-4301-ac26-cf4efdd26556",
+      "reason": "Spelling/capitalization variation: 'd Allesandro' to 'D'Alessandro'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "f4a2d350-2dba-47f0-a560-3139fe94c3e5",
+      "target_id": "0a259a15-5414-40f9-b812-664e8e46554f",
+      "reason": "Accent variation: 'Decathlon' to 'Décathlon'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "3d5b63f9-77e6-45c8-9281-d14c65c18af8",
+      "target_id": "ff270af0-4d06-4054-be4f-430f11f94450",
+      "reason": "Punctuation variation: 'Dr. Mann' to 'Dr.Mann'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "15cb627e-73b3-4b08-83e3-e1d8a82f1b0a",
+      "target_id": "dfc00632-fcca-4d13-a680-51e34327f85a",
+      "reason": "Spelling variation of Eurosoap",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "d5973480-dcb2-4b14-a331-4fd165bed3de",
+      "target_id": "dfc00632-fcca-4d13-a680-51e34327f85a",
+      "reason": "Hyphenated spelling variation of Eurosoap",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "513a6bc2-f537-48a4-90a6-bda9de0361c6",
+      "target_id": "dfc00632-fcca-4d13-a680-51e34327f85a",
+      "reason": "Spaced spelling variation of Eurosoap",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "be76b0f6-c312-466d-8978-24740f65c26a",
+      "target_id": "b7fb5a6c-bfb5-48f7-947f-5a4cc0741cce",
+      "reason": "Accent variation of Faizane",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "0c0a3a10-6f7b-4b12-8415-62dd06528ecd",
+      "target_id": "07d9b018-e593-48aa-a1ff-25701739ac43",
+      "reason": "Abbreviation for Fast Forward Wheels",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "19fb9638-3a38-41c1-a3a1-b29256921e08",
+      "target_id": "be5f3dd6-7d4d-4ae1-aa03-6e0efd589653",
+      "reason": "Full name corresponding to FDJ abbreviation",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "1ff5395e-2f01-4e74-933a-a90cdc97dde4",
+      "target_id": "be5f3dd6-7d4d-4ae1-aa03-6e0efd589653",
+      "reason": "Minor variation ('La') of Française des Jeux / FDJ",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "9b1b8b73-0223-4cc7-a3df-85b0bb73cffb",
+      "target_id": "bd454bdb-d567-4458-a50a-f0e30fe234e1",
+      "reason": "Petroleo de Colombia is former/related name for Ecopetrol (Empresa Colombiana de Petróleos)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "0d413afb-13c6-4e25-9193-381cdac597d6",
+      "target_id": "4b2fb78f-c96c-460d-b94a-281a3fde2816",
+      "reason": "Punctuation variation of FC Porto",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "fa0a7c6e-4020-4447-907d-09997ade73cf",
+      "target_id": "4b2fb78f-c96c-460d-b94a-281a3fde2816",
+      "reason": "Punctuation and spacing variation of FC Porto",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "a5c31183-59fe-411a-b14c-53b2bc9c4c8d",
+      "target_id": "dae652a8-a9c3-4fbe-9814-cdf5328962aa",
+      "reason": "'Gis' is abbreviation for 'Gis Gelati' within the same sponsor",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "e372beab-ede3-43e6-801f-1d7a006c7c9f",
+      "target_id": "a04d20d1-21fe-4b16-89a0-07ef1be285d3",
+      "reason": "'Groen Leeuw' is spelling variation of 'Groene Leeuw' (minor article difference in Dutch)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "dd1a3929-9c78-42fb-9e57-2569b5c37405",
+      "target_id": "750737fd-e9d0-4f19-ac33-09ff89e6890e",
+      "reason": "'HB alarm systemen' is identical to 'HB Alarmsystemen' ignoring case and spacing",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "b9dba2f4-1e3c-4865-aa5a-206166840463",
+      "target_id": "2969f9fb-da7d-4a33-b8dd-2aa5e1195163",
+      "reason": "Plural variation (Keukens -> Keuken) within the same sponsor",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "72e14900-201c-4703-b01f-e8aefda5316a",
+      "target_id": "9337b5c2-822e-4c44-90b4-399d073affec",
+      "reason": "Accent variation (Konig -> König) within the same sponsor",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "397462a7-764d-4979-9923-3d9b81a253ee",
+      "target_id": "e32ae477-1b3a-47f9-8ebf-681c6b29dd68",
+      "reason": "Apostrophe variation (L Express -> L'Express) within the same sponsor",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "dd9ca894-8821-42d4-88ae-3a2b053a57d5",
+      "target_id": "fc5c0f33-1efb-4c51-8d10-31ed775ac88c",
+      "reason": "Minor prefix variation (La Rota dos Moveis -> Rota dos Moveis) within the same sponsor",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "bb4a320a-b160-4a93-a06d-3fe3901194b1",
+      "target_id": "7015e1d8-b2e2-4fc8-96e2-cba3d3d224f2",
+      "reason": "Accent variation (Marcondes Cesar -> Marcondes César) within the same sponsor",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "72def3b3-8704-421e-9576-ff5e83f72132",
+      "target_id": "30628f16-165e-4313-b54e-ce74c44614e1",
+      "reason": "Full company name variation of primary brand NIPPO",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "8101f423-4301-4209-a736-8b3d009030c2",
+      "target_id": "9a65bf9e-1cc5-4ce5-bbd5-9d14643baf45",
+      "reason": "Full name variation of primary brand Navigators",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "3b21ef66-af51-4f18-9689-8fe97289744f",
+      "target_id": "d19f0b23-6a2d-4f2d-85fe-8b523eaa54f4",
+      "reason": "Spelling/capitalization variation (Newsystems vs New Systems)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "3805c6a6-8c62-4a4a-bc63-155fabbb24c0",
+      "target_id": "f3d14a1c-3049-418b-8963-d9a96a62931c",
+      "reason": "Accent variation (Nurnberger vs Nürnberger)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "c2afe402-17fe-44db-869d-d68d24859db0",
+      "target_id": "f3d14a1c-3049-418b-8963-d9a96a62931c",
+      "reason": "Full sponsor name variation to primary short brand",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "e3e6c6e5-6214-4d74-9ac7-0d100c950223",
+      "target_id": "751464ad-bb67-47cb-b9af-28abb2a7e63e",
+      "reason": "Spelling variation (Whiskey vs Whisky)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "5f659ffa-d2ae-4026-8a94-142d6c26199c",
+      "target_id": "684408af-b47f-48e6-840a-b163bb5680c3",
+      "reason": "Extended name variation (Paredes Movel vs Paredes)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "0380d572-dc47-43e6-95b9-d77238c913b9",
+      "target_id": "a7747939-539b-41bb-bf14-a3b761bccac5",
+      "reason": "Minor plural variation (Hermano vs Hermanos Manzaneque)",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "c5957bae-adbf-49a7-9259-691fd345ec13",
+      "target_id": "cb0d550c-56ba-4a22-a572-02c6d4e71e12",
+      "reason": "Plume Sport is a minor variation/extension of the primary Plume brand",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "c7fe166c-515f-4009-8f52-615698f6d5cd",
+      "target_id": "5400a897-e2ad-4c28-901c-ea8beb46536e",
+      "reason": "S.E.F.B. is punctuation variation of SEFB",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "4060200f-ef3f-4c8c-a3c6-5e5cda3cdac5",
+      "target_id": "fe6f30df-7bd3-4482-930f-cc0292745e93",
+      "reason": "S.I.S. is punctuation variation of SIS",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "6e53048a-a28b-4e75-a5d1-d6e0205335be",
+      "target_id": "9e509ac6-9d19-41d1-b5b0-378246d0b626",
+      "reason": "Roméo is accent variation of Romeo (higher usage target)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "da1af09d-cc40-4a38-8008-2b63f8ea17dc",
+      "target_id": "697658e3-a65d-4e71-a1cc-2cee560b2a68",
+      "reason": "St Raphael is abbreviated spelling variation of Saint-Raphaël",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "24ecda70-f30d-4373-8398-d7e863fe1f7d",
+      "target_id": "697658e3-a65d-4e71-a1cc-2cee560b2a68",
+      "reason": "Saint-Raphael is missing accent variation of Saint-Raphaël (proper spelling)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "d8e83afc-7404-4b38-bd5f-52a351d701c0",
+      "target_id": "33c90185-e5ee-4200-a502-23d9c50f2a55",
+      "reason": "S-phyre Glasses is descriptive extension of S-phyre",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "fd490415-5a50-49f9-b161-6dd69e7f5a8a",
+      "target_id": "9f9f3289-a13e-4438-b37f-73a3c19c692e",
+      "reason": "Short form/abbreviation of Sigma Sport",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "e4bde0f6-0fd5-4b23-ab67-3e5ac6d0e659",
+      "target_id": "ff1a9464-f7a6-4e1d-942c-bb2f4c91e89b",
+      "reason": "Spelling variation (without PVC), fewer uses",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "002c1a61-a34f-4897-8b93-5a7b5213b87e",
+      "target_id": "5c5309f7-010e-4a30-aa51-d4738b7902c8",
+      "reason": "Full name variation; Benfica is primary cycling brand with more uses",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "4ec7c20f-04c8-4f98-a73d-1fc9dccc0824",
+      "target_id": "a3735459-a937-4811-92e4-8684e447de7a",
+      "reason": "Full name variation; Sporting is primary with more uses",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "b22f5867-bc2d-438b-b5ba-f20a9cbddc8b",
+      "target_id": "cd907010-e7e3-47dd-a208-b5867a13342e",
+      "reason": "Spelling variation (with vs without hyphen)",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "5ee2104c-2e5d-4552-83d3-05eaa1dcd858",
+      "target_id": "11092ba1-7d16-4cbf-96fd-06b2399dcec8",
+      "reason": "Product specifier on main Time brand; fewer uses",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "4bf0a6f8-7106-4715-aee0-bf0ba7e552d0",
+      "target_id": "5ec5e036-5764-464f-841c-d2cc3a7472b0",
+      "reason": "Accent variation; target has proper ö spelling",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "b03ce988-2da1-442c-b1e3-e00df20ed76f",
+      "target_id": "8ec9eb78-c6bc-4a4e-befc-6eccbc7dd7a5",
+      "reason": "Spelling/accent variation (Torrie -> Torrié)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "df81653f-ce32-47d3-8d6b-fdca9219cf88",
+      "target_id": "4041ea47-07cd-481c-838d-aec96f8ebf81",
+      "reason": "Full company name vs common short brand; fewer uses",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "d37cf66a-fdf3-455f-9fe1-0c4f8a6c9ca7",
+      "target_id": "d06cdc47-9804-42d8-ae48-0aab87db946b",
+      "reason": "Product specifier on main Spiuk brand",
+      "confidence": 0.9,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "6bc286d7-d0b3-4548-ad19-f0b3bfe01d7e",
+      "target_id": "2cd57a42-4721-4055-a3f3-1111321138db",
+      "reason": "Spelling variation: 'Verandas Willems' missing apostrophe from 'Veranda's Willems'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "71d74888-12a9-414f-bcd8-b07d2f136906",
+      "target_id": "34444ba5-a998-4df1-9e6b-ba1f1ddb382c",
+      "reason": "Typographical error: 'Vini Calderola' is misspelling of 'Vini Caldirola'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "618f63af-a948-4169-8bff-884b56bc43d2",
+      "target_id": "3882ecde-a912-4681-aaf8-50904bc0e3ff",
+      "reason": "Typographical error: 'Willier Triestina' has extra 'l' compared to 'Wilier Triestina'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_brand",
+      "source_id": "131fc0b3-a3a3-492e-9823-33bacea35269",
+      "target_id": "98398b2a-f084-415b-a402-31ca7ef96164",
+      "reason": "Brand extension 'Zahor Chocolates' belongs to same sponsor 'Zahor'",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "81a7d5d4-6c2e-4959-bbf1-0d6958e2a5c6",
+      "target_id": "572f8dbb-4517-4c69-be1d-29b8f2291211",
+      "reason": "VF Group is the same entity as VF Corporation (parent company of Wrangler)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "e12b55c0-d0e4-4e76-8455-bc46d9c8485e",
+      "target_id": "c6ecfd69-300e-44a9-a622-d09e3923dd85",
+      "reason": "Same company: 'Willems Veranda's' is word order variation of 'Veranda's Willems'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "157c2163-73dd-4263-a8c2-383d4ba425a9",
+      "target_id": "73d50300-4033-4f12-bdb2-d886bedba4a3",
+      "reason": "'Wilier' is abbreviation/short form of bike manufacturer 'Wilier Triestina S.p.A.'",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "5d94a25e-5c56-44a8-ae8d-ac51b3f79f57",
+      "target_id": "d6b7763e-2016-4db1-9d46-1cc993b40afc",
+      "reason": "'WB' sponsor is duplicate abbreviation for 'Wallonie Bruxelles', which already has 'WB' brand",
+      "confidence": 1.0,
+      "status": "high_confidence"
+    },
+    {
+      "action_type": "merge_master",
+      "source_id": "afe39619-9a34-4499-a418-e70ccf0d433f",
+      "target_id": "6254c7be-adef-4d77-8216-af6813d14fc6",
+      "reason": "Same insurance company: 'Vitalicio' and 'Vitalicio Seguros' (Seguros = insurance)",
+      "confidence": 0.95,
+      "status": "high_confidence"
+    }
+  ],
+  "generated_at": "2026-01-15T17:41:17.200287",
+  "model_used": "grok-4-1-fast-reasoning",
+  "total_actions": 102
+}

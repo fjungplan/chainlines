@@ -4,30 +4,38 @@ Sponsor Consolidation Script
 
 LLM-assisted deduplication and consolidation of sponsors and brands.
 
-Usage:
-    python -m scripts.consolidate_sponsors --analyze
-    python -m scripts.consolidate_sponsors --apply consolidation_plan.json
 """
 import os
 import sys
+import re
+import unicodedata
 import argparse
 import json
+import difflib
+from collections import defaultdict
+from typing import List, Dict, Any, Optional, Tuple, Set
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
 from uuid import UUID
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
+
+# PATCH: If running locally on Windows, 'postgres' hostname won't resolve.
+# We need to replace it with 'localhost' for the script to work from host.
+if os.getenv("DATABASE_URL") and "@postgres" in os.getenv("DATABASE_URL"):
+    os.environ["DATABASE_URL"] = os.getenv("DATABASE_URL").replace("@postgres", "@localhost")
+    print(f"[NOTE] Patched DATABASE_URL for local execution: {os.environ['DATABASE_URL'].split('@')[-1]}")
 
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
-from openai import OpenAI
 import instructor
+from openai import OpenAI
 
 from app.db.database import async_session_maker
 from app.models.sponsor import SponsorMaster, SponsorBrand, TeamSponsorLink
@@ -38,7 +46,6 @@ from app.schemas.consolidation import (
     ConsolidationActionStatus
 )
 
-
 # ============================================================================
 # Constants
 # ============================================================================
@@ -47,8 +54,240 @@ CONFIDENCE_REVIEW = 0.7
 BACKUP_DIR = Path(__file__).parent.parent / "backups"
 PLAN_OUTPUT = Path(__file__).parent.parent / "consolidation_plan.json"
 
-
 # ============================================================================
+# Smart Clustering Logic
+# ============================================================================
+def normalize_str(s):
+    if not s: return ""
+    # Normalize unicode (strip accents) and lowercase, keep alphanumeric
+    s = unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode('ASCII')
+    return re.sub(r'[^a-z0-9]', '', s.lower())
+
+def cluster_sponsors(sponsors: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """
+    Group sponsors into clusters based on fuzzy matching of their names and brands.
+    Uses a graph connected components approach.
+    """
+    print("[CLUSTER] Starting smart fuzzy clustering...")
+    
+    # 1. Extract all unique terms (names and brand names)
+    # Map term -> list of sponsor_ids that use it
+    term_to_sponsors = defaultdict(list)
+    unique_terms = set()
+    
+    for s in sponsors:
+        terms = []
+        # Add sponsor name
+        if s.get("n"): terms.append(normalize_str(s["n"]))
+        # Add brand names
+        for b in s.get("brands", []):
+            if b.get("n"): terms.append(normalize_str(b["n"]))
+            
+        for term in set(terms): # Dedup within sponsor
+            if len(term) > 3: # Skip very short terms to avoid noise
+                term_to_sponsors[term].append(s["id"])
+                unique_terms.add(term)
+    
+    unique_terms_list = sorted(list(unique_terms))
+    print(f"[CLUSTER] Found {len(unique_terms_list)} unique terms to cluster")
+    
+    # 2. Cluster terms using fuzzy matching (Greedy O(N^2) but N is limited)
+    # term_clusters maps term -> cluster_id
+    term_clusters = {}
+    cluster_counter = 0
+    
+    # Optimization: Sort by length/alpha to speed up
+    # We'll simpler greedy approach:
+    # Taking a set of unvisited terms
+    unvisited = set(unique_terms_list)
+    
+    print("[CLUSTER] Computing fuzzy matches (this might take a moment)...")
+    progress = 0
+    total = len(unvisited)
+    
+    while unvisited:
+        # Pick a seed term
+        seed = unvisited.pop()
+        current_cluster_id = cluster_counter
+        term_clusters[seed] = current_cluster_id
+        
+        # Find all similar terms in remaining unvisited
+        # Using list(unvisited) to avoid runtime modification issues
+        candidates = list(unvisited) 
+        
+        # Heuristic: only check candidates with length within +/- 30%
+        seed_len = len(seed)
+        min_len = int(seed_len * 0.7)
+        max_len = int(seed_len * 1.3)
+        
+        for candidate in candidates:
+            if not (min_len <= len(candidate) <= max_len):
+                continue
+                
+            # Quick check: disjoint letters?
+            if set(seed).isdisjoint(set(candidate)):
+                continue
+                
+            # Deep check
+            ratio = difflib.SequenceMatcher(None, seed, candidate).ratio()
+            if ratio > 0.85: # High similarity threshold
+                term_clusters[candidate] = current_cluster_id
+                unvisited.remove(candidate)
+        
+        cluster_counter += 1
+        
+        progress += 1
+        if progress % 500 == 0:
+            print(f"   ... clustered {progress} groups")
+
+    print(f"[CLUSTER] Identified {cluster_counter} distinct semantic term groups")
+
+    # 3. Build Adjacency Graph of Sponsors
+    # Nodes: Sponsor IDs
+    # Edges: If two sponsors share a term OR have terms in the same cluster
+    
+    sponsor_adj = defaultdict(set)
+    sponsor_map = {s["id"]: s for s in sponsors}
+    all_sponsor_ids = list(sponsor_map.keys())
+    
+    # Invert mapping: Cluster ID -> List of Sponsors
+    cluster_to_sponsors = defaultdict(set)
+    
+    for term, s_ids in term_to_sponsors.items():
+        if term in term_clusters:
+            c_id = term_clusters[term]
+            for s_id in s_ids:
+                cluster_to_sponsors[c_id].add(s_id)
+                
+    # Create edges for all sponsors in the same cluster
+    for c_id, s_ids in cluster_to_sponsors.items():
+        s_ids_list = list(s_ids)
+        for i in range(len(s_ids_list)):
+            for j in range(i + 1, len(s_ids_list)):
+                u, v = s_ids_list[i], s_ids_list[j]
+                sponsor_adj[u].add(v)
+                sponsor_adj[v].add(u)
+                
+    # 4. Find Connected Components (The "Mega Chunks")
+    visited = set()
+    final_groups = []
+    
+    for s_id in all_sponsor_ids:
+        if s_id in visited:
+            continue
+            
+        # BFS to find component
+        component = []
+        queue = [s_id]
+        visited.add(s_id)
+        
+        while queue:
+            node = queue.pop(0)
+            component.append(sponsor_map[node])
+            
+            for neighbor in sponsor_adj[node]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+                    
+        final_groups.append(component)
+        
+    print(f"[CLUSTER] Grouped {len(all_sponsor_ids)} sponsors into {len(final_groups)} connected clusters")
+    
+    # Sort groups by size (largest first purely for interest) and then name
+    final_groups.sort(key=lambda g: (-len(g), g[0]["n"]))
+    
+    return final_groups
+
+
+async def analyze_command(session, limit: int = None):
+    """
+    Analyze phase: Fetch data, call LLM, generate consolidation_plan.json.
+    """
+    print("=" * 60)
+    print("ANALYSIS PHASE")
+    print("=" * 60)
+    
+    context = await fetch_sponsor_context(session, limit=limit)
+    
+    # SMART CLUSTERING
+    # Returns list of lists: [[SponsorA, SponsorB], [SponsorC], ...]
+    clusters = cluster_sponsors(context)
+    
+    # Flatten clusters into a single sorted list for chunking
+    # But keep clusters adjacent!
+    sorted_context = []
+    for cluster in clusters:
+        sorted_context.extend(cluster)
+        
+    # Recalculate metrics
+    context_json = json.dumps(sorted_context)
+    estimated_tokens = len(context_json) / 4
+    print(f"[SIZE] Total context size: ~{estimated_tokens:,.0f} tokens")
+
+    # Chunking Strategy
+    # We want to preserve clusters. Breaking a cluster across chunks is bad.
+    # We greedily build chunks from clusters.
+    
+    CHUNK_SIZE_LIMIT = 200 # Items per chunk
+    
+    chunks = []
+    current_chunk = []
+    
+    for cluster in clusters:
+        # If adding this cluster exceeds limit roughly, push current chunk
+        # (Unless cluster itself is huge, then we have to handle it)
+        if len(current_chunk) + len(cluster) > CHUNK_SIZE_LIMIT:
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = []
+        
+        current_chunk.extend(cluster)
+    
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    print(f"[LLM] Prepared {len(chunks)} chunks for processing (respecting cluster boundaries)")
+    
+    all_actions = []
+    
+    for i, chunk in enumerate(chunks):
+        print(f"\n[LLM] Processing chunk {i+1}/{len(chunks)} ({len(chunk)} sponsors)...")
+        # Print sample names to verify clustering
+        sample_names = [s["n"] for s in chunk[:3]]
+        print(f"      Starts with: {', '.join(sample_names)}...")
+        
+        try:
+            plan = call_grok_for_consolidation(chunk)
+            all_actions.extend(plan.actions)
+            print(f"   => Found {len(plan.actions)} actions")
+        except Exception as e:
+            print(f"[ERROR] Failed chunk: {e}")
+
+    # Deduplicate actions
+    unique_actions = {}
+    for action in all_actions:
+        key = f"{action.action_type}:{action.source_id}:{action.target_id}"
+        if key not in unique_actions:
+            unique_actions[key] = action
+    
+    print(f"\n[OK] Aggregated {len(unique_actions)} unique actions")
+    
+    final_actions = list(unique_actions.values())
+    
+    plan = ConsolidationPlan(
+        actions=final_actions,
+        generated_at=datetime.now().isoformat(),
+        model_used="grok-4-1-fast-reasoning",
+        total_actions=len(final_actions)
+    )
+    
+    # Save plan
+    with open(PLAN_OUTPUT, 'w', encoding='utf-8') as f:
+        f.write(plan.model_dump_json(indent=2))
+    
+    print(f"\n[OK] Consolidation plan saved to: {PLAN_OUTPUT}")
+
 # Backup Functions
 # ============================================================================
 async def backup_tables(session, output_path: Path):
@@ -97,7 +336,7 @@ async def backup_tables(session, output_path: Path):
                 "link_id": str(link.link_id),
                 "era_id": str(link.era_id),
                 "brand_id": str(link.brand_id),
-                "list_order": link.list_order
+                "rank_order": link.rank_order
             }
             for link in links
         ]
@@ -114,7 +353,7 @@ async def backup_tables(session, output_path: Path):
 # ============================================================================
 # Analysis Phase: Fetch Data and Call LLM
 # ============================================================================
-async def fetch_sponsor_context(session) -> List[Dict[str, Any]]:
+async def fetch_sponsor_context(session, limit: int = None) -> List[Dict[str, Any]]:
     """
     Fetch all sponsors with enriched context for LLM analysis.
     
@@ -129,6 +368,10 @@ async def fetch_sponsor_context(session) -> List[Dict[str, Any]]:
         )
         .order_by(SponsorMaster.legal_name)
     )
+    
+    if limit:
+        stmt = stmt.limit(limit)
+        
     result = await session.execute(stmt)
     masters = result.scalars().all()
     
@@ -194,27 +437,35 @@ def call_grok_for_consolidation(context: List[Dict[str, Any]]) -> ConsolidationP
     system_prompt = """You are a data cleaner specializing in sponsor and brand deduplication for professional cycling teams.
 
 Context: These sponsors and brands are associated with historic and current professional cycling teams. 
-Brands represent how sponsors appear on team jerseys and in team names (e.g., "Mapei", "Quick-Step", "Cervélo").
+Brands represent how sponsors appear on team jerseys and in team names.
 
-Your task: Identify duplicate sponsors and brands that should be merged or reorganized.
+Your task: AGGRESSIVELY identify duplicates and reorganize the data.
+We prefer fewer, cleaner entities over preserving minor variations.
 
 Rules:
 1. MERGE_MASTER: Merge two sponsor masters (all brands move to target).
+    - Use this when two Sponsors are the SAME company (e.g. "Stellantis" and "Peugeot" if Peugeot is just a child brand).
+    - Merge regional branches into the main company.
 2. MERGE_BRAND: Merge two brands (team links update to target brand).
+    - Use this for spelling variations (Citroen -> Citroën).
+    - Use this for abbreviations (FDJ -> Française des Jeux).
+    - MERGE BRANDS WITHIN THE SAME SPONSOR if they are duplicates!
 3. MOVE_BRAND: Move a brand from one sponsor master to another.
+    - Use this if a brand is listed under the wrong parent.
 
 For each action, provide:
 - action_type
-- source_id (UUID to merge/move FROM)
-- target_id (UUID to merge/move TO)
+- source_id (UUID)
+- target_id (UUID)
 - reason (brief explanation)
 - confidence (0.0-1.0)
 
-IMPORTANT: Only suggest merges when you're confident they represent the same entity.
-Preserve historical distinctions:
-- Different brands from the same parent company used in different eras (e.g., Peugeot vs Peugeot Cycles)
-- Different companies with similar names (e.g., Red Bull energy drink vs Red Bull bike frames)
-- Regional variations of the same brand that were used differently
+GUIDELINES:
+- **Synonyms & Abbreviations**: "FDJ" IS "Française des Jeux". "C.A." IS "Crédit Agricole". MERGE THEM.
+- **Accents**: "Citroen" IS "Citroën". MERGE THEM.
+- **Parent/Child**: If you see a "Peugeot" sponsor and a "Stellantis" sponsor with "Peugeot" brand, consider merging the Peugeot sponsor into Stellantis (or vice versa, whichever seems to be the primary 'Cycling Identity').
+  - *Preference*: Keep the name most commonly used in cycling (e.g. "Peugeot" might be preferred over "Stellantis" if "Peugeot" is the historic team name).
+- **Consolidate**: If a Sponsor has 3 brands: "FDJ", "F.D.J.", "La Française des Jeux", pick the BEST one (e.g. "Française des Jeux" or "FDJ") and merge the others into it.
 """
     
     user_prompt = f"""Here is the current state of {len(context)} sponsors and their brands:
@@ -265,36 +516,7 @@ Identify duplicates and provide consolidation actions. Be conservative - only me
     )
 
 
-async def analyze_command(session):
-    """
-    Analyze phase: Fetch data, call LLM, generate consolidation_plan.json.
-    """
-    print("=" * 60)
-    print("ANALYSIS PHASE")
-    print("=" * 60)
-    
-    context = await fetch_sponsor_context(session)
-    
-    # Estimate token count (rough)
-    context_json = json.dumps(context)
-    estimated_tokens = len(context_json) / 4  # Rough estimate
-    print(f"[SIZE] Estimated context size: ~{estimated_tokens:,.0f} tokens")
-    
-    if estimated_tokens > 128000:
-        print("[WARN]  Warning: Context exceeds 128k token threshold. Pricing will be 2x.")
-    
-    plan = call_grok_for_consolidation(context)
-    
-    # Save plan
-    with open(PLAN_OUTPUT, 'w', encoding='utf-8') as f:
-        f.write(plan.model_dump_json(indent=2))
-    
-    print(f"\n[OK] Consolidation plan saved to: {PLAN_OUTPUT}")
-    print(f"   Total actions: {plan.total_actions}")
-    print("\n[NOTE] Next steps:")
-    print("   1. Review the plan file")
-    print("   2. Remove any 'needs_review' actions you don't want")
-    print("   3. Run: python -m scripts.consolidate_sponsors --apply consolidation_plan.json")
+
 
 
 # ============================================================================
@@ -357,6 +579,11 @@ async def execute_plan(session, plan: ConsolidationPlan):
         print(f"    {action.reason} (confidence: {action.confidence:.2f})")
         
         if action.action_type == ConsolidationActionType.MERGE_BRAND:
+            # Check target links for collision to avoid uq_era_brand violation
+            stmt_t = select(TeamSponsorLink.era_id).where(TeamSponsorLink.brand_id == action.target_id)
+            res_t = await session.execute(stmt_t)
+            target_era_ids = set(res_t.scalars().all())
+
             # Update all TeamSponsorLinks
             stmt = (
                 select(TeamSponsorLink)
@@ -365,8 +592,14 @@ async def execute_plan(session, plan: ConsolidationPlan):
             result = await session.execute(stmt)
             links = result.scalars().all()
             
+            updated_count = 0
             for link in links:
-                link.brand_id = action.target_id
+                if link.era_id in target_era_ids:
+                    # Collision! Target brand already linked to this era. Delete redundant source link.
+                    await session.delete(link)
+                else:
+                    link.brand_id = action.target_id
+                    updated_count += 1
             
             # Delete source brand
             stmt = select(SponsorBrand).where(SponsorBrand.brand_id == action.source_id)
@@ -387,25 +620,60 @@ async def execute_plan(session, plan: ConsolidationPlan):
                 print(f"    OK Moved brand to new sponsor")
         
         elif action.action_type == ConsolidationActionType.MERGE_MASTER:
-            # Move all brands from source to target
+            # 1. Fetch target's existing brands to check for collisions
+            stmt_targets = select(SponsorBrand).where(SponsorBrand.master_id == action.target_id)
+            res_t = await session.execute(stmt_targets)
+            target_brands_map = {b.brand_name: b for b in res_t.scalars().all()}
+            
+            # 2. Fetch source brands
             stmt = (
                 select(SponsorBrand)
                 .where(SponsorBrand.master_id == action.source_id)
             )
             result = await session.execute(stmt)
-            brands = result.scalars().all()
+            source_brands = result.scalars().all()
             
-            for brand in brands:
-                brand.master_id = action.target_id
+            moved_count = 0
+            merged_count = 0
             
-            # Delete source master
+            for brand in source_brands:
+                if brand.brand_name in target_brands_map:
+                    # Collision! Merge into duplicate target brand
+                    target_brand = target_brands_map[brand.brand_name]
+                    
+                    # Move all links from source brand to target brand
+                    stmt_links = select(TeamSponsorLink).where(TeamSponsorLink.brand_id == brand.brand_id)
+                    links_res = await session.execute(stmt_links)
+                    links = links_res.scalars().all()
+                    
+                    # Check target brand links for collision
+                    stmt_t = select(TeamSponsorLink.era_id).where(TeamSponsorLink.brand_id == target_brand.brand_id)
+                    res_t = await session.execute(stmt_t)
+                    target_era_ids = set(res_t.scalars().all())
+                    
+                    for link in links:
+                        if link.era_id in target_era_ids:
+                            # Collision! Delete redundant link
+                            await session.delete(link)
+                        else:
+                            link.brand_id = target_brand.brand_id
+                    
+                    # Delete the now-empty source brand
+                    await session.delete(brand)
+                    merged_count += 1
+                else:
+                    # No collision, just re-parent
+                    brand.master_id = action.target_id
+                    moved_count += 1
+            
+            # 3. Delete source master
             stmt = select(SponsorMaster).where(SponsorMaster.master_id == action.source_id)
             result = await session.execute(stmt)
             source_master = result.scalar_one_or_none()
             if source_master:
                 await session.delete(source_master)
             
-            print(f"    OK Merged sponsor (moved {len(brands)} brands)")
+            print(f"    OK Merged sponsor (moved {moved_count}, merged {merged_count} brands)")
     
     await session.commit()
     print("\n[OK] Consolidation complete!")
@@ -467,6 +735,11 @@ async def main():
         metavar="PLAN_FILE",
         help="Apply a consolidation plan (provide path to plan JSON)"
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Limit number of sponsors to analyze (for testing)"
+    )
     
     args = parser.parse_args()
     
@@ -476,7 +749,7 @@ async def main():
     
     async with async_session_maker() as session:
         if args.analyze:
-            await analyze_command(session)
+            await analyze_command(session, limit=args.limit)
         elif args.apply:
             plan_path = Path(args.apply)
             await apply_command(session, plan_path)
