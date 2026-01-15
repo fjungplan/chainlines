@@ -609,6 +609,11 @@ class AuditLogService:
                 if team_identity_id:
                     external_ids["cyclingflash_identity"] = team_identity_id
                 
+                if not data.get("registered_name"):
+                        raise ValueError("Cannot create TeamNode: Missing 'registered_name' in snapshot")
+                if not data.get("season_year"):
+                        raise ValueError("Cannot create TeamNode: Missing 'season_year' (founding_year) in snapshot")
+
                 node = TeamNode(
                     node_id=edit.entity_id, # Using same ID for simplicity if 1:1, but usually distinct. 
                     # Actually, TeamEra is the entity. Node is separate.
@@ -621,6 +626,11 @@ class AuditLogService:
                 await session.flush()
             
             # Create Era
+            if not data.get("season_year"):
+                 raise ValueError("Cannot create TeamEra: Missing 'season_year' in snapshot")
+            if not data.get("registered_name"):
+                 raise ValueError("Cannot create TeamEra: Missing 'registered_name' in snapshot")
+                 
             era = TeamEra(
                 era_id=edit.entity_id,
                 node_id=node.node_id,
@@ -637,7 +647,10 @@ class AuditLogService:
             # Create Sponsor Links
             sponsors_data = data.get("sponsors", [])
             for idx, s_data in enumerate(sponsors_data):
-                brand_name = s_data["name"]
+                brand_name = s_data.get("name")
+                if not brand_name:
+                    raise ValueError(f"Cannot create Sponsor Link: Missing 'name' for sponsor at index {idx}")
+                    
                 prominence = s_data.get("prominence", 0)
                 parent_name = s_data.get("parent_company") # Will be added to payload in phase2.py
                 
@@ -696,36 +709,42 @@ class AuditLogService:
             # Snapshot should have: predecessor_id, successor_id, event_year, type, etc.
             # OR resolved names: source_node, target_team
             
+            # OR resolved names: source_node, target_team
+            
             # Try to resolve IDs from names if IDs are missing (Scraper fallback)
             # Log analysis showed scraper creates 'event' wrapper with keys: predecessor_node_id, successor_node_id
             pred_id = data.get("predecessor_id") or data.get("predecessor_node_id")
             succ_id = data.get("successor_id") or data.get("successor_node_id")
             
             if not pred_id and "source_node" in data:
-                # Find by display_name or legal_name
-                stmt = select(TeamNode).where(TeamNode.legal_name == data["source_node"])
+                # Find by display_name or legal_name (case-insensitive)
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(data["source_node"]))
                 result = await session.execute(stmt)
                 p_node = result.scalar_one_or_none()
                 if p_node:
                     pred_id = p_node.node_id
             
             if not succ_id and "target_team" in data:
-                stmt = select(TeamNode).where(TeamNode.legal_name == data["target_team"])
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(data["target_team"]))
                 result = await session.execute(stmt)
                 s_node = result.scalar_one_or_none()
                 if s_node:
                     succ_id = s_node.node_id
             
-            if pred_id and succ_id:
-                # Ensure UUIDs
                 if isinstance(pred_id, str): pred_id = UUID(pred_id)
                 if isinstance(succ_id, str): succ_id = UUID(succ_id)
                 
+                event_year = data.get("event_year") or data.get("year")
+                
+                if not event_year:
+                     # LOUD FAIL as requested by user
+                     raise ValueError("Event Year is missing in snapshot")
+
                 event = LineageEvent(
                     event_id=edit.entity_id,
                     predecessor_node_id=pred_id,
                     successor_node_id=succ_id,
-                    event_year=data.get("event_year") or data.get("year"),
+                    event_year=event_year,
                     event_type=data.get("event_type", "MERGE") # Default to MERGE or provided type
                 )
                 session.add(event)
@@ -734,7 +753,8 @@ class AuditLogService:
                 # Log warning or error? 
                 # If we can't find nodes, we can't create the link.
                 import logging
-                logging.warning(f"Could not resolve nodes for LineageEvent create: {data}")
+                logging.error(f"Could not resolve nodes for LineageEvent create: {data}")
+                raise ValueError(f"Could not resolve nodes for lineage event. Source: '{data.get('source_node')}', Target: '{data.get('target_team')}'")
 
 
     @staticmethod
