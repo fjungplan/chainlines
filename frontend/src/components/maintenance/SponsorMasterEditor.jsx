@@ -4,6 +4,7 @@ import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
 import Input from '../common/Input';
 import Button from '../common/Button';
+import BrandTransferModal from './BrandTransferModal';
 import './SponsorEditor.css';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -55,6 +56,9 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
     // UI Helpers
     const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
     const industryInputRef = useRef(null);
+
+    // Brand Transfer Modal
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
     // === INITIAL LOAD ===
     useEffect(() => {
@@ -318,325 +322,346 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
     const saveCloseBtnLabel = canDirectEdit ? "Save & Close" : "Request & Close";
 
     return (
-        <div className="sponsor-inner-container centered-editor-container">
-            <div className="editor-header">
-                <div className="header-left">
-                    <Button variant="ghost" className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
-                        </svg>
-                    </Button>
-                    <h2>{headerTitle}</h2>
+        <>
+            <div className="sponsor-inner-container centered-editor-container">
+                <div className="editor-header">
+                    <div className="header-left">
+                        <Button variant="ghost" className="back-btn" onClick={handleBack} title={isBrandMode ? "Back to Sponsor" : "Back to List"}>
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="currentColor" />
+                            </svg>
+                        </Button>
+                        <h2>{headerTitle}</h2>
+                    </div>
                 </div>
-            </div>
 
-            <div className="editor-split-view">
-                {/* === LEFT COLUMN (SWAPPABLE) === */}
-                <div className="editor-column details-column">
-                    {/* Header Varies by Mode for Alignment */}
-                    {isBrandMode ? (
-                        <div className="column-header">
-                            <h3>Brand Details</h3>
-                            {isModerator() && (
-                                <label className="protected-toggle">
-                                    <input
-                                        type="checkbox"
-                                        checked={brandForm.is_protected}
-                                        onChange={e => handleBrandChange('is_protected', e.target.checked)}
-                                    />
-                                    <span>Protected Record</span>
-                                </label>
-                            )}
-                            {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
-                        </div>
-                    ) : (
-                        <div className="column-header">
-                            <h3>Sponsor Details</h3>
-                            {isModerator() && (
-                                <label className="protected-toggle">
-                                    <input
-                                        type="checkbox"
-                                        checked={masterForm.is_protected}
-                                        onChange={e => handleMasterChange('is_protected', e.target.checked)}
-                                    />
-                                    <span>Protected Record</span>
-                                </label>
-                            )}
-                            {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
-                        </div>
-                    )}
+                <div className="editor-split-view">
+                    {/* === LEFT COLUMN (SWAPPABLE) === */}
+                    <div className="editor-column details-column">
+                        {/* Header Varies by Mode for Alignment */}
+                        {isBrandMode ? (
+                            <div className="column-header">
+                                <h3>Brand Details</h3>
+                                {isModerator() && (
+                                    <label className="protected-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={brandForm.is_protected}
+                                            onChange={e => handleBrandChange('is_protected', e.target.checked)}
+                                        />
+                                        <span>Protected Record</span>
+                                    </label>
+                                )}
+                                {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
+                            </div>
+                        ) : (
+                            <div className="column-header">
+                                <h3>Sponsor Details</h3>
+                                {isModerator() && (
+                                    <label className="protected-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={masterForm.is_protected}
+                                            onChange={e => handleMasterChange('is_protected', e.target.checked)}
+                                        />
+                                        <span>Protected Record</span>
+                                    </label>
+                                )}
+                                {isProtected && <span className="badge badge-warning">Protected (Read Only)</span>}
+                            </div>
+                        )}
 
-                    {error && <div className="error-banner">{error}</div>}
+                        {error && <div className="error-banner">{error}</div>}
 
-                    {!isBrandMode ? (
-                        /* --- MASTER FORM --- */
-                        <form onSubmit={(e) => { e.preventDefault(); }}>
-                            <div className="form-row">
-                                <div className="form-group" style={{ flex: 1.5 }}>
-                                    <Input
-                                        label="Legal Name *"
-                                        name="legal_name"
-                                        value={masterForm.legal_name}
-                                        onChange={e => handleMasterChange('legal_name', e.target.value)}
-                                        required
-                                        readOnly={isProtected}
-                                    />
+                        {!isBrandMode ? (
+                            /* --- MASTER FORM --- */
+                            <form onSubmit={(e) => { e.preventDefault(); }}>
+                                <div className="form-row">
+                                    <div className="form-group" style={{ flex: 1.5 }}>
+                                        <Input
+                                            label="Legal Name *"
+                                            name="legal_name"
+                                            value={masterForm.legal_name}
+                                            onChange={e => handleMasterChange('legal_name', e.target.value)}
+                                            required
+                                            readOnly={isProtected}
+                                        />
+                                    </div>
+
+                                    <div className="form-group" style={{ flex: 1, position: 'relative' }} ref={industryInputRef}>
+                                        <label>Industry Sector</label>
+                                        <input
+                                            type="text"
+                                            value={masterForm.industry_sector}
+                                            onChange={e => handleMasterChange('industry_sector', e.target.value)}
+                                            onFocus={() => !isProtected && setShowIndustryDropdown(true)}
+                                            placeholder="Select or type..."
+                                            className="industry-input"
+                                            autoComplete="off"
+                                            readOnly={isProtected}
+                                        />
+                                        {showIndustryDropdown && filteredIndustries.length > 0 && (
+                                            <ul className="custom-dropdown-list">
+                                                {filteredIndustries.map(ind => (
+                                                    <li key={ind} onClick={() => {
+                                                        handleMasterChange('industry_sector', ind);
+                                                        setShowIndustryDropdown(false);
+                                                    }}>
+                                                        {ind}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                    </div>
                                 </div>
 
-                                <div className="form-group" style={{ flex: 1, position: 'relative' }} ref={industryInputRef}>
-                                    <label>Industry Sector</label>
-                                    <input
-                                        type="text"
-                                        value={masterForm.industry_sector}
-                                        onChange={e => handleMasterChange('industry_sector', e.target.value)}
-                                        onFocus={() => !isProtected && setShowIndustryDropdown(true)}
-                                        placeholder="Select or type..."
-                                        className="industry-input"
-                                        autoComplete="off"
-                                        readOnly={isProtected}
-                                    />
-                                    {showIndustryDropdown && filteredIndustries.length > 0 && (
-                                        <ul className="custom-dropdown-list">
-                                            {filteredIndustries.map(ind => (
-                                                <li key={ind} onClick={() => {
-                                                    handleMasterChange('industry_sector', ind);
-                                                    setShowIndustryDropdown(false);
-                                                }}>
-                                                    {ind}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <Input
-                                    label="Source URL"
-                                    name="source_url"
-                                    type="url"
-                                    value={masterForm.source_url}
-                                    onChange={e => handleMasterChange('source_url', e.target.value)}
-                                    readOnly={isProtected}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <Input
-                                    label="Internal Notes"
-                                    name="source_notes"
-                                    type="textarea"
-                                    value={masterForm.source_notes}
-                                    onChange={e => handleMasterChange('source_notes', e.target.value)}
-                                    rows={3}
-                                    readOnly={isProtected}
-                                />
-                            </div>
-                        </form>
-                    ) : (
-                        /* --- BRAND FORM --- */
-                        <form onSubmit={(e) => { e.preventDefault(); }}>
-                            {/* Color Picker moved here for consistency */}
-
-                            <div className="form-row">
-                                <div className="form-group" style={{ flex: 1.5 }}>
-                                    <Input
-                                        label="Brand Name * (e.g. Visma)"
-                                        name="brand_name"
-                                        value={brandForm.brand_name}
-                                        onChange={e => handleBrandChange('brand_name', e.target.value)}
-                                        placeholder="e.g. Visma"
-                                        required
-                                        readOnly={isProtected}
-                                    />
-                                </div>
-
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <Input
-                                        label="Display Name"
-                                        name="display_name"
-                                        value={brandForm.display_name}
-                                        onChange={e => handleBrandChange('display_name', e.target.value)}
-                                        placeholder="if different"
-                                        readOnly={isProtected}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-row">
-                                <div className="form-group" style={{ flex: 1 }}>
+                                <div className="form-group">
                                     <Input
                                         label="Source URL"
                                         name="source_url"
                                         type="url"
-                                        value={brandForm.source_url}
-                                        onChange={e => handleBrandChange('source_url', e.target.value)}
+                                        value={masterForm.source_url}
+                                        onChange={e => handleMasterChange('source_url', e.target.value)}
                                         readOnly={isProtected}
                                     />
                                 </div>
-                                <div className="form-group" style={{ width: '240px' }}>
-                                    <label>Brand Color</label>
-                                    <div className="color-input-group">
-                                        <div className="color-preview-wrapper" style={{ backgroundColor: brandForm.default_hex_color }}>
-                                            <input
-                                                type="color"
-                                                value={brandForm.default_hex_color}
-                                                onChange={e => handleBrandChange('default_hex_color', e.target.value)}
-                                                title="Choose color"
-                                                disabled={isProtected}
-                                                style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', padding: 0, margin: 0, border: 'none', cursor: 'pointer', opacity: 0 }}
-                                            />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            value={brandForm.default_hex_color}
-                                            onChange={e => handleBrandChange('default_hex_color', e.target.value)}
-                                            pattern="^#[0-9A-Fa-f]{6}$"
+
+                                <div className="form-group">
+                                    <Input
+                                        label="Internal Notes"
+                                        name="source_notes"
+                                        type="textarea"
+                                        value={masterForm.source_notes}
+                                        onChange={e => handleMasterChange('source_notes', e.target.value)}
+                                        rows={3}
+                                        readOnly={isProtected}
+                                    />
+                                </div>
+                            </form>
+                        ) : (
+                            /* --- BRAND FORM --- */
+                            <form onSubmit={(e) => { e.preventDefault(); }}>
+                                {/* Color Picker moved here for consistency */}
+
+                                <div className="form-row">
+                                    <div className="form-group" style={{ flex: 1.5 }}>
+                                        <Input
+                                            label="Brand Name * (e.g. Visma)"
+                                            name="brand_name"
+                                            value={brandForm.brand_name}
+                                            onChange={e => handleBrandChange('brand_name', e.target.value)}
+                                            placeholder="e.g. Visma"
                                             required
                                             readOnly={isProtected}
-                                            style={{ flex: 1, fontFamily: 'monospace' }}
+                                        />
+                                    </div>
+
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <Input
+                                            label="Display Name"
+                                            name="display_name"
+                                            value={brandForm.display_name}
+                                            onChange={e => handleBrandChange('display_name', e.target.value)}
+                                            placeholder="if different"
+                                            readOnly={isProtected}
                                         />
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="form-group">
-                                <Input
-                                    label="Internal Notes"
-                                    name="source_notes"
-                                    type="textarea"
-                                    value={brandForm.source_notes}
-                                    onChange={e => handleBrandChange('source_notes', e.target.value)}
-                                    rows={3}
-                                    readOnly={isProtected}
+                                <div className="form-row">
+                                    <div className="form-group" style={{ flex: 1 }}>
+                                        <Input
+                                            label="Source URL"
+                                            name="source_url"
+                                            type="url"
+                                            value={brandForm.source_url}
+                                            onChange={e => handleBrandChange('source_url', e.target.value)}
+                                            readOnly={isProtected}
+                                        />
+                                    </div>
+                                    <div className="form-group" style={{ width: '240px' }}>
+                                        <label>Brand Color</label>
+                                        <div className="color-input-group">
+                                            <div className="color-preview-wrapper" style={{ backgroundColor: brandForm.default_hex_color }}>
+                                                <input
+                                                    type="color"
+                                                    value={brandForm.default_hex_color}
+                                                    onChange={e => handleBrandChange('default_hex_color', e.target.value)}
+                                                    title="Choose color"
+                                                    disabled={isProtected}
+                                                    style={{ position: 'absolute', top: '-50%', left: '-50%', width: '200%', height: '200%', padding: 0, margin: 0, border: 'none', cursor: 'pointer', opacity: 0 }}
+                                                />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={brandForm.default_hex_color}
+                                                onChange={e => handleBrandChange('default_hex_color', e.target.value)}
+                                                pattern="^#[0-9A-Fa-f]{6}$"
+                                                required
+                                                readOnly={isProtected}
+                                                style={{ flex: 1, fontFamily: 'monospace' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <Input
+                                        label="Internal Notes"
+                                        name="source_notes"
+                                        type="textarea"
+                                        value={brandForm.source_notes}
+                                        onChange={e => handleBrandChange('source_notes', e.target.value)}
+                                        rows={3}
+                                        readOnly={isProtected}
+                                    />
+                                </div>
+                            </form>
+                        )}
+
+                        {/* REASON FIELD FOR REQUESTS */}
+                        {showReasonField && (
+                            <div className="form-group reason-group" style={{ marginTop: '1rem' }}>
+                                <label>Reason for Request *</label>
+                                <textarea
+                                    value={reason}
+                                    onChange={e => setReason(e.target.value)}
+                                    placeholder="Please explain why you are making this change..."
+                                    required
+                                    rows={2}
+                                    style={{ borderColor: '#fcd34d' }}
                                 />
                             </div>
-                        </form>
-                    )}
-
-                    {/* REASON FIELD FOR REQUESTS */}
-                    {showReasonField && (
-                        <div className="form-group reason-group" style={{ marginTop: '1rem' }}>
-                            <label>Reason for Request *</label>
-                            <textarea
-                                value={reason}
-                                onChange={e => setReason(e.target.value)}
-                                placeholder="Please explain why you are making this change..."
-                                required
-                                rows={2}
-                                style={{ borderColor: '#fcd34d' }}
-                            />
-                        </div>
-                    )}
-                </div>
-
-                {/* === RIGHT COLUMN (ALWAYS VISIBLE) === */}
-                <div className="editor-column brands-column">
-                    <div className="column-header">
-                        <h3>Brand Identities</h3>
-                        {masterId && (
-                            <Button variant="secondary" size="sm" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
-                                + Add
-                            </Button>
                         )}
                     </div>
 
-                    {!masterId ? (
-                        <div className="empty-panel">
-                            <p>Save sponsor details first to add brand identities.</p>
+                    {/* === RIGHT COLUMN (ALWAYS VISIBLE) === */}
+                    <div className="editor-column brands-column">
+                        <div className="column-header">
+                            <h3>Brand Identities</h3>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                {masterId && (
+                                    <>
+                                        <Button variant="secondary" size="sm" onClick={() => setIsTransferModalOpen(true)} title="Import brands from another sponsor">
+                                            ↓ Import
+                                        </Button>
+                                        <Button variant="secondary" size="sm" onClick={handleAddBrand} disabled={!isBrandMode && isProtected && !isModerator()}>
+                                            + Add
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="brands-list-container">
-                            {brands.length === 0 ? (
-                                <p className="empty-text">No brands recorded.</p>
-                            ) : (
-                                <div className="brands-list">
-                                    {brands.map(brand => {
-                                        const isActive = isBrandMode && currentBrand?.brand_id === brand.brand_id;
-                                        return (
-                                            <div
-                                                key={brand.brand_id}
-                                                className={`brand-item ${isActive ? 'active' : ''}`}
-                                                onClick={() => handleSelectBrand(brand)}
-                                            >
-                                                <div className="brand-color" style={{ backgroundColor: brand.default_hex_color }}></div>
-                                                <div className="brand-info">
-                                                    <div className="brand-name">{brand.brand_name}</div>
-                                                    {brand.display_name && <div className="brand-display">{brand.display_name}</div>}
+
+                        {!masterId ? (
+                            <div className="empty-panel">
+                                <p>Save sponsor details first to add brand identities.</p>
+                            </div>
+                        ) : (
+                            <div className="brands-list-container">
+                                {brands.length === 0 ? (
+                                    <p className="empty-text">No brands recorded.</p>
+                                ) : (
+                                    <div className="brands-list">
+                                        {brands.map(brand => {
+                                            const isActive = isBrandMode && currentBrand?.brand_id === brand.brand_id;
+                                            return (
+                                                <div
+                                                    key={brand.brand_id}
+                                                    className={`brand-item ${isActive ? 'active' : ''}`}
+                                                    onClick={() => handleSelectBrand(brand)}
+                                                >
+                                                    <div className="brand-color" style={{ backgroundColor: brand.default_hex_color }}></div>
+                                                    <div className="brand-info">
+                                                        <div className="brand-name">{brand.brand_name}</div>
+                                                        {brand.display_name && <div className="brand-display">{brand.display_name}</div>}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="editor-footer">
+                    <div className="footer-actions-left">
+                        {isAdmin() && (
+                            <>
+                                {isBrandMode ? (
+                                    currentBrand && (
+                                        <Button
+                                            variant="outline"
+                                            className="footer-btn"
+                                            style={{ borderColor: '#991b1b', color: '#fca5a5' }}
+                                            onClick={handleDeleteBrand}
+                                            disabled={submitting || isProtected}
+                                        >
+                                            Delete Brand
+                                        </Button>
+                                    )
+                                ) : (
+                                    masterId && (
+                                        <Button
+                                            variant="outline"
+                                            className="footer-btn"
+                                            style={{ borderColor: '#991b1b', color: '#fca5a5' }}
+                                            onClick={handleDeleteMaster}
+                                            disabled={submitting || isProtected}
+                                        >
+                                            Delete Sponsor
+                                        </Button>
+                                    )
+                                )}
+                            </>
+                        )}
+                        <Button
+                            variant="secondary"
+                            className="footer-btn"
+                            onClick={handleBack}
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </Button>
+                    </div>
+                    <div className="footer-actions-right">
+                        {!isProtected && (
+                            <>
+                                <Button
+                                    variant="primary"
+                                    className="footer-btn"
+                                    onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
+                                    disabled={submitting}
+                                >
+                                    {saveBtnLabel}
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    className="footer-btn"
+                                    onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
+                                    disabled={submitting}
+                                >
+                                    {saveCloseBtnLabel}
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            <div className="editor-footer">
-                <div className="footer-actions-left">
-                    {isAdmin() && (
-                        <>
-                            {isBrandMode ? (
-                                currentBrand && (
-                                    <Button
-                                        variant="outline"
-                                        className="footer-btn"
-                                        style={{ borderColor: '#991b1b', color: '#fca5a5' }}
-                                        onClick={handleDeleteBrand}
-                                        disabled={submitting || isProtected}
-                                    >
-                                        Delete Brand
-                                    </Button>
-                                )
-                            ) : (
-                                masterId && (
-                                    <Button
-                                        variant="outline"
-                                        className="footer-btn"
-                                        style={{ borderColor: '#991b1b', color: '#fca5a5' }}
-                                        onClick={handleDeleteMaster}
-                                        disabled={submitting || isProtected}
-                                    >
-                                        Delete Sponsor
-                                    </Button>
-                                )
-                            )}
-                        </>
-                    )}
-                    <Button
-                        variant="secondary"
-                        className="footer-btn"
-                        onClick={handleBack}
-                        disabled={submitting}
-                    >
-                        Cancel
-                    </Button>
-                </div>
-                <div className="footer-actions-right">
-                    {!isProtected && (
-                        <>
-                            <Button
-                                variant="primary"
-                                className="footer-btn"
-                                onClick={() => isBrandMode ? handleSaveBrand(false) : handleSaveMaster(false)}
-                                disabled={submitting}
-                            >
-                                {saveBtnLabel}
-                            </Button>
-                            <Button
-                                variant="primary"
-                                className="footer-btn"
-                                onClick={() => isBrandMode ? handleSaveBrand(true) : handleSaveMaster(true)}
-                                disabled={submitting}
-                            >
-                                {saveCloseBtnLabel}
-                            </Button>
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+            {/* Brand Transfer Modal */}
+            <BrandTransferModal
+                isOpen={isTransferModalOpen}
+                receivingMasterId={masterId}
+                receivingMasterName={masterForm.legal_name}
+                onClose={() => setIsTransferModalOpen(false)}
+                onSuccess={() => {
+                    setIsTransferModalOpen(false);
+                    loadMasterData(); // Refresh to show newly imported brands
+                }}
+            />
+        </>
     );
 }
