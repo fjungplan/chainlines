@@ -31,23 +31,49 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
         }
     };
 
-    // Scroll Preservation
-    const listRef = useRef(null);
+    // Scroll Preservation - find the scrolling parent
+    const containerRef = useRef(null);
     const scrollKey = `team-era-scroll-${nodeId}`;
 
-    // 1. Save scroll position on scroll
-    const handleScroll = () => {
-        if (listRef.current) {
-            sessionStorage.setItem(scrollKey, listRef.current.scrollTop);
+    // Find the scrolling parent container
+    const findScrollParent = (element) => {
+        if (!element) return null;
+        let parent = element.parentElement;
+        while (parent) {
+            const overflow = window.getComputedStyle(parent).overflowY;
+            if (overflow === 'auto' || overflow === 'scroll') {
+                return parent;
+            }
+            parent = parent.parentElement;
+        }
+        return null;
+    };
+
+    // Save scroll position on scroll
+    const handleScroll = (e) => {
+        const scrollParent = e.currentTarget;
+        if (scrollParent) {
+            sessionStorage.setItem(scrollKey, scrollParent.scrollTop);
         }
     };
 
-    // 2. Restore scroll position when data loads
+    // Restore scroll position after render
     useEffect(() => {
-        if (eras.length > 0 && listRef.current) {
-            const savedScroll = sessionStorage.getItem(scrollKey);
-            if (savedScroll) {
-                listRef.current.scrollTop = parseInt(savedScroll, 10);
+        if (eras.length > 0 && containerRef.current) {
+            const scrollParent = findScrollParent(containerRef.current);
+            if (scrollParent) {
+                // Attach scroll listener
+                scrollParent.addEventListener('scroll', handleScroll);
+
+                // Restore saved position with a slight delay to ensure layout is complete
+                requestAnimationFrame(() => {
+                    const savedScroll = sessionStorage.getItem(scrollKey);
+                    if (savedScroll) {
+                        scrollParent.scrollTop = parseInt(savedScroll, 10);
+                    }
+                });
+
+                return () => scrollParent.removeEventListener('scroll', handleScroll);
             }
         }
     }, [eras, nodeId]);
@@ -55,7 +81,7 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
     if (loading) return <LoadingSpinner message="Loading eras..." />;
 
     return (
-        <div className="era-bubbles-container">
+        <div className="era-bubbles-container" ref={containerRef}>
 
 
             {error && <div className="error-text">{error}</div>}
@@ -65,11 +91,7 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
             ) : eras.length === 0 ? (
                 <div className="empty-text">No eras recorded.</div>
             ) : (
-                <div
-                    className="bubbles-list"
-                    ref={listRef}
-                    onScroll={handleScroll}
-                >
+                <div className="bubbles-list">
                     {eras.map(era => (
                         <div
                             key={era.era_id}
