@@ -69,7 +69,9 @@ export default function TimelineGraph({
     isLeftSidebarCollapsed: true
   });
 
-  const VERTICAL_PADDING = VISUALIZATION.NODE_HEIGHT + 20;
+  // Large padding to ensures ~30px clearance even at 0.05x zoom (600 * 0.05 = 30)
+  // This prevents top/bottom nodes from being clipped by the decade ruler overlays
+  const VERTICAL_PADDING = 600;
 
   const { user, canEdit, isAdmin } = useAuth();
   const navigate = useNavigate();
