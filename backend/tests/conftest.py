@@ -37,11 +37,28 @@ async def test_engine():
     test_db_url = "sqlite+aiosqlite:///:memory:"
     engine = create_async_engine(test_db_url, echo=False, future=True)
     
+    # Register 'unaccent' function for SQLite to mimic Postgres extension
+    from sqlalchemy import event
+    import unicodedata
+
+    def _unaccent(val):
+        if val is None:
+            return None
+        if not isinstance(val, str):
+            return str(val)
+        return ''.join(c for c in unicodedata.normalize('NFD', val)
+                       if unicodedata.category(c) != 'Mn')
+
+    # Ensure listener is registered BEFORE any connection is made
+    @event.listens_for(engine.sync_engine, "connect")
+    def _add_unaccent(dbapi_con, con_record):
+        dbapi_con.create_function("unaccent", 1, _unaccent)
+
     # Create all tables upfront
     async with engine.begin() as conn:
         await conn.execute(text("PRAGMA foreign_keys=ON"))
         await conn.run_sync(Base.metadata.create_all)
-    
+
     # Override the module-level engine so the app uses our test engine
     original_engine = database_module.engine
     original_session_maker = database_module.async_session_maker

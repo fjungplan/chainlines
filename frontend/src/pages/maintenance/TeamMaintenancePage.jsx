@@ -213,7 +213,7 @@ export default function TeamMaintenancePage() {
                     {loading ? (
                         <LoadingSpinner message="Loading teams..." />
                     ) : error ? (
-                        <ErrorDisplay error={error} onRetry={fetchTeams} />
+                        <ErrorDisplay error={error} onRetry={() => fetchTeams(searchQuery)} />
                     ) : (
                         <div className="team-list">
                             {teams.length === 0 ? (

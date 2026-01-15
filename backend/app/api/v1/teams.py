@@ -192,7 +192,7 @@ async def list_teams(
     limit: int = Query(default=50, ge=1, le=100),
     active_in_year: Optional[int] = Query(default=None, ge=1900, le=2100),
     tier_level: Optional[int] = Query(default=None, ge=1, le=3),
-    search: Optional[str] = Query(default=None, min_length=2),
+    search: Optional[str] = Query(default=None, min_length=1),
     db: AsyncSession = Depends(get_db),
 ):
     """List teams with pagination and optional filters.
