@@ -187,7 +187,11 @@ def call_grok_for_consolidation(context: List[Dict[str, Any]]) -> ConsolidationP
     )
     
     # Construct prompt
-    system_prompt = """You are a data cleaner specializing in sponsor and brand deduplication.
+    system_prompt = """You are a data cleaner specializing in sponsor and brand deduplication for professional cycling teams.
+
+Context: These sponsors and brands are associated with historic and current professional cycling teams. 
+Brands represent how sponsors appear on team jerseys and in team names (e.g., "Mapei", "Quick-Step", "Cervélo").
+
 Your task: Identify duplicate sponsors and brands that should be merged or reorganized.
 
 Rules:
@@ -203,7 +207,10 @@ For each action, provide:
 - confidence (0.0-1.0)
 
 IMPORTANT: Only suggest merges when you're confident they represent the same entity.
-Preserve historical distinctions (e.g., "Red Bull" energy drink vs "Red Bull" bike frames).
+Preserve historical distinctions:
+- Different brands from the same parent company used in different eras (e.g., Peugeot vs Peugeot Cycles)
+- Different companies with similar names (e.g., Red Bull energy drink vs Red Bull bike frames)
+- Regional variations of the same brand that were used differently
 """
     
     user_prompt = f"""Here is the current state of {len(context)} sponsors and their brands:
@@ -216,7 +223,7 @@ Identify duplicates and provide consolidation actions. Be conservative - only me
     
     # Call LLM
     response = client.chat.completions.create(
-        model="grok-2-1212",
+        model="grok-4-1-fast-reasoning",
         response_model=ConsolidationPlan,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -249,7 +256,7 @@ Identify duplicates and provide consolidation actions. Be conservative - only me
     return ConsolidationPlan(
         actions=filtered_actions,
         generated_at=datetime.now().isoformat(),
-        model_used="grok-2-1212",
+        model_used="grok-4-1-fast-reasoning",
         total_actions=len(filtered_actions)
     )
 
