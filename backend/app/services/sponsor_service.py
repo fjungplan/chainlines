@@ -43,7 +43,7 @@ class SponsorService:
             last_modified_by=user_id
         )
         session.add(master)
-        await session.flush()  # Use flush instead of commit - caller will commit
+        await session.flush()
         await session.refresh(master)
         return master
 
@@ -63,7 +63,7 @@ class SponsorService:
             setattr(master, key, value)
         
         master.last_modified_by = user_id
-        await session.commit()
+        await session.flush()
         await session.refresh(master)
         return master
 
@@ -74,7 +74,7 @@ class SponsorService:
             return False
         
         await session.delete(master)
-        await session.commit()
+        await session.flush()
         return True
 
     @staticmethod
@@ -95,7 +95,7 @@ class SponsorService:
             last_modified_by=user_id
         )
         session.add(brand)
-        await session.flush()  # Use flush instead of commit - caller will commit
+        await session.flush()
         await session.refresh(brand)
         return brand
 
@@ -118,7 +118,7 @@ class SponsorService:
             setattr(brand, key, value)
             
         brand.last_modified_by = user_id
-        await session.commit()
+        await session.flush()
         await session.refresh(brand)
         return brand
     
@@ -132,7 +132,7 @@ class SponsorService:
             return False
             
         await session.delete(brand)
-        await session.commit()
+        await session.flush()
         return True
 
     @staticmethod
@@ -203,7 +203,7 @@ class SponsorService:
             last_modified_by=user_id
         )
         session.add(link)
-        await session.commit()
+        await session.flush()
         await session.refresh(link)
         return link
 
@@ -241,7 +241,7 @@ class SponsorService:
         link.hex_color_override = hex_color_override
         link.last_modified_by = user_id
 
-        await session.commit()
+        await session.flush()
         await session.refresh(link)
         return link
 
@@ -293,7 +293,7 @@ class SponsorService:
             session.add(link)
             new_links.append(link)
             
-        await session.commit()
+        await session.flush()
         
         # Re-fetch with eager loading for response serialization
         # This prevents "Lazy load operation of attribute..." errors during Pydantic validation
@@ -349,5 +349,5 @@ class SponsorService:
             return False
             
         await session.delete(link)
-        await session.commit()
+        await session.flush()
         return True

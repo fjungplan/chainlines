@@ -110,7 +110,7 @@ class TeamService:
             last_modified_by=user_id
         )
         session.add(node)
-        await session.commit()
+        await session.flush()
         await session.refresh(node)
         return node
 
@@ -138,7 +138,7 @@ class TeamService:
             setattr(node, key, value)
         
         node.last_modified_by = user_id
-        await session.commit()
+        await session.flush()
         await session.refresh(node)
         return node
 
@@ -149,7 +149,7 @@ class TeamService:
             return False
             
         await session.delete(node)
-        await session.commit()
+        await session.flush()
         TimelineService.invalidate_cache()
         return True
 
@@ -194,7 +194,7 @@ class TeamService:
             last_modified_by=user_id
         )
         session.add(era)
-        await session.commit()
+        await session.flush()
         TimelineService.invalidate_cache()
         await session.refresh(era)
         return era
@@ -220,7 +220,7 @@ class TeamService:
             setattr(era, key, value)
             
         era.last_modified_by = user_id
-        await session.commit()
+        await session.flush()
         TimelineService.invalidate_cache()
         await session.refresh(era)
         return era
@@ -234,6 +234,6 @@ class TeamService:
             return False
             
         await session.delete(era)
-        await session.commit()
+        await session.flush()
         TimelineService.invalidate_cache()
         return True

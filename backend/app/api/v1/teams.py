@@ -23,9 +23,12 @@ from app.schemas.team import (
 )
 from app.api.dependencies import get_current_user, require_editor, require_admin, require_trusted_or_higher
 from app.models.user import User
+from app.models.team import TeamEra
 from app.schemas.team_detail import TeamHistoryResponse
 from app.services.team_detail_service import TeamDetailService
 from app.core.exceptions import NodeNotFoundException
+from app.services.edit_service import EditService
+from app.models.enums import EditAction, EditStatus
 
 
 router = APIRouter(prefix="/api/v1/teams", tags=["teams"])
@@ -64,10 +67,34 @@ async def get_team(
 async def create_team_node(
     data: TeamNodeCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_trusted_or_higher),
 ):
     """Create a new TeamNode."""
-    return await TeamService.create_node(db, data, current_user.user_id)
+    node = await TeamService.create_node(db, data, current_user.user_id)
+    
+    # Audit Log
+    snapshot_after = {
+        "node": {
+            "node_id": str(node.node_id),
+            "legal_name": node.legal_name,
+            "founding_year": node.founding_year,
+            "dissolution_year": node.dissolution_year
+        }
+    }
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_node",
+        entity_id=node.node_id,
+        action=EditAction.CREATE,
+        snapshot_before=None,
+        snapshot_after=snapshot_after,
+        notes="API Direct Create"
+    )
+    
+    await db.commit()
+    await db.refresh(node)
+    return node
 
 
 @router.put("/{node_id}", response_model=TeamNodeResponse)
@@ -75,10 +102,48 @@ async def update_team_node(
     node_id: UUID,
     data: TeamNodeUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_trusted_or_higher),
 ):
     """Update a TeamNode."""
-    return await TeamService.update_node(db, node_id, data, current_user.user_id)
+    # Fetch for snapshot_before
+    existing = await TeamService.get_node_with_eras(db, node_id) # Using this helper as it's available
+    if not existing:
+        raise NodeNotFoundException(f"TeamNode {node_id} not found")
+        
+    snapshot_before = {
+        "node": {
+            "node_id": str(existing.node_id),
+            "legal_name": existing.legal_name,
+            "founding_year": existing.founding_year,
+            "dissolution_year": existing.dissolution_year
+        }
+    }
+
+    node = await TeamService.update_node(db, node_id, data, current_user.user_id)
+    
+    snapshot_after = {
+        "node": {
+            "node_id": str(node.node_id),
+            "legal_name": node.legal_name,
+            "founding_year": node.founding_year,
+            "dissolution_year": node.dissolution_year
+        }
+    }
+    
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_node",
+        entity_id=node.node_id,
+        action=EditAction.UPDATE,
+        snapshot_before=snapshot_before,
+        snapshot_after=snapshot_after,
+        notes="API Direct Update"
+    )
+    
+    await db.commit()
+    await db.refresh(node)
+    return node
 
 
 @router.delete("/{node_id}", status_code=204)
@@ -88,9 +153,36 @@ async def delete_team_node(
     current_user: User = Depends(require_admin),
 ):
     """Delete a TeamNode."""
+    # Fetch for snapshot_before
+    existing = await TeamService.get_node_with_eras(db, node_id)
+    if not existing:
+         raise NodeNotFoundException(f"TeamNode {node_id} not found")
+
+    snapshot_before = {
+        "node": {
+            "node_id": str(existing.node_id),
+            "legal_name": existing.legal_name,
+            "founding_year": existing.founding_year
+        }
+    }
+
     success = await TeamService.delete_node(db, node_id)
     if not success:
+        # Should catch this earlier with check above, but safe to keep
         raise NodeNotFoundException(f"TeamNode {node_id} not found")
+        
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_node",
+        entity_id=node_id,
+        action=EditAction.DELETE,
+        snapshot_before=snapshot_before,
+        snapshot_after={"deleted": True},
+        notes="API Direct Delete"
+    )
+    
+    await db.commit()
 
 
 @router.get("/{node_id}/history", response_model=TeamHistoryResponse)
@@ -155,10 +247,36 @@ async def create_team_era(
     node_id: UUID,
     data: TeamEraCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_trusted_or_higher),
 ):
     """Add a new Era to a TeamNode."""
-    return await TeamService.create_era(db, node_id, data, current_user.user_id)
+    era = await TeamService.create_era(db, node_id, data, current_user.user_id)
+    
+    # Audit Log
+    snapshot_after = {
+        "era": {
+            "era_id": str(era.era_id),
+            "node_id": str(era.node_id),
+            "season_year": era.season_year,
+            "registered_name": era.registered_name,
+            "uci_code": era.uci_code
+        }
+    }
+    
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_era",
+        entity_id=era.era_id,
+        action=EditAction.CREATE,
+        snapshot_before=None,
+        snapshot_after=snapshot_after,
+        notes="API Direct Create"
+    )
+    
+    await db.commit()
+    await db.refresh(era)
+    return era
 
 
 @router.put("/eras/{era_id}", response_model=TeamEraResponse)
@@ -166,10 +284,50 @@ async def update_team_era(
     era_id: UUID,
     data: TeamEraUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_editor),
+    current_user: User = Depends(require_trusted_or_higher),
 ):
     """Update a TeamEra."""
-    return await TeamService.update_era(db, era_id, data, current_user.user_id)
+    # Fetch for snapshot_before
+    existing = await db.get(TeamEra, era_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="TeamEra not found")
+        
+    snapshot_before = {
+        "era": {
+            "era_id": str(existing.era_id),
+            "node_id": str(existing.node_id),
+            "season_year": existing.season_year,
+            "registered_name": existing.registered_name,
+            "uci_code": existing.uci_code
+        }
+    }
+
+    era = await TeamService.update_era(db, era_id, data, current_user.user_id)
+    
+    snapshot_after = {
+        "era": {
+            "era_id": str(era.era_id),
+            "node_id": str(era.node_id),
+            "season_year": era.season_year,
+            "registered_name": era.registered_name,
+            "uci_code": era.uci_code
+        }
+    }
+    
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_era",
+        entity_id=era.era_id,
+        action=EditAction.UPDATE,
+        snapshot_before=snapshot_before,
+        snapshot_after=snapshot_after,
+        notes="API Direct Update"
+    )
+    
+    await db.commit()
+    await db.refresh(era)
+    return era
 
 
 @router.delete("/eras/{era_id}", status_code=204)
@@ -179,9 +337,37 @@ async def delete_team_era(
     current_user: User = Depends(require_trusted_or_higher),
 ):
     """Delete a TeamEra."""
+    # Fetch for snapshot_before
+    existing = await db.get(TeamEra, era_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="TeamEra not found")
+
+    snapshot_before = {
+        "era": {
+            "era_id": str(existing.era_id),
+            "node_id": str(existing.node_id),
+            "season_year": existing.season_year,
+            "registered_name": existing.registered_name
+        }
+    }
+
     success = await TeamService.delete_era(db, era_id)
     if not success:
+         # Should catch this earlier, but safe
         raise HTTPException(status_code=404, detail="TeamEra not found")
+        
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="team_era",
+        entity_id=era_id,
+        action=EditAction.DELETE,
+        snapshot_before=snapshot_before,
+        snapshot_after={"deleted": True},
+        notes="API Direct Delete"
+    )
+    
+    await db.commit()
 
 
 @router.get("", response_model=TeamListResponse)

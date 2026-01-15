@@ -9,6 +9,9 @@ from app.schemas.lineage import LineageListResponse
 from app.core.etag import compute_etag
 from app.api.dependencies import require_admin
 from app.models.user import User
+from app.models.lineage import LineageEvent
+from app.services.edit_service import EditService
+from app.models.enums import EditAction, EditStatus
 
 router = APIRouter(prefix="/api/v1/lineage", tags=["lineage"])
 
@@ -74,8 +77,44 @@ async def delete_lineage_event(
     Delete a lineage event.
     Admins only.
     """
+    import uuid
+    try:
+        e_uuid = uuid.UUID(event_id)
+    except ValueError:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Lineage event not found")
+
+    # Fetch for snapshot
+    event = await db.get(LineageEvent, e_uuid)
+    if not event:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Lineage event not found")
+        
+    snapshot_before = {
+        "event": {
+            "event_id": str(event.event_id),
+            "event_type": event.event_type.value,
+            "event_year": event.event_year,
+            "predecessor_node_id": str(event.predecessor_node_id) if event.predecessor_node_id else None,
+            "successor_node_id": str(event.successor_node_id) if event.successor_node_id else None
+        }
+    }
+
     service = LineageService(db)
-    success = await service.delete_event(event_id)
+    success = await service.delete_event(e_uuid)
     if not success:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Lineage event not found")
+        
+    await EditService.record_direct_edit(
+        session=db,
+        user=current_user,
+        entity_type="lineage_event",
+        entity_id=e_uuid,
+        action=EditAction.DELETE,
+        snapshot_before=snapshot_before,
+        snapshot_after={"deleted": True},
+        notes="API Direct Delete"
+    )
+    
+    await db.commit()

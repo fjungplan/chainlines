@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from datetime import datetime, date
-from typing import Dict
+from typing import Dict, Optional
 from uuid import UUID
 import uuid
 import json
@@ -26,6 +26,33 @@ from app.schemas.edits import (
 
 
 class EditService:
+    @staticmethod
+    async def record_direct_edit(
+        session: AsyncSession,
+        user: User,
+        entity_type: str,
+        entity_id: UUID,
+        action: EditAction,
+        snapshot_before: Optional[Dict],
+        snapshot_after: Dict,
+        notes: Optional[str] = None
+    ) -> EditHistory:
+        """Record a direct (auto-approved) edit for audit trail."""
+        edit = EditHistory(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            user_id=user.user_id,
+            action=action,
+            status=EditStatus.APPROVED,
+            reviewed_by=user.user_id,
+            reviewed_at=datetime.utcnow(),
+            snapshot_before=snapshot_before,
+            snapshot_after=snapshot_after,
+            source_notes=notes
+        )
+        session.add(edit)
+        return edit
+
     @staticmethod
     async def create_metadata_edit(
         session: AsyncSession,
