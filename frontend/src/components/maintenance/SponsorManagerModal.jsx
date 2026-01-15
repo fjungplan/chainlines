@@ -23,17 +23,52 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
     const [colorOverride, setColorOverride] = useState('#ffffff');
     const [submitting, setSubmitting] = useState(false);
 
-    useEffect(() => {
-        if (eraId) loadLinks();
-    }, [eraId]);
+    // Drag and Drop Logic
+    const [draggedIndex, setDraggedIndex] = useState(null);
 
+    const handleDragStart = (e, index) => {
+        setDraggedIndex(index);
+        e.dataTransfer.effectAllowed = "move";
+        // Ghost image usually handled by browser, but we can style row
+        e.target.closest('tr').classList.add('dragging');
+    };
+
+    const handleDragEnd = (e) => {
+        e.target.closest('tr').classList.remove('dragging');
+        setDraggedIndex(null);
+    };
+
+    const handleDragOver = (e, index) => {
+        e.preventDefault(); // Necessary for Drop to fire
+        if (draggedIndex === index) return;
+        // Optional: Adding visual indicator logic here (e.g. class on target row)
+    };
+
+    const handleDrop = (e, targetIndex) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+        const newLinks = [...links];
+        const [movedItem] = newLinks.splice(draggedIndex, 1);
+        newLinks.splice(targetIndex, 0, movedItem);
+
+        // Reassign Ranks
+        const updatedLinks = newLinks.map((link, idx) => ({
+            ...link,
+            rank_order: idx + 1
+        }));
+
+        setLinks(updatedLinks);
+        setDraggedIndex(null);
+    };
+
+    // Sort Logic: Always Sort by Rank Order
     const loadLinks = async () => {
         setLoading(true);
         setError(null);
         try {
             const data = await sponsorsApi.getEraLinks(eraId);
-            // Sort by Prominence Percent (Descending)
-            setLinks(data.sort((a, b) => b.prominence_percent - a.prominence_percent));
+            setLinks(data.sort((a, b) => a.rank_order - b.rank_order));
         } catch (err) {
             setError("Failed to load sponsors");
         } finally {
@@ -41,10 +76,9 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
         }
     };
 
-    // Warn on unsaved changes if closing not via Save & Close
-    // We can't easily block the 'X' button or overlay click without custom onClose logic in parent, 
-    // but we can add a confirm if they try to close and total != 100 or just generic "discard changes?"
-    // For now, relies on user intent as per plan.
+    useEffect(() => {
+        if (eraId) loadLinks();
+    }, [eraId]);
 
     // Search Brands
     useEffect(() => {
@@ -98,13 +132,11 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
         setSearchTerm(link.brand?.brand_name || '');
     };
 
-    const calculateTotalProminence = () => {
-        return links.reduce((sum, link) => sum + link.prominence_percent, 0);
-    };
-
+    // Modified helper for save to avoid re-sorting by prominence
     const handleSaveLink = () => {
         if (!selectedBrand) return;
-        // Local validation only
+
+        // Check duplication
         const otherLinks = links.filter(l => editingLink ? l.brand?.brand_id !== editingLink.brand?.brand_id : true);
         if (otherLinks.some(l => l.brand?.brand_id === selectedBrand.brand_id)) {
             setError("This brand is already a sponsor");
@@ -115,23 +147,19 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
             link_id: editingLink?.link_id || `temp-${Date.now()}`,
             brand_id: selectedBrand.brand_id,
             brand: selectedBrand,
-            rank_order: rankOrder,
+            // If editing, keep rank. If new, append to end (max rank + 1)
+            rank_order: editingLink ? editingLink.rank_order : links.length + 1,
             prominence_percent: prominence,
             hex_color_override: colorOverride
         };
 
         if (editingLink) {
-            setLinks(prev => {
-                const updated = prev.map(l => l.link_id === editingLink.link_id ? newLink : l);
-                return updated.sort((a, b) => b.prominence_percent - a.prominence_percent);
-            });
+            setLinks(prev => prev.map(l => l.link_id === editingLink.link_id ? newLink : l));
         } else {
-            setLinks(prev => {
-                const updated = [...prev, newLink];
-                return updated.sort((a, b) => b.prominence_percent - a.prominence_percent);
-            });
+            setLinks(prev => [...prev, newLink]);
         }
 
+        // Reset Form
         if (isAdding) {
             handleAddClick();
         } else {
@@ -142,8 +170,12 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
         setError(null);
     };
 
+    const calculateTotalProminence = () => {
+        return links.reduce((sum, link) => sum + link.prominence_percent, 0);
+    };
+
     // Check if we can close
-    const canClose = Math.abs(calculateTotalProminence() - 100) < 0.1; // Float safety measures
+    const canClose = Math.abs(calculateTotalProminence() - 100) < 0.1;
 
     const handleSaveAndClose = async () => {
         if (!canClose) return;
@@ -182,8 +214,6 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
     const totalProminence = calculateTotalProminence();
 
     const handleClose = () => {
-        // Warn if changes might be lost (simple check if local state doesn't match loaded? 
-        // For now just check invalid state per user request context)
         if (links.length > 0 && Math.abs(calculateTotalProminence() - 100) > 0.1) {
             if (!window.confirm("Total prominence is not 100%. Changes will be lost. Close anyway?")) {
                 return;
@@ -192,20 +222,12 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
         onClose();
     };
 
-
-
     return (
         <div className="modal-overlay">
             <div className="modal-content sponsor-manager-modal">
+                {/* Header ... */}
                 <div className="modal-header">
                     <h2>Manage Sponsors {seasonYear ? `- ${seasonYear}` : ''}</h2>
-                    {/* Replaced top Close button with just an X that warns or functionality driven by bottom button? 
-                        User said: "only thn can I leave the modal by clicking a separate save&close button"
-                        But usually X is safe "Cancel/Dismiss without saving further". 
-                        Since we save immediately on "Save" button, X is fine to just close. 
-                        But we should probably encourage the bottom button. 
-                        Let's keep X for emergency exit. 
-                    */}
                     <Button variant="ghost" className="close-btn" onClick={handleClose} title="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 6L6 18M6 6l12 12" />
@@ -228,19 +250,33 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
                                 <table className="mini-table">
                                     <thead>
                                         <tr>
-                                            <th>Rank</th>
+                                            <th style={{ width: '40px' }}></th>
+                                            <th style={{ width: '50px' }}>Rank</th>
                                             <th>Brand</th>
                                             <th>%</th>
                                             <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {links.map(link => (
+                                        {links.map((link, index) => (
                                             <tr
                                                 key={link.link_id}
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, index)}
+                                                onDragOver={(e) => handleDragOver(e, index)}
+                                                onDrop={(e) => handleDrop(e, index)}
+                                                onDragEnd={handleDragEnd}
                                                 onClick={() => handleEditClick(link)}
                                                 className={editingLink?.link_id === link.link_id ? 'selected-row' : ''}
+                                                style={{ cursor: 'grab' }}
                                             >
+                                                <td className="drag-handle">
+                                                    <div className="drag-handle-icon">
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2">
+                                                            <path d="M4 8h16M4 16h16" />
+                                                        </svg>
+                                                    </div>
+                                                </td>
                                                 <td>{link.rank_order}</td>
                                                 <td>
                                                     <div className="brand-cell">
