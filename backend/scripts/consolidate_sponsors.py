@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Sponsor Consolidation Script
 
@@ -16,6 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 from uuid import UUID
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -55,7 +59,7 @@ async def backup_tables(session, output_path: Path):
         session: AsyncSession
         output_path: Path to write backup JSON
     """
-    print(f"🔒 Creating backup at {output_path}...")
+    print(f"[BACKUP] Creating backup at {output_path}...")
     
     # Fetch all sponsors with brands
     stmt = select(SponsorMaster).options(selectinload(SponsorMaster.brands))
@@ -75,7 +79,7 @@ async def backup_tables(session, output_path: Path):
                 "legal_name": m.legal_name,
                 "industry_sector": m.industry_sector,
                 "source_url": m.source_url,
-                "notes": m.notes,
+                "source_notes": m.source_notes,
                 "brands": [
                     {
                         "brand_id": str(b.brand_id),
@@ -104,7 +108,7 @@ async def backup_tables(session, output_path: Path):
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(backup_data, f, indent=2, ensure_ascii=False)
     
-    print(f"✅ Backup created: {len(masters)} sponsors, {sum(len(m.brands) for m in masters)} brands, {len(links)} links")
+    print(f"[OK] Backup created: {len(masters)} sponsors, {sum(len(m.brands) for m in masters)} brands, {len(links)} links")
 
 
 # ============================================================================
@@ -116,7 +120,7 @@ async def fetch_sponsor_context(session) -> List[Dict[str, Any]]:
     
     Returns compact JSON to minimize token usage.
     """
-    print("📊 Fetching sponsor and brand data...")
+    print("[DATA] Fetching sponsor and brand data...")
     
     stmt = (
         select(SponsorMaster)
@@ -157,11 +161,11 @@ async def fetch_sponsor_context(session) -> List[Dict[str, Any]]:
             "n": master.legal_name,
             "sector": master.industry_sector,
             "url": master.source_url,
-            "notes": master.notes,
+            "notes": master.source_notes,
             "brands": brands_info
         })
     
-    print(f"✅ Fetched {len(masters)} sponsors with {sum(len(m.brands) for m in masters)} brands")
+    print(f"[OK] Fetched {len(masters)} sponsors with {sum(len(m.brands) for m in masters)} brands")
     return context
 
 
@@ -171,7 +175,7 @@ def call_grok_for_consolidation(context: List[Dict[str, Any]]) -> ConsolidationP
     
     Returns a ConsolidationPlan with filtered actions (only >= 0.7 confidence).
     """
-    print("🤖 Calling Grok LLM for consolidation analysis...")
+    print("[LLM] Calling Grok LLM for consolidation analysis...")
     
     # Initialize Grok client via instructor
     api_key = os.getenv("GROK_API_KEY")
@@ -248,7 +252,7 @@ Identify duplicates and provide consolidation actions. Be conservative - only me
             # Discard low confidence
             discarded_count += 1
     
-    print(f"✅ LLM returned {len(response.actions)} actions")
+    print(f"[OK] LLM returned {len(response.actions)} actions")
     print(f"   - High confidence (>= 0.9): {sum(1 for a in filtered_actions if a.status == ConsolidationActionStatus.HIGH_CONFIDENCE)}")
     print(f"   - Needs review (0.7-0.9): {sum(1 for a in filtered_actions if a.status == ConsolidationActionStatus.NEEDS_REVIEW)}")
     print(f"   - Discarded (< 0.7): {discarded_count}")
@@ -274,10 +278,10 @@ async def analyze_command(session):
     # Estimate token count (rough)
     context_json = json.dumps(context)
     estimated_tokens = len(context_json) / 4  # Rough estimate
-    print(f"📏 Estimated context size: ~{estimated_tokens:,.0f} tokens")
+    print(f"[SIZE] Estimated context size: ~{estimated_tokens:,.0f} tokens")
     
     if estimated_tokens > 128000:
-        print("⚠️  Warning: Context exceeds 128k token threshold. Pricing will be 2x.")
+        print("[WARN]  Warning: Context exceeds 128k token threshold. Pricing will be 2x.")
     
     plan = call_grok_for_consolidation(context)
     
@@ -285,9 +289,9 @@ async def analyze_command(session):
     with open(PLAN_OUTPUT, 'w', encoding='utf-8') as f:
         f.write(plan.model_dump_json(indent=2))
     
-    print(f"\n✅ Consolidation plan saved to: {PLAN_OUTPUT}")
+    print(f"\n[OK] Consolidation plan saved to: {PLAN_OUTPUT}")
     print(f"   Total actions: {plan.total_actions}")
-    print("\n📝 Next steps:")
+    print("\n[NOTE] Next steps:")
     print("   1. Review the plan file")
     print("   2. Remove any 'needs_review' actions you don't want")
     print("   3. Run: python -m scripts.consolidate_sponsors --apply consolidation_plan.json")
@@ -302,7 +306,7 @@ async def validate_plan(session, plan: ConsolidationPlan) -> bool:
     
     Returns True if valid, False otherwise.
     """
-    print("🔍 Validating consolidation plan...")
+    print("[CHECK] Validating consolidation plan...")
     
     # Fetch all master and brand IDs
     stmt = select(SponsorMaster.master_id)
@@ -333,12 +337,12 @@ async def validate_plan(session, plan: ConsolidationPlan) -> bool:
                     errors.append(f"Action {idx}: Target master {action.target_id} not found")
     
     if errors:
-        print("❌ Validation failed:")
+        print("[ERROR] Validation failed:")
         for error in errors:
             print(f"   - {error}")
         return False
     
-    print("✅ Validation passed")
+    print("[OK] Validation passed")
     return True
 
 
@@ -346,7 +350,7 @@ async def execute_plan(session, plan: ConsolidationPlan):
     """
     Execute the consolidation plan: update links, delete sources.
     """
-    print("🔧 Executing consolidation plan...")
+    print("[EXEC] Executing consolidation plan...")
     
     for idx, action in enumerate(plan.actions):
         print(f"\n[{idx + 1}/{len(plan.actions)}] {action.action_type.value}")
@@ -371,7 +375,7 @@ async def execute_plan(session, plan: ConsolidationPlan):
             if source_brand:
                 await session.delete(source_brand)
             
-            print(f"    ✓ Merged brand (updated {len(links)} links)")
+            print(f"    OK Merged brand (updated {len(links)} links)")
         
         elif action.action_type == ConsolidationActionType.MOVE_BRAND:
             # Update brand's master_id
@@ -380,7 +384,7 @@ async def execute_plan(session, plan: ConsolidationPlan):
             brand = result.scalar_one_or_none()
             if brand:
                 brand.master_id = action.target_id
-                print(f"    ✓ Moved brand to new sponsor")
+                print(f"    OK Moved brand to new sponsor")
         
         elif action.action_type == ConsolidationActionType.MERGE_MASTER:
             # Move all brands from source to target
@@ -401,10 +405,10 @@ async def execute_plan(session, plan: ConsolidationPlan):
             if source_master:
                 await session.delete(source_master)
             
-            print(f"    ✓ Merged sponsor (moved {len(brands)} brands)")
+            print(f"    OK Merged sponsor (moved {len(brands)} brands)")
     
     await session.commit()
-    print("\n✅ Consolidation complete!")
+    print("\n[OK] Consolidation complete!")
 
 
 async def apply_command(session, plan_path: Path):
@@ -423,7 +427,7 @@ async def apply_command(session, plan_path: Path):
         plan_data = json.load(f)
     
     plan = ConsolidationPlan.model_validate(plan_data)
-    print(f"📄 Loaded plan with {plan.total_actions} actions")
+    print(f"[FILE] Loaded plan with {plan.total_actions} actions")
     
     # Backup
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -432,15 +436,15 @@ async def apply_command(session, plan_path: Path):
     
     # Validate
     if not await validate_plan(session, plan):
-        print("\n❌ Validation failed. Aborting.")
+        print("\n[ERROR] Validation failed. Aborting.")
         return
     
     # Confirm
-    print(f"\n⚠️  WARNING: This will modify the database!")
+    print(f"\n[WARN]  WARNING: This will modify the database!")
     print(f"   Backup saved at: {backup_path}")
     confirm = input("\nProceed with consolidation? (yes/no): ")
     if confirm.lower() != "yes":
-        print("❌ Aborted by user")
+        print("[ERROR] Aborted by user")
         return
     
     # Execute
@@ -481,3 +485,4 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
