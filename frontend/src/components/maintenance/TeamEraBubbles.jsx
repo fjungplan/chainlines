@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../Loading';
 
@@ -31,6 +31,27 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
         }
     };
 
+    // Scroll Preservation
+    const listRef = useRef(null);
+    const scrollKey = `team-era-scroll-${nodeId}`;
+
+    // 1. Save scroll position on scroll
+    const handleScroll = () => {
+        if (listRef.current) {
+            sessionStorage.setItem(scrollKey, listRef.current.scrollTop);
+        }
+    };
+
+    // 2. Restore scroll position when data loads
+    useEffect(() => {
+        if (eras.length > 0 && listRef.current) {
+            const savedScroll = sessionStorage.getItem(scrollKey);
+            if (savedScroll) {
+                listRef.current.scrollTop = parseInt(savedScroll, 10);
+            }
+        }
+    }, [eras, nodeId]);
+
     if (loading) return <LoadingSpinner message="Loading eras..." />;
 
     return (
@@ -44,7 +65,11 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
             ) : eras.length === 0 ? (
                 <div className="empty-text">No eras recorded.</div>
             ) : (
-                <div className="bubbles-list">
+                <div
+                    className="bubbles-list"
+                    ref={listRef}
+                    onScroll={handleScroll}
+                >
                     {eras.map(era => (
                         <div
                             key={era.era_id}
