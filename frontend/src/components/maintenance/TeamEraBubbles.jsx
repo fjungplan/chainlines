@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../Loading';
 
-export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
+export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra, lastUpdate }) {
     const [eras, setEras] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -14,7 +14,7 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
             setEras([]);
             setLoading(false);
         }
-    }, [nodeId]);
+    }, [nodeId, lastUpdate]);
 
     const loadEras = async () => {
         setLoading(true);
