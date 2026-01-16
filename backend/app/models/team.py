@@ -130,7 +130,7 @@ class TeamEra(Base):
     @validates("uci_code")
     def validate_uci_code(self, key, value):
         if value is not None:
-            if len(value) != 3 or not value.isalnum() or not value.isupper():
+            if len(value) != 3 or not value.isalnum() or value != value.upper():
                 raise ValueError("uci_code must be 3 uppercase alphanumeric")
         return value
 
