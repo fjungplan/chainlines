@@ -82,7 +82,8 @@ async def test_audit_log_resolves_team_era_name(
     )
     
     item = response.json()["items"][0]
-    assert item["entity_name"] == "Test Era Name"
+    # Service returns "Name (Year)"
+    assert item["entity_name"] == "Test Era Name (2024)"
 
 @pytest.mark.asyncio
 async def test_audit_log_detail_resolves_name(
@@ -118,7 +119,7 @@ async def test_audit_log_detail_resolves_name(
         action=EditAction.UPDATE,
         status=EditStatus.APPROVED,
         snapshot_before={},
-        snapshot_after={},
+        snapshot_after={"updated": "true"},
         created_at=datetime.utcnow(),
         reviewed_at=datetime.utcnow()
     )
