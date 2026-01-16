@@ -459,13 +459,9 @@ export class LayoutCalculator {
       const succs = successors.get(nodeId) || [];
 
       // Try to use predecessor's lane to minimize crossings
-      let suggestedLane = preferredLane;
-      if (preds.length === 1) {
-        const predId = preds[0].nodeId;
-        if (assignments[predId] !== undefined) {
-          suggestedLane = assignments[predId];
-        }
-      }
+      // Use the confirmed assignment of the current node as the baseline for successors
+      // This ensures linear chains maintain their lane (e.g. in Splits or if shifted)
+      let suggestedLane = assignments[nodeId];
 
       // Process successors
       if (succs.length === 0) {
