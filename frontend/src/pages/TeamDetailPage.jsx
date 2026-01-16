@@ -9,7 +9,7 @@ import Card from '../components/common/Card';
 import './TeamDetailPage.css';
 
 import { getTierName } from '../utils/tierUtils';
-import { getCountryCode } from '../utils/countryUtils';
+import { getCountryFlag } from '../utils/iocCodes';
 
 function TeamDetailPage() {
   const { nodeId } = useParams();
@@ -74,7 +74,7 @@ function TeamDetailPage() {
                         </h4>
                         <div className="era-meta-pills">
                           {(() => {
-                            const cCode = getCountryCode(era.country_code);
+                            const cCode = getCountryFlag(era.country_code);
                             return cCode ? (
                               <span
                                 className={`meta-pill flag-pill fi fi-${cCode}`}
