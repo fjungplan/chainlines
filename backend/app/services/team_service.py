@@ -166,9 +166,9 @@ class TeamService:
         if data.tier_level is not None and data.tier_level not in (1, 2, 3):
             raise ValidationException("tier_level must be 1, 2, or 3 when provided")
         if data.uci_code is not None and (
-            len(data.uci_code) != 3 or not data.uci_code.isalpha() or not data.uci_code.isupper()
+            len(data.uci_code) != 3 or not data.uci_code.isalnum() or data.uci_code != data.uci_code.upper()
         ):
-            raise ValidationException("uci_code must be exactly 3 uppercase letters")
+            raise ValidationException("uci_code must be 3 uppercase alphanumeric")
         if not data.registered_name or data.registered_name.strip() == "":
             raise ValidationException("registered_name cannot be empty")
 
