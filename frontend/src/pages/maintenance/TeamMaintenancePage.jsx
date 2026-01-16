@@ -117,7 +117,7 @@ export default function TeamMaintenancePage() {
         setViewMode('list');
         setSelectedNodeId(null);
         setSelectedEraId(null);
-        fetchTeams();
+        fetchTeams(searchQuery);
     };
 
     // Called when Team Node is saved (create or update)

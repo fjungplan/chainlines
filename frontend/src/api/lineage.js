@@ -2,7 +2,7 @@ import { apiClient as api } from './client';
 
 export const lineageApi = {
     listEvents: async (params) => {
-        const response = await api.get('/api/v1/lineage', { params });
+        const response = await api.get('/api/v1/lineage', { params: { ...params, _t: Date.now() } });
         return response.data;
     },
 

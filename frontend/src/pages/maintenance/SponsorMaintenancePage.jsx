@@ -72,6 +72,7 @@ export default function SponsorMaintenancePage() {
     const handleEditorClose = () => {
         setIsEditorOpen(false);
         setSelectedMasterId(null);
+        fetchMasters(); // Refetch to prevent stale data
     };
 
     const handleEditorSuccess = () => {

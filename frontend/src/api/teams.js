@@ -12,7 +12,7 @@ export const teamsApi = {
   },
 
   getTeams: async (params) => {
-    const response = await apiClient.get('/api/v1/teams', { params });
+    const response = await apiClient.get('/api/v1/teams', { params: { ...params, _t: Date.now() } });
     return response.data;
   },
 

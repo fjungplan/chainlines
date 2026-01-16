@@ -83,6 +83,7 @@ const LineageMaintenance = () => {
     const handleCloseEditor = () => {
         setViewMode('list');
         setSelectedEventId(null);
+        fetchEvents(searchQuery); // Refetch to update list + persist search
     };
 
     const handleSuccess = () => {
