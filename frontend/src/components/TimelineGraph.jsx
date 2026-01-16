@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
+import { MarkerRenderer } from '../utils/markerRenderer';
 import { LayoutCalculator } from '../utils/layoutCalculator';
 import { validateGraphData } from '../utils/graphUtils';
 import { VISUALIZATION } from '../constants/visualization';
@@ -1013,63 +1014,7 @@ export default function TimelineGraph({
   };
 
   const renderTransitionMarkers = (g, links) => {
-    // Only render markers for same-swimlane transitions
-    const markerData = links.filter(d => d.sameSwimlane && d.path === null);
-
-    let markerGroup = g.select('.transition-markers');
-    if (markerGroup.empty()) {
-      markerGroup = g.append('g').attr('class', 'transition-markers');
-    }
-
-    const markers = markerGroup
-      .selectAll('g.transition-marker')
-      .data(markerData, (d) => `marker-${d.source}-${d.target}-${d.year || ''}`)
-      .join('g')
-      .attr('class', 'transition-marker')
-      .style('cursor', 'pointer')
-      .on('mouseenter', (event, d) => {
-        d3.select(event.currentTarget).select('line').attr('stroke-width', 3);
-        d3.select(event.currentTarget).select('circle').attr('r', 5);
-        const content = TooltipBuilder.buildLinkTooltip(d, currentLayout.current?.nodes || []);
-        if (content) {
-          setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
-        }
-      })
-      .on('mousemove', (event) => {
-        if (tooltip.visible) {
-          setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
-        }
-      })
-      .on('mouseleave', (event) => {
-        d3.select(event.currentTarget).select('line').attr('stroke-width', 2);
-        d3.select(event.currentTarget).select('circle').attr('r', 3.5);
-        setTooltip({ visible: false, content: null, position: null });
-      });
-
-    // Vertical line marker
-    markers
-      .append('line')
-      .attr('x1', (d) => d.targetX)
-      .attr('y1', (d) => d.targetY - 15)
-      .attr('x2', (d) => d.targetX)
-      .attr('y2', (d) => d.targetY + 15)
-      .attr('stroke', (d) =>
-        d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL
-      )
-      .attr('stroke-width', 2)
-      .attr('stroke-dasharray', (d) => (d.type === 'SPIRITUAL_SUCCESSION' ? '4,2' : '0'));
-
-    // Circle at center
-    markers
-      .append('circle')
-      .attr('cx', (d) => d.targetX)
-      .attr('cy', (d) => d.targetY)
-      .attr('r', 3.5)
-      .attr('fill', (d) =>
-        d.type === 'SPIRITUAL_SUCCESSION' ? VISUALIZATION.LINK_COLOR_SPIRITUAL : VISUALIZATION.LINK_COLOR_LEGAL
-      )
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.5);
+    MarkerRenderer.render(g, links, currentLayout.current, setTooltip);
   };
 
 

@@ -131,6 +131,7 @@ export class LayoutCalculator {
       yearRange: this.yearRange,
       xScale: this.xScale,
       rowHeight,
+      nodeHeight: this.nodeHeight,
       pixelsPerYear: this.pixelsPerYear
     };
   }
