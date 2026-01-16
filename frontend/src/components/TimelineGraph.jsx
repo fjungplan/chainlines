@@ -20,6 +20,7 @@ import { OptimizedRenderer } from '../utils/optimizedRenderer';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import NavigationHint from './NavigationHint';
 
 export default function TimelineGraph({
   data,
@@ -252,19 +253,49 @@ export default function TimelineGraph({
     return () => window.removeEventListener('resize', handleResize);
   }, [computeMinScale, computeMaxScale]);
 
-  // Prevent browser zoom on SVG container
+  // Prevent browser zoom on SVG container and handle manual vertical pan
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const preventBrowserZoom = (e) => {
+    const scaleFactor = 3; // Adjust for scroll speed
+
+    const handleWheel = (e) => {
+      // 1. Prevent Browser Zoom (Ctrl + Wheel) - D3 handles this if filter allows
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+        return;
       }
+
+      // 2. Manual Vertical Pan (No Ctrl)
+      // D3 Zoom is filtering this out, so we handle it manually
+      e.preventDefault();
+
+      if (!zoomBehavior.current || !svgRef.current) return;
+
+      const currentT = d3.zoomTransform(svgRef.current);
+      // DeltaY is usually ~100 per tick. We want to move OPPOSITE to delta (scroll down = view moves up / data moves up)
+      // Actually standard scrolling: Scroll Down -> Content moves UP (Y decreases).
+      // D3 Transform Y: shifting Y negative moves view down? No.
+      // e.g. T.y = -100 means we are looked at y=100.
+      // Let's use d3.zoom().translateBy which handles the math.
+      // We want to translate the VIEW, so if we scroll DOWN (positive Delta), we want to see lower content.
+      // This means panning UP (content moves up).
+      // translateBy(dx, dy) adds to the translation.
+
+      const dy = -e.deltaY * scaleFactor / currentT.k; // Normalize by scale to keep speed consistent? Or not?
+      // Actually translateBy works in screen coordinates usually.
+
+      // Let's try simple screen-coordinate translation
+      // Scroll Down (Delta > 0) -> Move View Down -> Content moves UP -> dy should be negative?
+      // Standard scroll: Scroll Down -> page moves up.
+      // D3: element.call(zoom.translateBy, 0, -e.deltaY)
+      // User reported 2.5 was too slow. Increasing to 5.0.
+      d3.select(svgRef.current).call(zoomBehavior.current.translateBy, 0, -e.deltaY * 5.0);
     };
 
-    container.addEventListener('wheel', preventBrowserZoom, { passive: false });
-    return () => container.removeEventListener('wheel', preventBrowserZoom);
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
   }, []);
 
 
@@ -785,9 +816,14 @@ export default function TimelineGraph({
       .scaleExtent([minScale, maxScale])
       .translateExtent(extent)
       .filter((event) => {
-        // Allow mouse wheel, touch gestures, but block right-click drag
-        if (event.type === 'wheel') return !event.ctrlKey;
-        if (event.type === 'mousedown') return !event.button;
+        // Allow ONLY Ctrl+Wheel for zooming
+        if (event.type === 'wheel') {
+          return event.ctrlKey || event.metaKey;
+        }
+        // Allow Left Click (0) or Middle Click (1) for Panning
+        if (event.type === 'mousedown') {
+          return event.button === 0 || event.button === 1;
+        }
         return true; // Allow touch events
       })
       .on('zoom', (event) => {
@@ -1334,6 +1370,7 @@ export default function TimelineGraph({
         position={tooltip.position}
         visible={tooltip.visible}
       />
+      <NavigationHint />
 
 
 
