@@ -17,8 +17,8 @@ class EditMetadataRequest(BaseModel):
     @field_validator('uci_code')
     @classmethod
     def validate_uci_code(cls, v):
-        if v and (len(v) != 3 or not v.isupper()):
-            raise ValueError('UCI code must be exactly 3 uppercase letters')
+        if v and (len(v) != 3 or not v.isalnum() or v != v.upper()):
+            raise ValueError('UCI code must be 3 uppercase alphanumeric')
         return v
     
     @field_validator('tier_level')
@@ -84,8 +84,8 @@ class CreateTeamRequest(BaseModel):
     @field_validator('uci_code')
     @classmethod
     def validate_uci_code(cls, v):
-        if v and (len(v) != 3 or not v.isupper()):
-            raise ValueError('UCI code must be exactly 3 uppercase letters')
+        if v and (len(v) != 3 or not v.isalnum() or v != v.upper()):
+            raise ValueError('UCI code must be 3 uppercase alphanumeric')
         return v
     
     @field_validator('tier_level')
