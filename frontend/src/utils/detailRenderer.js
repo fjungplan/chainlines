@@ -53,10 +53,24 @@ export class DetailRenderer {
     const startYear = eras[0].year;
 
     // Calculate effective end year
+    // Calculate effective end year matching LayoutCalculator logic
     const currentYear = new Date().getFullYear();
-    const effectiveEndYear = node.dissolution_year
-      ? node.dissolution_year + 1
-      : currentYear + 1;
+    const lastEra = eras[eras.length - 1]; // Eras are sorted by year from GraphBuilder
+
+    // Check if team is "Active" (last era is recent)
+    // Must match LayoutCalculator logic to ensure internal proportion matches external node width
+    const isActive = lastEra && lastEra.year >= (currentYear - 1);
+
+    let effectiveEndYear;
+    if (node.dissolution_year) {
+      effectiveEndYear = node.dissolution_year + 1;
+    } else if (isActive) {
+      effectiveEndYear = currentYear + 1;
+    } else {
+      // Zombie/Inactive: Cap at last era end to match node width
+      effectiveEndYear = lastEra ? lastEra.year + 1 : startYear + 1;
+    }
+
     const totalYears = effectiveEndYear - startYear;
 
     if (totalYears <= 0) return;
