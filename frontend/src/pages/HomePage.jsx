@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTimeline } from '../hooks/useTeamData';
-import { useResponsive } from '../hooks/useResponsive';
 import { LoadingSpinner } from '../components/Loading';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import TimelineGraph from '../components/TimelineGraph';
+import { ResolutionBlocker } from '../components/common/ResolutionBlocker';
 import './HomePage.css';
 
 function HomePage() {
-  const { isMobile } = useResponsive();
   const currentYear = new Date().getFullYear();
   const [filtersVersion, setFiltersVersion] = useState(0);
   const [fullData, setFullData] = useState(null); // State for full unfiltered data (for Minimap)
@@ -60,36 +59,28 @@ function HomePage() {
     return <ErrorDisplay error={error} onRetry={refetch} />;
   }
 
-  return isMobile ? (
-    <div className="home-page">
-      <h2>Mobile View</h2>
-      <p>Mobile list view coming soon...</p>
-      <div className="data-summary">
-        <div className="summary-card">
-          <h3>Nodes</h3>
-          <p className="summary-value">{data?.nodes?.length || 0}</p>
-        </div>
-        <div className="summary-card">
-          <h3>Links</h3>
-          <p className="summary-value">{data?.links?.length || 0}</p>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <TimelineGraph
-      data={data}
-      fullData={fullData}
-      onYearRangeChange={handleYearRangeChange}
-      onTierFilterChange={handleTierFilterChange}
-      onFocusChange={handleFocusChange}
-      filtersVersion={filtersVersion}
-      initialStartYear={filters.start_year}
-      initialEndYear={filters.end_year}
-      currentStartYear={filters.start_year}
-      currentEndYear={filters.end_year}
-      initialTiers={filters.tier_filter || [1, 2, 3]}
-      onEditSuccess={refetch}
-    />
+  // Calculate start/end for blocker based on FULL data range if possible, or defaults
+  // Use data range (1900-2026) for blocker calculation
+  const blockerStart = filters.start_year;
+  const blockerEnd = filters.end_year;
+
+  return (
+    <ResolutionBlocker startYear={blockerStart} endYear={blockerEnd}>
+      <TimelineGraph
+        data={data}
+        fullData={fullData}
+        onYearRangeChange={handleYearRangeChange}
+        onTierFilterChange={handleTierFilterChange}
+        onFocusChange={handleFocusChange}
+        filtersVersion={filtersVersion}
+        initialStartYear={filters.start_year}
+        initialEndYear={filters.end_year}
+        currentStartYear={filters.start_year}
+        currentEndYear={filters.end_year}
+        initialTiers={filters.tier_filter || [1, 2, 3]}
+        onEditSuccess={refetch}
+      />
+    </ResolutionBlocker>
   );
 }
 

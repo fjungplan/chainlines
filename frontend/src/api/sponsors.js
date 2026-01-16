@@ -3,12 +3,12 @@ import apiClient from './client';
 export const sponsorsApi = {
     // Masters
     getAllMasters: async (skip = 0, limit = 100) => {
-        const response = await apiClient.get('/api/v1/sponsors/masters', { params: { skip, limit } });
+        const response = await apiClient.get('/api/v1/sponsors/masters', { params: { skip, limit, _t: Date.now() } });
         return response.data;
     },
 
     searchMasters: async (query, limit = 20) => {
-        const response = await apiClient.get('/api/v1/sponsors/masters', { params: { query, limit } });
+        const response = await apiClient.get('/api/v1/sponsors/masters', { params: { query, limit, _t: Date.now() } });
         return response.data;
     },
 

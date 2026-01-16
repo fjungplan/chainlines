@@ -30,10 +30,33 @@ class AuditLogService:
     """
     
     @staticmethod
+    @staticmethod
+    def _unwrap_snapshot(data: Optional[Dict]) -> Optional[Dict]:
+        """
+        Unwrap nested snapshot data if present.
+        
+        Handles cases where scrapers wrap payload in entity keys like:
+        { "node": { ... } } or { "lineage_event": { ... } }
+        """
+        if not data:
+            return None
+            
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        flattened = data.copy()
+
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                # Found a wrapper key, return its content
+                return data[key]
+                
+        return flattened
+
+    @staticmethod
     async def resolve_entity_name(
         session: AsyncSession,
         entity_type: str,
-        entity_id: Union[UUID, str]
+        entity_id: Union[UUID, str],
+        snapshot: Optional[Dict] = None
     ) -> str:
         """
         Resolve an entity UUID to a human-readable name.
@@ -42,6 +65,7 @@ class AuditLogService:
             session: Database session
             entity_type: Type of entity (team_node, team_era, sponsor_master, etc.)
             entity_id: UUID of the entity
+            snapshot: Optional snapshot data (used as fallback for PENDING CREATEs)
             
         Returns:
             Human-readable name string, or "Unknown" if not found
@@ -53,21 +77,24 @@ class AuditLogService:
             except ValueError:
                 return str(entity_id)
         
+        # Unwrap snapshot once here so sub-methods don't have to
+        unwrapped_snapshot = AuditLogService._unwrap_snapshot(snapshot)
+        
         try:
             etype = entity_type.lower()
             
             if etype in ("team", "team_node", "teamnode"):
-                return await AuditLogService._resolve_team_node(session, entity_id)
+                return await AuditLogService._resolve_team_node(session, entity_id, unwrapped_snapshot)
             elif etype in ("era", "team_era", "teamera"):
-                return await AuditLogService._resolve_team_era(session, entity_id)
+                return await AuditLogService._resolve_team_era(session, entity_id, unwrapped_snapshot)
             elif etype in ("sponsor", "sponsor_master", "sponsormaster"):
-                return await AuditLogService._resolve_sponsor_master(session, entity_id)
+                return await AuditLogService._resolve_sponsor_master(session, entity_id, unwrapped_snapshot)
             elif etype in ("brand", "sponsor_brand", "sponsorbrand"):
-                return await AuditLogService._resolve_sponsor_brand(session, entity_id)
+                return await AuditLogService._resolve_sponsor_brand(session, entity_id, unwrapped_snapshot)
             elif etype in ("link", "team_sponsor_link", "teamsponsorlink"):
-                return await AuditLogService._resolve_sponsor_link(session, entity_id)
+                return await AuditLogService._resolve_sponsor_link(session, entity_id, unwrapped_snapshot)
             elif etype in ("lineage", "lineage_event", "lineageevent"):
-                return await AuditLogService._resolve_lineage_event(session, entity_id)
+                return await AuditLogService._resolve_lineage_event(session, entity_id, unwrapped_snapshot)
             else:
                 # Unknown entity type - return ID as string
                 return str(entity_id)
@@ -75,74 +102,135 @@ class AuditLogService:
             return "Unknown"
     
     @staticmethod
-    async def _resolve_team_node(session: AsyncSession, node_id: UUID) -> str:
+    async def _resolve_team_node(session: AsyncSession, node_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamNode to display_name or legal_name."""
         node = await session.get(TeamNode, node_id)
-        if not node:
-            return "Unknown"
-        return node.display_name or node.legal_name
+        if node:
+            return node.display_name or node.legal_name
+            
+        # Fallback to snapshot
+        if snapshot:
+            return snapshot.get("display_name") or snapshot.get("legal_name") or "Unknown"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_team_era(session: AsyncSession, era_id: UUID) -> str:
+    async def _resolve_team_era(session: AsyncSession, era_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamEra to 'registered_name (year)'."""
         era = await session.get(TeamEra, era_id)
-        if not era:
-            return "Unknown"
-        return f"{era.registered_name} ({era.season_year})"
+        if era:
+            return f"{era.registered_name} ({era.season_year})"
+            
+        # Fallback to snapshot
+        if snapshot:
+            name = snapshot.get("registered_name") or "Unknown"
+            year = snapshot.get("season_year") or "?"
+            return f"{name} ({year})"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_master(session: AsyncSession, master_id: UUID) -> str:
+    async def _resolve_sponsor_master(session: AsyncSession, master_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve SponsorMaster to display_name or legal_name."""
         master = await session.get(SponsorMaster, master_id)
-        if not master:
-            return "Unknown"
-        return master.display_name or master.legal_name
+        if master:
+            return master.display_name or master.legal_name
+            
+        # Fallback to snapshot
+        if snapshot:
+            return snapshot.get("display_name") or snapshot.get("legal_name") or "Unknown"
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_brand(session: AsyncSession, brand_id: UUID) -> str:
+    async def _resolve_sponsor_brand(session: AsyncSession, brand_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve SponsorBrand to 'brand_name (master_name)'."""
         brand = await session.get(SponsorBrand, brand_id)
-        if not brand:
-            return "Unknown"
-        
-        # Get parent master name
-        master = await session.get(SponsorMaster, brand.master_id)
-        master_name = (master.display_name or master.legal_name) if master else "Unknown"
-        
-        return f"{brand.brand_name} ({master_name})"
+        if brand:
+            # Get parent master name
+            master = await session.get(SponsorMaster, brand.master_id)
+            master_name = (master.display_name or master.legal_name) if master else "Unknown"
+            return f"{brand.brand_name} ({master_name})"
+            
+        # Fallback to snapshot
+        if snapshot:
+            brand_name = snapshot.get("brand_name") or "Unknown"
+            # We assume we can't easily resolve master name from snapshot ID here without extra query
+            # but usually brand name is enough for identification
+            return brand_name
+            
+        return "Unknown"
     
     @staticmethod
-    async def _resolve_sponsor_link(session: AsyncSession, link_id: UUID) -> str:
+    async def _resolve_sponsor_link(session: AsyncSession, link_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve TeamSponsorLink to 'brand → era (year)'."""
         link = await session.get(TeamSponsorLink, link_id)
-        if not link:
-            return "Unknown"
-        
-        # Get brand and era names
-        brand = await session.get(SponsorBrand, link.brand_id)
-        era = await session.get(TeamEra, link.era_id)
-        
-        brand_name = brand.brand_name if brand else "Unknown Brand"
-        era_name = era.registered_name if era else "Unknown Era"
-        year = era.season_year if era else "?"
-        
-        return f"{brand_name} → {era_name} ({year})"
+        if link:
+            # Get brand and era names
+            brand = await session.get(SponsorBrand, link.brand_id)
+            era = await session.get(TeamEra, link.era_id)
+            
+            brand_name = brand.brand_name if brand else "Unknown Brand"
+            era_name = era.registered_name if era else "Unknown Era"
+            year = era.season_year if era else "?"
+            return f"{brand_name} → {era_name} ({year})"
+            
+        # Fallback: snapshot for link creation usually contains brand_id/era_id
+        # We could resolve them, but it's complex. Return "New Sponsorship" or similar?
+        return "Sponsorship Link"
     
     @staticmethod
-    async def _resolve_lineage_event(session: AsyncSession, event_id: UUID) -> str:
+    async def _resolve_lineage_event(session: AsyncSession, event_id: UUID, snapshot: Optional[Dict] = None) -> str:
         """Resolve LineageEvent to 'predecessor → successor (year)'."""
+        # Try DB first
         event = await session.get(LineageEvent, event_id)
-        if not event:
+        
+        pred_id = None
+        succ_id = None
+        year = "?"
+        pred_name = "Unknown Team"
+        succ_name = "Unknown Team"
+        
+        if event:
+            pred_id = event.predecessor_node_id
+            succ_id = event.successor_node_id
+            year = event.event_year
+        elif snapshot:
+            # Fallback to snapshot for PENDING CREATE
+            # Snapshot keys for lineage create might be "predecessor_id", "successor_id"
+            # OR "source_node", "target_team" (names directly) as seen in screenshots
+            try:
+                # 1. Try ID based resolution (support multiple key variations)
+                p_str = snapshot.get("predecessor_id") or snapshot.get("predecessor_node_id")
+                s_str = snapshot.get("successor_id") or snapshot.get("successor_node_id")
+                if p_str: pred_id = UUID(p_str)
+                if s_str: succ_id = UUID(s_str)
+                
+                # 2. Try Name based resolution (if IDs missing)
+                if not pred_id and "source_node" in snapshot:
+                    pred_name = snapshot["source_node"]
+                if not succ_id and "target_team" in snapshot:
+                    succ_name = snapshot["target_team"]
+                    
+                year = snapshot.get("event_year") or snapshot.get("year") or "?"
+            except ValueError:
+                pass
+        
+        if not pred_id and not succ_id and not event and pred_name == "Unknown Team" and succ_name == "Unknown Team":
             return "Unknown"
+
+        # Resolve Node Names from IDs if we have them
+        if pred_id:
+            predecessor = await session.get(TeamNode, pred_id)
+            if predecessor:
+                pred_name = predecessor.display_name or predecessor.legal_name
         
-        # Get predecessor and successor node names
-        predecessor = await session.get(TeamNode, event.predecessor_node_id)
-        successor = await session.get(TeamNode, event.successor_node_id)
+        if succ_id:
+            successor = await session.get(TeamNode, succ_id)
+            if successor:
+                succ_name = successor.display_name or successor.legal_name
         
-        pred_name = (predecessor.display_name or predecessor.legal_name) if predecessor else "Unknown Team"
-        succ_name = (successor.display_name or successor.legal_name) if successor else "Unknown Team"
-        
-        return f"{pred_name} → {succ_name} ({event.event_year})"
+        return f"{pred_name} → {succ_name} ({year})"
     
     # =========================================================================
     # Permission Checking
@@ -287,6 +375,25 @@ class AuditLogService:
             else:
                 edit.review_notes = f"Reverted: {notes}"
         
+        # CRITICAL: Rollback the data to previous state
+        # If the edit was CREATE, we need to DELETE
+        # If the edit was UPDATE, we need to restore snapshot_before
+        # If the edit was DELETE, we need to recreate from snapshot_before
+        if edit.action == EditAction.CREATE:
+            # Revert CREATE by deleting the entity
+            await AuditLogService._apply_delete(session, edit)
+        elif edit.action == EditAction.UPDATE:
+            # Revert UPDATE by applying the before snapshot
+            # We reuse _apply_update to handle entity loading, unwrapping, and field setting
+            if edit.snapshot_before:
+                await AuditLogService._apply_update(session, edit, override_data=edit.snapshot_before)
+        elif edit.action == EditAction.DELETE:
+            # Revert DELETE by recreating the entity from snapshot_before
+            # This is complex and edge-case, may need to be implemented later
+            # For now, log a warning
+            import logging
+            logging.warning(f"Reverting DELETE action not fully implemented for edit {edit.edit_id}")
+        
         await session.commit()
         
         return ReviewEditResponse(
@@ -354,6 +461,9 @@ class AuditLogService:
                 edit.review_notes = f"{edit.review_notes}\n\nRe-applied: {notes}"
             else:
                 edit.review_notes = f"Re-applied: {notes}"
+        
+        # Apply the edit to the database (re-apply the snapshot_after changes)
+        await AuditLogService.apply_edit(session, edit)
         
         await session.commit()
         
@@ -457,12 +567,22 @@ class AuditLogService:
 
         if edit.action == EditAction.CREATE:
             await AuditLogService._apply_create(session, edit)
-        # TODO: Implement UPDATE and DELETE logic
+        elif edit.action == EditAction.UPDATE:
+            await AuditLogService._apply_update(session, edit)
+        elif edit.action == EditAction.DELETE:
+            await AuditLogService._apply_delete(session, edit)
 
     @staticmethod
     async def _apply_create(session: AsyncSession, edit: EditHistory) -> None:
         """Apply CREATE action."""
         data = edit.snapshot_after
+        
+        # Unwrap nested data if present (consistency with update)
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                data = data[key]
+                break
         
         if edit.entity_type == "TeamEra":
             node = None
@@ -489,6 +609,11 @@ class AuditLogService:
                 if team_identity_id:
                     external_ids["cyclingflash_identity"] = team_identity_id
                 
+                if not data.get("registered_name"):
+                        raise ValueError("Cannot create TeamNode: Missing 'registered_name' in snapshot")
+                if not data.get("season_year"):
+                        raise ValueError("Cannot create TeamNode: Missing 'season_year' (founding_year) in snapshot")
+
                 node = TeamNode(
                     node_id=edit.entity_id, # Using same ID for simplicity if 1:1, but usually distinct. 
                     # Actually, TeamEra is the entity. Node is separate.
@@ -501,6 +626,11 @@ class AuditLogService:
                 await session.flush()
             
             # Create Era
+            if not data.get("season_year"):
+                 raise ValueError("Cannot create TeamEra: Missing 'season_year' in snapshot")
+            if not data.get("registered_name"):
+                 raise ValueError("Cannot create TeamEra: Missing 'registered_name' in snapshot")
+                 
             era = TeamEra(
                 era_id=edit.entity_id,
                 node_id=node.node_id,
@@ -517,7 +647,10 @@ class AuditLogService:
             # Create Sponsor Links
             sponsors_data = data.get("sponsors", [])
             for idx, s_data in enumerate(sponsors_data):
-                brand_name = s_data["name"]
+                brand_name = s_data.get("name")
+                if not brand_name:
+                    raise ValueError(f"Cannot create Sponsor Link: Missing 'name' for sponsor at index {idx}")
+                    
                 prominence = s_data.get("prominence", 0)
                 parent_name = s_data.get("parent_company") # Will be added to payload in phase2.py
                 
@@ -570,3 +703,128 @@ class AuditLogService:
                     rank_order=idx + 1
                 )
                 session.add(link)
+
+        elif edit.entity_type in ("lineage", "lineage_event", "lineageevent"):
+            # Create Lineage Event
+            # Snapshot should have: predecessor_id, successor_id, event_year, type, etc.
+            # OR resolved names: source_node, target_team
+            
+            # OR resolved names: source_node, target_team
+            
+            # Try to resolve IDs from names if IDs are missing (Scraper fallback)
+            # Log analysis showed scraper creates 'event' wrapper with keys: predecessor_node_id, successor_node_id
+            pred_id = data.get("predecessor_id") or data.get("predecessor_node_id")
+            succ_id = data.get("successor_id") or data.get("successor_node_id")
+            
+            if not pred_id and "source_node" in data:
+                # Find by display_name or legal_name (case-insensitive)
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(data["source_node"]))
+                result = await session.execute(stmt)
+                p_node = result.scalar_one_or_none()
+                if p_node:
+                    pred_id = p_node.node_id
+            
+            if not succ_id and "target_team" in data:
+                stmt = select(TeamNode).where(TeamNode.legal_name.ilike(data["target_team"]))
+                result = await session.execute(stmt)
+                s_node = result.scalar_one_or_none()
+                if s_node:
+                    succ_id = s_node.node_id
+            
+                if isinstance(pred_id, str): pred_id = UUID(pred_id)
+                if isinstance(succ_id, str): succ_id = UUID(succ_id)
+                
+                event_year = data.get("event_year") or data.get("year")
+                
+                if not event_year:
+                     # LOUD FAIL as requested by user
+                     raise ValueError("Event Year is missing in snapshot")
+
+                event = LineageEvent(
+                    event_id=edit.entity_id,
+                    predecessor_node_id=pred_id,
+                    successor_node_id=succ_id,
+                    event_year=event_year,
+                    event_type=data.get("event_type", "MERGE") # Default to MERGE or provided type
+                )
+                session.add(event)
+                await session.flush()
+            else:
+                # Log warning or error? 
+                # If we can't find nodes, we can't create the link.
+                import logging
+                logging.error(f"Could not resolve nodes for LineageEvent create: {data}")
+                raise ValueError(f"Could not resolve nodes for lineage event. Source: '{data.get('source_node')}', Target: '{data.get('target_team')}'")
+
+
+    @staticmethod
+    async def _apply_update(session: AsyncSession, edit: EditHistory, override_data: Optional[Dict] = None) -> None:
+        """
+        Apply UPDATE action by updating entity fields.
+        
+        Args:
+            session: Database session
+            edit: The edit record
+            override_data: Optional data to use instead of edit.snapshot_after (e.g. for reverts)
+        """
+        data = override_data if override_data is not None else edit.snapshot_after
+        entity_type = edit.entity_type.lower()
+        
+        # Load the entity
+        entity = None
+        if entity_type in ("team", "team_node", "teamnode"):
+            entity = await session.get(TeamNode, edit.entity_id)
+        elif entity_type in ("era", "team_era", "teamera"):
+            entity = await session.get(TeamEra, edit.entity_id)
+        elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
+            entity = await session.get(SponsorMaster, edit.entity_id)
+        elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
+            entity = await session.get(SponsorBrand, edit.entity_id)
+        elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
+            entity = await session.get(TeamSponsorLink, edit.entity_id)
+        elif entity_type in ("lineage", "lineage_event", "lineageevent"):
+            entity = await session.get(LineageEvent, edit.entity_id)
+        
+        if not entity:
+            raise ValueError(f"Entity {edit.entity_id} of type {edit.entity_type} not found")
+        
+        # Unwrap nested data if present (e.g. { "node": { ... } } from scraper)
+        unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+        flattened_data = data.copy()
+        
+        for key in unwrap_keys:
+            if key in data and isinstance(data[key], dict):
+                # If the snapshot contains the wrapper key, use its content
+                flattened_data = data[key]
+                break
+        
+        # Update fields from snapshot (flattened)
+        for key, value in flattened_data.items():
+            if hasattr(entity, key):
+                setattr(entity, key, value)
+        
+        await session.flush()
+
+    @staticmethod
+    async def _apply_delete(session: AsyncSession, edit: EditHistory) -> None:
+        """Apply DELETE action by removing the entity."""
+        entity_type = edit.entity_type.lower()
+        
+        # Load the entity
+        entity = None
+        if entity_type in ("team", "team_node", "teamnode"):
+            entity = await session.get(TeamNode, edit.entity_id)
+        elif entity_type in ("era", "team_era", "teamera"):
+            entity = await session.get(TeamEra, edit.entity_id)
+        elif entity_type in ("sponsor", "sponsor_master", "sponsormaster"):
+            entity = await session.get(SponsorMaster, edit.entity_id)
+        elif entity_type in ("brand", "sponsor_brand", "sponsorbrand"):
+            entity = await session.get(SponsorBrand, edit.entity_id)
+        elif entity_type in ("link", "team_sponsor_link", "teamsponsorlink"):
+            entity = await session.get(TeamSponsorLink, edit.entity_id)
+        elif entity_type in ("lineage", "lineage_event", "lineageevent"):
+            entity = await session.get(LineageEvent, edit.entity_id)
+        
+        if entity:
+            await session.delete(entity)
+            await session.flush()

@@ -15,6 +15,7 @@ from app.schemas.sponsor import SponsorLinkResponse
 from app.schemas.team_detail import (
     TeamHistoryResponse,
     TeamHistoryEra,
+    TeamHistoryEvent,
     LineageSummary,
     TransitionInfo,
 )
@@ -89,6 +90,76 @@ class TeamDetailService:
                 )
             )
 
+        # Map Lineage Events
+        history_events: List[TeamHistoryEvent] = []
+        
+        # 1. Incoming (Predecessors)
+        for event in team.incoming_events:
+            related_name = "Unknown Team"
+            related_era_name = None
+            
+            if event.predecessor_node:
+                related_name = event.predecessor_node.display_name or event.predecessor_node.legal_name
+                # Try to find relevant era name (year - 1)
+                if event.predecessor_node.eras:
+                    target_year = event.event_year - 1
+                    # Find exact match or closest previous
+                    matching_era = next((e for e in event.predecessor_node.eras if e.season_year == target_year), None)
+                    if not matching_era:
+                         # Fallback to latest era before event
+                         candidates = [e for e in event.predecessor_node.eras if e.season_year < event.event_year]
+                         if candidates:
+                             matching_era = max(candidates, key=lambda e: e.season_year)
+                    
+                    if matching_era:
+                        related_era_name = matching_era.registered_name
+
+            history_events.append(
+                TeamHistoryEvent(
+                    event_id=event.event_id,
+                    year=event.event_year,
+                    event_type=str(event.event_type.value), # Ensure string
+                    direction="INCOMING",
+                    related_team_id=event.predecessor_node_id,
+                    related_team_name=related_name,
+                    related_era_name=related_era_name,
+                    notes=event.notes
+                )
+            )
+
+        # 2. Outgoing (Successors)
+        for event in team.outgoing_events:
+            related_name = "Unknown Team"
+            related_era_name = None
+            
+            if event.successor_node:
+                related_name = event.successor_node.display_name or event.successor_node.legal_name
+                # Try to find relevant era name (event year)
+                if event.successor_node.eras:
+                    target_year = event.event_year
+                    matching_era = next((e for e in event.successor_node.eras if e.season_year == target_year), None)
+                    # For successor, the era AT the event year is usually the one created/joined
+                    if not matching_era:
+                         candidates = [e for e in event.successor_node.eras if e.season_year >= event.event_year]
+                         if candidates:
+                             matching_era = min(candidates, key=lambda e: e.season_year)
+                    
+                    if matching_era:
+                        related_era_name = matching_era.registered_name
+
+            history_events.append(
+                TeamHistoryEvent(
+                    event_id=event.event_id,
+                    year=event.event_year,
+                    event_type=str(event.event_type.value),
+                    direction="OUTGOING",
+                    related_team_id=event.successor_node_id,
+                    related_team_name=related_name,
+                    related_era_name=related_era_name,
+                    notes=event.notes
+                )
+            )
+
         lineage_summary = LineageSummary(
             has_predecessors=len(team.incoming_events) > 0,
             has_successors=len(team.outgoing_events) > 0,
@@ -104,6 +175,7 @@ class TeamDetailService:
             founding_year=team.founding_year,
             dissolution_year=team.dissolution_year,
             timeline=timeline,
+            events=history_events,
             lineage_summary=lineage_summary,
         )
 

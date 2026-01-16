@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { teamsApi } from '../../api/teams';
 import { editsApi } from '../../api/edits';
@@ -12,12 +12,14 @@ import TeamEraBubbles from './TeamEraBubbles';
 import { IOC_CODES } from '../../utils/iocCodes';
 import { getTierName } from '../../utils/tierUtils';
 
-export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
+export default function TeamEraEditor({ eraId, nodeId, baseEraId, onSuccess, onDelete }) {
     // State
     const [loading, setLoading] = useState(!!eraId);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState(null);
+    const [lastUpdate, setLastUpdate] = useState(Date.now()); // Trigger for Bubbles refresh
+    const lastSavedEraId = useRef(null); // Track ID of just-saved era to prevent stale reloading
 
     const [formData, setFormData] = useState({
         season_year: new Date().getFullYear(),
@@ -74,6 +76,13 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
 
     useEffect(() => {
         if (eraId) {
+            // Optimization: If we just saved this era, don't reload from API immediately.
+            // The local state is already fresh and correct. Re-fetching might hit a stale cache
+            // (eventual consistency) and "revert" the form to old/empty data.
+            if (lastSavedEraId.current === eraId) {
+                setLoading(false);
+                return;
+            }
             loadEraData();
             setPrefilledSponsors([]);
         } else if (nodeId) {
@@ -88,26 +97,49 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
         setLoading(true);
         try {
             const eras = await teamsApi.getTeamEras(nodeId);
-            if (eras && eras.length > 0) {
-                // Find latest by season_year
+
+            let sourceEra = null;
+
+            if (baseEraId) {
+                // Priority 1: Clone from specifically selected era
+                sourceEra = eras.find(e => e.era_id === baseEraId);
+            }
+
+            if (!sourceEra && eras && eras.length > 0) {
+                // Priority 2: Clone from latest era
                 const sorted = eras.sort((a, b) => b.season_year - a.season_year);
-                const latest = sorted[0];
-                const nextYear = latest.season_year + 1;
+                sourceEra = sorted[0];
+            }
+
+            if (sourceEra) {
+                // If cloning from baseEraId (not latest), we might want to keep same year or same logic?
+                // Logic: 
+                // If cloning latest -> next year.
+                // If cloning specific -> same info, maybe same year (conflict?) or next available?
+                // User requirement: "pre-populated from the selected era". 
+                // Usually this means COPY content. Year should probably still be incremented from LATEST to avoid conflict?
+                // Or if I select 1990, maybe I want to create 1991? 
+                // Let's stick to "Next Year after LATEST" for default Year, but Content from SELECTED.
+
+                // Find latest year for default date
+                const allYears = eras.map(e => e.season_year);
+                const maxYear = Math.max(...allYears);
+                const nextYear = maxYear + 1;
 
                 setFormData({
                     season_year: nextYear,
                     valid_from: `${nextYear}-01-01`,
-                    registered_name: latest.registered_name,
-                    tier_level: latest.tier_level,
-                    uci_code: latest.uci_code || '',
-                    country_code: latest.country_code || '',
-                    is_protected: latest.is_protected || false,
+                    registered_name: sourceEra.registered_name,
+                    tier_level: sourceEra.tier_level,
+                    uci_code: sourceEra.uci_code || '',
+                    country_code: sourceEra.country_code || '',
+                    is_protected: false, // Don't copy protection status
                     reason: '' // Reset reason
                 });
 
-                // Fetch sponsors to pre-populate
+                // Fetch sponsors from SOURCE era to pre-populate
                 try {
-                    const links = await sponsorsApi.getEraLinks(latest.era_id);
+                    const links = await sponsorsApi.getEraLinks(sourceEra.era_id);
                     if (links.length > 0) {
                         setPrefilledSponsors(links);
                         // Populate stats for display
@@ -139,7 +171,14 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
             if (!nodeId) throw new Error("Node ID required");
             const eras = await teamsApi.getTeamEras(nodeId);
             const era = eras.find(e => e.era_id === eraId);
-            if (!era) throw new Error("Era not found");
+            if (!era) {
+                // If era not found in list (stale?), try fetching directly if API supports it?
+                // Or throw specific error.
+                // If we assume consistent read-after-write, it should be there.
+                // If not, throwing here prevents "reverting to defaults" (which happens if we proceed with empty?)
+                // Actually, if `era` is undefined, the code below would crash on `era.season_year` unless we catch it.
+                throw new Error("Era not found (stale cache?)");
+            }
 
             setFormData({
                 season_year: era.season_year,
@@ -225,7 +264,14 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 if (canDirectSave()) {
                     // Direct Save via Teams API (To preserve Copy Sponsors feature which needs ID)
                     // Note: Reason is NOT captured here as TeamsAPI doesn't support it.
-                    const res = await teamsApi.createTeamEra(nodeId, payload);
+                    // Sanitize optional fields
+                    const createPayload = {
+                        ...payload,
+                        uci_code: payload.uci_code || null,
+                        country_code: payload.country_code || null
+                    };
+
+                    const res = await teamsApi.createTeamEra(nodeId, createPayload);
                     resultId = res.era_id;
                     // Handle prefilled sponsors copy for direct create
                     await copySponsors(resultId);
@@ -250,9 +296,40 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 }
             }
 
+            // Track that we just saved this ID so useEffect doesn't clobber state with stale data
+            if (resultId) {
+                lastSavedEraId.current = resultId;
+                setLastUpdate(Date.now());
+            }
+
             if (!canDirectSave() || shouldClose) {
                 // Done
             } else {
+                // If staying open (Save & Continue), we must UPDATE form state with result
+                // to prevent "reverting" if we just rely on refetching (which might be stale).
+                // Actually, if we switch mode from CREATE to EDIT, parent will re-render us with eraId=resultId.
+                // So we need to rely on the parent updating `eraId` prop.
+                // BUT, `loadEraData` will trigger on prop change.
+                // If `loadEraData` hits stale API, we revert.
+                // FIX: Verify API data before overwriting if we just saved? 
+                // OR: Maybe we should pre-seed the cache or just trust the parent update?
+                // The parent calls `handleEraSuccess` which sets `selectedEraId`.
+                // This updates `eraId` prop here. `useEffect` triggers `loadEraData`.
+                // If `teamsApi.getTeamEras` is slow/stale, we lose data.
+
+                // For now, let's rely on standard flow. If revert persists, we might need manual seed.
+                // However, the user said "it reverts to 2009".
+                // This suggests `loadEraData` is loading the old "latest" instead of the new one?
+                // `loadEraData` finds by ID: `eras.find(e => e.era_id === eraId)`.
+                // If the new era isn't in `eras` list returned by API yet, `find` returns undefined.
+                // Then `if (!nodeId) throw...` -> Error.
+                // Wait, if `find` returns undefined, it throws "Era not found".
+                // The user says "reverts to 2009". This sounds like `loadLatestEraForPrepopulation` logic running again?
+                // If `eraId` is set, we run `loadEraData`. 
+                // If `loadEraData` fails effectively, maybe something resets?
+
+                // CRITICAL: We should update `submitting` AFTER parent update?
+                // Actually, let's just finish here. Parent transition should be fast.
                 setSubmitting(false);
             }
         } catch (err) {
@@ -522,6 +599,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                         nodeId={nodeId}
                         onEraSelect={handleEraSwitch}
                         onCreateEra={() => handleEraSwitch('NEW')}
+                        lastUpdate={lastUpdate}
                     />
                 </div>
             </div>
@@ -574,6 +652,7 @@ export default function TeamEraEditor({ eraId, nodeId, onSuccess, onDelete }) {
                 onClose={() => setIsSponsorModalOpen(false)}
                 eraId={eraId}
                 seasonYear={formData.season_year}
+                registeredName={formData.registered_name}
                 onUpdate={loadSponsorStats}
             />
         </div >

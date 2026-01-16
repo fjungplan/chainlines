@@ -17,8 +17,8 @@ class EditMetadataRequest(BaseModel):
     @field_validator('uci_code')
     @classmethod
     def validate_uci_code(cls, v):
-        if v and (len(v) != 3 or not v.isupper()):
-            raise ValueError('UCI code must be exactly 3 uppercase letters')
+        if v and (len(v) != 3 or not v.isalnum() or v != v.upper()):
+            raise ValueError('UCI code must be 3 uppercase alphanumeric')
         return v
     
     @field_validator('tier_level')
@@ -84,8 +84,8 @@ class CreateTeamRequest(BaseModel):
     @field_validator('uci_code')
     @classmethod
     def validate_uci_code(cls, v):
-        if v and (len(v) != 3 or not v.isupper()):
-            raise ValueError('UCI code must be exactly 3 uppercase letters')
+        if v and (len(v) != 3 or not v.isalnum() or v != v.upper()):
+            raise ValueError('UCI code must be 3 uppercase alphanumeric')
         return v
     
     @field_validator('tier_level')
@@ -108,6 +108,7 @@ class EditMetadataResponse(BaseModel):
     model_config = {"from_attributes": True}
     
     edit_id: str
+    entity_id: Optional[str] = None  # ID of the created/modified entity
     status: str  # 'PENDING' or 'APPROVED'
     message: str
 
@@ -223,6 +224,27 @@ class CreateEraEditRequest(BaseModel):
     uci_code: Optional[str] = None
     country_code: Optional[str] = None
     tier_level: Optional[int] = None
+    reason: Optional[str] = None
+    
+    @field_validator('reason')
+    @classmethod
+    def validate_reason(cls, v):
+        if not v or not v.strip():
+            return v
+        if len(v.strip()) < 10:
+            raise ValueError('Reason must be at least 10 characters')
+        return v.strip()
+
+
+class UpdateEraEditRequest(BaseModel):
+    """Request to update an existing TeamEra. Supports node_id change for transfers."""
+    era_id: Optional[str] = None  # Set by path param if not in body
+    node_id: Optional[str] = None  # New owner node for transfers
+    registered_name: Optional[str] = None
+    uci_code: Optional[str] = None
+    country_code: Optional[str] = None
+    tier_level: Optional[int] = None
+    valid_from: Optional[date] = None
     reason: Optional[str] = None
     
     @field_validator('reason')

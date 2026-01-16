@@ -19,6 +19,8 @@ class TimelineEra(BaseModel):
 
 class TimelineNode(BaseModel):
     id: str
+    display_name: Optional[str] = None
+    legal_name: Optional[str] = None
     founding_year: int
     dissolution_year: Optional[int] = None
     eras: List[TimelineEra] = []

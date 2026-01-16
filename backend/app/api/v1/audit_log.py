@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, cast, String
 from typing import List, Optional
 from datetime import datetime
-import uuid
+
 
 from app.db.database import get_db
 from app.api.dependencies import require_moderator
@@ -122,52 +122,16 @@ async def list_audit_log(
     result = await session.execute(stmt)
     edits = result.scalars().all()
     
-    # helper to process lineage names efficiently
-    # Collect all team IDs from lineage events
-    lineage_team_ids = set()
-    for edit in edits:
-        etype = edit.entity_type.upper()
-        if etype in ("LINEAGE", "LINEAGE_EVENT") and edit.snapshot_after:
-            pid = edit.snapshot_after.get("predecessor_id")
-            sid = edit.snapshot_after.get("successor_id")
-            if pid: lineage_team_ids.add(uuid.UUID(pid))
-            if sid: lineage_team_ids.add(uuid.UUID(sid))
-            
-    # Bulk fetch team names if needed
-    team_map = {}
-    if lineage_team_ids:
-        # Avoid circular import, import inside function if needed or rely on existing imports
-        from app.models.team import TeamNode
-        teams_stmt = select(TeamNode.node_id, TeamNode.legal_name, TeamNode.display_name).where(TeamNode.node_id.in_(lineage_team_ids))
-        teams_result = await session.execute(teams_stmt)
-        for t in teams_result.all():
-            # Prefer display_name, fallback to legal_name
-            team_map[str(t.node_id)] = t.display_name or t.legal_name
-
     # Transform to response schema
     items = []
     for edit in edits:
-        entity_name = str(edit.entity_id) # Fallback
-        snap = edit.snapshot_after or {}
-        
-        # Normalize type for checks (handle TEAM, TEAM_NODE, team_node, etc.)
-        etype = edit.entity_type.upper()
-        
-        if etype in ("TEAM", "TEAM_NODE", "TEAMNODE"):
-            entity_name = snap.get("display_name") or snap.get("legal_name") or entity_name
-        elif etype in ("SPONSOR", "SPONSOR_MASTER", "SPONSORMASTER"):
-            entity_name = snap.get("legal_name") or entity_name
-        elif etype in ("BRAND", "SPONSOR_BRAND", "SPONSORBRAND"):
-            entity_name = snap.get("brand_name") or snap.get("name") or entity_name
-        elif etype in ("ERA", "TEAM_ERA", "TEAMERA"):
-            entity_name = snap.get("registered_name") or entity_name
-        elif etype in ("LINEAGE", "LINEAGE_EVENT", "LINEAGEEVENT"):
-            pid = snap.get("predecessor_id")
-            sid = snap.get("successor_id")
-            l_type = snap.get("type", "EVENT")
-            p_name = team_map.get(pid, "Unknown")
-            s_name = team_map.get(sid, "Unknown")
-            entity_name = f"{p_name} {l_type} {s_name}"
+        # Resolve entity name using shared service logic
+        entity_name = await AuditLogService.resolve_entity_name(
+            session, 
+            edit.entity_type, 
+            edit.entity_id,
+            snapshot=edit.snapshot_after
+        )
         
         # Get submitter info
         submitter = await session.get(User, edit.user_id)
@@ -259,7 +223,7 @@ async def get_audit_log_detail(
     
     # Resolve entity name
     entity_name = await AuditLogService.resolve_entity_name(
-        session, edit.entity_type, edit.entity_id
+        session, edit.entity_type, edit.entity_id, snapshot=edit.snapshot_after
     )
     
     # Determine permission flags based on current user and edit state
@@ -275,6 +239,10 @@ async def get_audit_log_detail(
     can_reapply = False
     if edit.status in (EditStatus.REVERTED, EditStatus.REJECTED) and submitter and AuditLogService.can_moderate_edit(current_user, submitter):
         can_reapply = not await AuditLogService._has_newer_approved_edit(session, edit)
+        
+    # Hydrate snapshot with resolved names for UI display
+    # This ensures "Unknown" IDs in diff views (like Lineage) are replaced with names if possible
+    hydrated_snapshot_after = await _hydrate_snapshot(session, edit.entity_type, edit.snapshot_after)
     
     return AuditLogDetailResponse(
         edit_id=str(edit.edit_id),
@@ -288,7 +256,7 @@ async def get_audit_log_detail(
         reviewed_at=edit.reviewed_at,
         summary=_generate_edit_summary(edit),
         snapshot_before=edit.snapshot_before,
-        snapshot_after=edit.snapshot_after,
+        snapshot_after=hydrated_snapshot_after,
         source_url=edit.source_url,
         source_notes=edit.source_notes,
         review_notes=edit.review_notes,
@@ -297,6 +265,96 @@ async def get_audit_log_detail(
         can_revert=can_revert,
         can_reapply=can_reapply
     )
+
+
+async def _hydrate_snapshot(session: AsyncSession, entity_type: str, snapshot: Optional[dict]) -> Optional[dict]:
+    """
+    Inject resolved names into snapshot data for UI display.
+    
+    Ideally this would be done by the frontend, but the frontend lacks DB access
+    to resolve IDs if they aren't already in the snapshot.
+    """
+    if not snapshot:
+        return None
+        
+    hydrated = snapshot.copy()
+    etype = entity_type.lower()
+    
+    # Helper to unwrap (similar to service layer)
+    # We need to peek inside wrapper keys to find the IDs
+    inner = hydrated
+    inner_key = None
+    unwrap_keys = ["node", "era", "master", "brand", "link", "event", "lineage_event"]
+    for key in unwrap_keys:
+        if key in hydrated and isinstance(hydrated[key], dict):
+            inner = hydrated[key]
+            inner_key = key
+            break
+            
+    if etype in ("lineage", "lineage_event", "lineageevent"):
+        # Resolve predecessor/successor IDs
+        pred_id = inner.get("predecessor_id") or inner.get("predecessor_node_id")
+        succ_id = inner.get("successor_id") or inner.get("successor_node_id")
+        
+        # Only resolve if name is missing from snapshot logic
+        has_pred_name = inner.get("source_node") or inner.get("predecessor_names")
+        has_succ_name = inner.get("target_team") or inner.get("successor_names")
+        
+        from uuid import UUID
+        from app.models.team import TeamNode
+        
+        if pred_id and not has_pred_name:
+            try:
+                if isinstance(pred_id, str): pred_id = UUID(pred_id)
+                node = await session.get(TeamNode, pred_id)
+                if node:
+                    inner["source_node"] = node.display_name or node.legal_name
+            except (ValueError, Exception):
+                pass
+                
+        if succ_id and not has_succ_name:
+            try:
+                if isinstance(succ_id, str): succ_id = UUID(succ_id)
+                node = await session.get(TeamNode, succ_id)
+                if node:
+                    inner["target_team"] = node.display_name or node.legal_name
+            except (ValueError, Exception):
+                pass
+
+    elif etype in ("sponsor_link", "teamsponsorlink", "link"):
+        # Resolve Era and Brand names for Sponsor Links
+        era_id = inner.get("era_id")
+        brand_id = inner.get("brand_id")
+        
+        from uuid import UUID
+        from app.models.team import TeamEra
+        from app.models.sponsor import SponsorBrand
+        
+        if era_id and not inner.get("era_name"):
+            try:
+                if isinstance(era_id, str): era_id = UUID(era_id)
+                era = await session.get(TeamEra, era_id)
+                if era:
+                    inner["era_name"] = f"{era.registered_name} ({era.season_year})"
+            except (ValueError, Exception):
+                pass
+                
+        if brand_id and not inner.get("brand_name"):
+            try:
+                if isinstance(brand_id, str): brand_id = UUID(brand_id)
+                brand = await session.get(SponsorBrand, brand_id)
+                if brand:
+                    inner["brand_name"] = brand.brand_name
+            except (ValueError, Exception):
+                pass
+    
+    # If we unwrapped, put it back
+    if inner_key:
+        hydrated[inner_key] = inner
+    else:
+        hydrated = inner
+        
+    return hydrated
 
 
 @router.post("/{edit_id}/revert")

@@ -33,6 +33,18 @@ class LineageSummary(BaseModel):
     spiritual_succession: bool = Field(..., description="True if any spiritual succession events exist")
 
 
+class TeamHistoryEvent(BaseModel):
+    """Lineage event (Merge, Split, etc) for the history timeline."""
+    event_id: UUID = Field(..., description="Unique identifier for the event")
+    year: int = Field(..., description="Year of the event")
+    event_type: str = Field(..., description="Type of event (MERGE, SPLIT, ACQUISITION, etc)")
+    direction: str = Field(..., description="INCOMING (Predecessor) or OUTGOING (Successor)")
+    related_team_id: Optional[UUID] = Field(None, description="ID of the other team involved")
+    related_team_name: str = Field(..., description="Name of the other team involved")
+    related_era_name: Optional[str] = Field(None, description="Specific era name of the other team (e.g. at year-1)")
+    notes: Optional[str] = Field(None, description="Notes/Reason for the event")
+
+
 class TeamHistoryResponse(BaseModel):
     """Mobile-optimized chronological history for a team node."""
     node_id: str = Field(..., description="UUID of the team node")
@@ -42,4 +54,5 @@ class TeamHistoryResponse(BaseModel):
     founding_year: int = Field(..., description="Year the team was founded")
     dissolution_year: Optional[int] = Field(None, description="Year dissolved, if applicable")
     timeline: list[TeamHistoryEra] = Field(..., description="Chronological list of eras")
+    events: list[TeamHistoryEvent] = Field(default_factory=list, description="List of lineage events")
     lineage_summary: LineageSummary = Field(..., description="Lineage overview")

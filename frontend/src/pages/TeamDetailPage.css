@@ -267,3 +267,115 @@
     gap: 10px;
   }
 }
+
+/* --- Timeline Events --- */
+
+.timeline-event {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 15px;
+  padding: 10px 15px;
+  background-color: transparent;
+  /* Distinct from era cards */
+  border-radius: 6px;
+  /* border: 1px dashed #444; */
+  /* Optional: dashed border for connector feel */
+  align-items: center;
+  margin: -5px 0;
+  /* Tighten gap */
+  position: relative;
+}
+
+/* Connector Line (concept) */
+/* .timeline-event::before {
+    content: '';
+    position: absolute;
+    left: 40px;
+    top: -15px;
+    bottom: -15px;
+    width: 2px;
+    background: #444;
+    z-index: 0;
+} */
+
+.event-year {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #888;
+  display: flex;
+  justify-content: flex-end;
+  /* Right align year to act as annotation */
+  padding-right: 15px;
+}
+
+.event-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 15px;
+  border-left: 2px dashed #555;
+  /* Visual connection line */
+}
+
+.event-main-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddd;
+  font-size: 0.95rem;
+}
+
+.event-icon {
+  font-size: 1.1rem;
+}
+
+.event-label {
+  font-weight: 500;
+  color: #ccc;
+}
+
+.event-related-team-link {
+  color: var(--color-accent, #646cff);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.event-related-team-link:hover {
+  text-decoration: underline;
+}
+
+.event-related-team {
+  font-weight: 600;
+  color: #ccc;
+}
+
+.event-sub-info {
+  font-size: 0.8rem;
+  color: #777;
+  margin-left: 28px;
+  /* Align with text start (icon width approx) */
+}
+
+.event-notes {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #999;
+  margin-top: 2px;
+  margin-left: 28px;
+}
+
+/* Specific Event Types */
+.timeline-event.event-merge-in .event-content-wrapper {
+  border-left-color: #4caf50;
+  /* Green for incoming */
+}
+
+.timeline-event.event-merge-out .event-content-wrapper {
+  border-left-color: #ff9800;
+  /* Orange for outgoing */
+}
+
+.timeline-event.event-split .event-content-wrapper {
+  border-left-color: #2196f3;
+  /* Blue for splits */
+}

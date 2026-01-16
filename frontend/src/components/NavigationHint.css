@@ -1,0 +1,55 @@
+.navigation-hint-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(30, 30, 30, 0.9);
+  /* Dark translucent */
+  color: #f0f0f0;
+  padding: 24px 36px;
+  border-radius: 12px;
+  pointer-events: auto;
+  cursor: default;
+  z-index: 1000;
+  animation: fadeIn 0.4s ease-out;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.navigation-hint-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hint-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 1.05rem;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  color: var(--color-text-secondary);
+  /* #a0a0a0 */
+  letter-spacing: 0.02em;
+}
+
+/* Remove icon styling as icons are removed */
+.hint-icon {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}

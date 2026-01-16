@@ -43,8 +43,9 @@ export default function UserEditor({ user, onClose, onSuccess }) {
         setError(null);
         try {
             await updateUser(user.user_id, formData);
-            if (shouldClose && onSuccess) {
-                onSuccess();
+            if (shouldClose) {
+                onClose();
+                if (onSuccess) onSuccess();
             } else {
                 setSubmitting(false);
             }

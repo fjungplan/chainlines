@@ -12,12 +12,12 @@ export const teamsApi = {
   },
 
   getTeams: async (params) => {
-    const response = await apiClient.get('/api/v1/teams', { params });
+    const response = await apiClient.get('/api/v1/teams', { params: { ...params, _t: Date.now() } });
     return response.data;
   },
 
   getTeam: async (nodeId) => {
-    const response = await apiClient.get(`/api/v1/teams/${nodeId}`);
+    const response = await apiClient.get(`/api/v1/teams/${nodeId}`, { params: { _t: Date.now() } });
     return response.data;
   },
 
@@ -37,7 +37,9 @@ export const teamsApi = {
   },
 
   getTeamEras: async (nodeId, params) => {
-    const response = await apiClient.get(`/api/v1/teams/${nodeId}/eras`, { params });
+    // Add timestamp to bust browser cache (backend sets max-age=300)
+    const bustParams = { ...params, _t: Date.now() };
+    const response = await apiClient.get(`/api/v1/teams/${nodeId}/eras`, { params: bustParams });
     return response.data;
   },
 

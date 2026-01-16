@@ -37,7 +37,7 @@ export class LayoutCalculator {
     // Node Height = pixelsPerYear * HEIGHT_FACTOR
     // Row Height = Node Height * 1.5
     this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
-    this.rowHeight = this.nodeHeight * 2;
+    this.rowHeight = this.nodeHeight * 1.5;
 
     console.log('LayoutCalculator Vertical Scaling:', {
       pixelsPerYear: this.pixelsPerYear,
@@ -130,7 +130,9 @@ export class LayoutCalculator {
       links: linkPaths,
       yearRange: this.yearRange,
       xScale: this.xScale,
-      rowHeight
+      rowHeight,
+      nodeHeight: this.nodeHeight,
+      pixelsPerYear: this.pixelsPerYear
     };
   }
 
@@ -162,12 +164,30 @@ export class LayoutCalculator {
       // DON'T apply MIN_NODE_WIDTH for dissolved teams - keep accurate year boundaries
       return scaledWidth;
     } else {
-      // Active: extend to end of yearRange (already includes +1 from filterYearRange)
-      endX = this.xScale(this.yearRange.max);
-      const scaledWidth = endX - startX;
-      console.log(`${teamName}: [${node.founding_year}-active] startX=${startX.toFixed(2)}, endX(${this.yearRange.max})=${endX.toFixed(2)}, width=${scaledWidth.toFixed(2)}`);
-      // For active teams, apply MIN_NODE_WIDTH if needed
-      return Math.max(VISUALIZATION.MIN_NODE_WIDTH, scaledWidth);
+      // Logic for teams with NO dissolution year
+      // Check if they are actually active (last era is recent)
+      const lastEra = node.eras && node.eras.length > 0
+        ? node.eras.reduce((max, era) => (!max || era.year > max.year ? era : max), null)
+        : null;
+
+      const currentYear = new Date().getFullYear();
+      // Consider active if last era is this year or last year (allowing for data lag)
+      const isActive = lastEra && lastEra.year >= (currentYear - 1);
+
+      if (isActive) {
+        // Active: extend to end of yearRange
+        endX = this.xScale(this.yearRange.max);
+        const scaledWidth = endX - startX;
+        // For active teams, apply MIN_NODE_WIDTH
+        return Math.max(VISUALIZATION.MIN_NODE_WIDTH, scaledWidth);
+      } else {
+        // Inactive (Zombie team): Cap at last known era
+        // This fixes "infinite bar" for teams that just stopped existing without a dissolution year
+        const endYear = lastEra ? lastEra.year + 1 : node.founding_year + 1;
+        endX = this.xScale(endYear);
+        const scaledWidth = endX - startX;
+        return scaledWidth; // Accurate duration, no min width padding
+      }
     }
   }
 
@@ -439,13 +459,9 @@ export class LayoutCalculator {
       const succs = successors.get(nodeId) || [];
 
       // Try to use predecessor's lane to minimize crossings
-      let suggestedLane = preferredLane;
-      if (preds.length === 1) {
-        const predId = preds[0].nodeId;
-        if (assignments[predId] !== undefined) {
-          suggestedLane = assignments[predId];
-        }
-      }
+      // Use the confirmed assignment of the current node as the baseline for successors
+      // This ensures linear chains maintain their lane (e.g. in Splits or if shifted)
+      let suggestedLane = assignments[nodeId];
 
       // Process successors
       if (succs.length === 0) {

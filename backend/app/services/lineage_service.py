@@ -60,7 +60,7 @@ class LineageService:
         # event.validate() 
 
         self.db.add(event)
-        await self.db.commit()
+        await self.db.flush()
         # Invalidate timeline cache after data change
         TimelineService.invalidate_cache()
         await self.db.refresh(event)
@@ -84,7 +84,7 @@ class LineageService:
                         parts = [p.strip() for p in event.notes.split("|") if p.strip() and not p.strip().startswith("INCOMPLETE MERGE")]
                         event.notes = " | ".join(parts) if parts else None
                     self.db.add(event)
-                    await self.db.commit()
+                    await self.db.flush()
                     await self.db.refresh(event)
                 elif len(related_events) >= 2:
                     # Remove incomplete warnings from all related events
@@ -97,7 +97,7 @@ class LineageService:
                             self.db.add(ev)
                             changed = True
                     if changed:
-                        await self.db.commit()
+                        await self.db.flush()
                         await self.db.refresh(event)
             else:  # SPLIT
                 q = await self.db.execute(
@@ -115,7 +115,7 @@ class LineageService:
                         parts = [p.strip() for p in event.notes.split("|") if p.strip() and not p.strip().startswith("INCOMPLETE SPLIT")]
                         event.notes = " | ".join(parts) if parts else None
                     self.db.add(event)
-                    await self.db.commit()
+                    await self.db.flush()
                     await self.db.refresh(event)
                 elif len(related_events) >= 2:
                     incomplete_phrase = "INCOMPLETE SPLIT: add another successor"
@@ -127,7 +127,7 @@ class LineageService:
                             self.db.add(ev)
                             changed = True
                     if changed:
-                        await self.db.commit()
+                        await self.db.flush()
                         await self.db.refresh(event)
         return event
 
@@ -262,7 +262,7 @@ class LineageService:
             return False
             
         await self.db.delete(event)
-        await self.db.commit()
+        await self.db.flush()
         
         # Invalidate timeline cache after data change
         TimelineService.invalidate_cache()

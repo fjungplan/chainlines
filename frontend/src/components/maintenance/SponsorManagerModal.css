@@ -499,6 +499,7 @@
     cursor: pointer;
     border-radius: 4px;
 }
+
 .text-btn.small:hover {
     background: #444;
     color: #fff;
@@ -513,4 +514,37 @@
 
 .form-header-row h4 {
     margin: 0;
+}
+
+/* Drag and Drop Styles */
+.mini-table tbody tr.dragging {
+    opacity: 0.5;
+    background-color: #2a2a2a;
+    border: 2px dashed #4A90E2;
+}
+
+.drag-handle {
+    cursor: grab;
+    padding: 0 !important;
+    /* Remove cell padding */
+    width: 40px;
+    /* Force width */
+}
+
+.drag-handle-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    padding: 0.5rem;
+}
+
+.drag-handle:active,
+.drag-handle-icon:active {
+    cursor: grabbing;
+}
+
+.mini-table tbody tr {
+    cursor: grab;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }

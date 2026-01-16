@@ -32,14 +32,17 @@ export class DetailRenderer {
    * Add era timeline within node at detail level
    */
 
-  static renderEraTimeline(nodeGroup, node, scale, svg, onEraHover, onEraHoverEnd) {
+  static renderEraTimeline(nodeGroup, node, scale, svg, onEraHover, onEraHoverEnd, thresholds = null) {
+    // Use provided thresholds or fall back to static import
+    const THRESHOLDS = thresholds || ZOOM_THRESHOLDS;
+
     const eras = node.eras;
     if (!eras || eras.length === 0) {
       nodeGroup.selectAll('.era-segment').remove();
       return;
     }
 
-    if (scale < ZOOM_THRESHOLDS.DETAIL_VISIBLE) {
+    if (scale < THRESHOLDS.DETAIL_VISIBLE) {
       nodeGroup.selectAll('.era-segment').remove();
       return;
     }
@@ -50,10 +53,24 @@ export class DetailRenderer {
     const startYear = eras[0].year;
 
     // Calculate effective end year
+    // Calculate effective end year matching LayoutCalculator logic
     const currentYear = new Date().getFullYear();
-    const effectiveEndYear = node.dissolution_year
-      ? node.dissolution_year + 1
-      : currentYear + 1;
+    const lastEra = eras[eras.length - 1]; // Eras are sorted by year from GraphBuilder
+
+    // Check if team is "Active" (last era is recent)
+    // Must match LayoutCalculator logic to ensure internal proportion matches external node width
+    const isActive = lastEra && lastEra.year >= (currentYear - 1);
+
+    let effectiveEndYear;
+    if (node.dissolution_year) {
+      effectiveEndYear = node.dissolution_year + 1;
+    } else if (isActive) {
+      effectiveEndYear = currentYear + 1;
+    } else {
+      // Zombie/Inactive: Cap at last era end to match node width
+      effectiveEndYear = lastEra ? lastEra.year + 1 : startYear + 1;
+    }
+
     const totalYears = effectiveEndYear - startYear;
 
     if (totalYears <= 0) return;
@@ -71,7 +88,7 @@ export class DetailRenderer {
 
       // Determine fill style based on zoom level
       let fillStyle = '#ccc';
-      if (scale >= ZOOM_THRESHOLDS.HIGH_DETAIL && svg) {
+      if (scale >= THRESHOLDS.HIGH_DETAIL && svg) {
         // High zoom: Use jersey gradient
         // Ensure ID is safe for CSS selectors (cannot start with number)
         const uniqueId = `nid-${era.id || node.id}-${index}`;

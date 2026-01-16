@@ -176,5 +176,38 @@ describe('DetailRenderer', () => {
       // First segment (2020-2022) should be twice as wide as second (2022-2023)
       expect(width1).toBeCloseTo(width2 * 2, 1);
     });
+
+    it('should correctly truncate timeline for "zombie" (inactive, open-ended) teams', () => {
+      // A team that has no dissolution date but stopped having eras long ago (e.g., 2002)
+      // Should NOT extend to current year (2026+), but stop at last era + 1
+      const currentYear = new Date().getFullYear();
+      const startYear = 2000;
+
+      // Mock node: 2 eras, 2000 and 2001.
+      // If truncated correctly: Ends 2002. Total 2 years. Each era 1 year = 50% width.
+      // If buggy: Ends CurrentYear+1. Era 1 is 1 year (small fraction). Era 2 is huge.
+      const node = {
+        width: 100,
+        height: 60,
+        founding_year: startYear,
+        eras: [
+          { year: 2000, sponsors: [] }, // 2000-2001
+          { year: 2001, sponsors: [] }  // 2001-2002 (truncated) vs 2001-2026 (buggy)
+        ]
+      };
+
+      const nodeGroup = g.append('g');
+      DetailRenderer.renderEraTimeline(nodeGroup, node, 2.0);
+
+      const segments = nodeGroup.selectAll('.era-segment').nodes();
+      expect(segments).toHaveLength(2);
+
+      const width1 = parseFloat(d3.select(segments[0]).attr('width'));
+      const width2 = parseFloat(d3.select(segments[1]).attr('width'));
+
+      // Expect roughly equal widths (allow small float diff)
+      expect(width1).toBeCloseTo(width2, 1);
+      expect(width1).toBeCloseTo(50, 0); // 50% of 100
+    });
   });
 });

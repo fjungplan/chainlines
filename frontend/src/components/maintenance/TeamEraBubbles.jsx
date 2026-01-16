@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { teamsApi } from '../../api/teams';
 import { LoadingSpinner } from '../Loading';
 
-export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
+export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra, lastUpdate }) {
     const [eras, setEras] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -14,7 +14,7 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
             setEras([]);
             setLoading(false);
         }
-    }, [nodeId]);
+    }, [nodeId, lastUpdate]);
 
     const loadEras = async () => {
         setLoading(true);
@@ -31,10 +31,57 @@ export default function TeamEraBubbles({ nodeId, onEraSelect, onCreateEra }) {
         }
     };
 
+    // Scroll Preservation - find the scrolling parent
+    const containerRef = useRef(null);
+    const scrollKey = `team-era-scroll-${nodeId}`;
+
+    // Find the scrolling parent container
+    const findScrollParent = (element) => {
+        if (!element) return null;
+        let parent = element.parentElement;
+        while (parent) {
+            const overflow = window.getComputedStyle(parent).overflowY;
+            if (overflow === 'auto' || overflow === 'scroll') {
+                return parent;
+            }
+            parent = parent.parentElement;
+        }
+        return null;
+    };
+
+    // Save scroll position on scroll
+    const handleScroll = (e) => {
+        const scrollParent = e.currentTarget;
+        if (scrollParent) {
+            sessionStorage.setItem(scrollKey, scrollParent.scrollTop);
+        }
+    };
+
+    // Restore scroll position after render
+    useEffect(() => {
+        if (eras.length > 0 && containerRef.current) {
+            const scrollParent = findScrollParent(containerRef.current);
+            if (scrollParent) {
+                // Attach scroll listener
+                scrollParent.addEventListener('scroll', handleScroll);
+
+                // Restore saved position with a slight delay to ensure layout is complete
+                requestAnimationFrame(() => {
+                    const savedScroll = sessionStorage.getItem(scrollKey);
+                    if (savedScroll) {
+                        scrollParent.scrollTop = parseInt(savedScroll, 10);
+                    }
+                });
+
+                return () => scrollParent.removeEventListener('scroll', handleScroll);
+            }
+        }
+    }, [eras, nodeId]);
+
     if (loading) return <LoadingSpinner message="Loading eras..." />;
 
     return (
-        <div className="era-bubbles-container">
+        <div className="era-bubbles-container" ref={containerRef}>
 
 
             {error && <div className="error-text">{error}</div>}

@@ -1,9 +1,15 @@
 import { apiClient as api } from './client';
 
 export const editsApi = {
-  // Edit Metadata (Eras)
+  // Create Era Edit (for new eras)
   createEraEdit: async (payload) => {
     const response = await api.post('/api/v1/edits/era', payload);
+    return response.data;
+  },
+
+  // Update Era Edit (for existing eras, supports node_id transfer)
+  updateEra: async (eraId, payload) => {
+    const response = await api.put(`/api/v1/edits/era/${eraId}`, payload);
     return response.data;
   },
 

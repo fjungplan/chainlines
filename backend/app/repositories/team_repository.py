@@ -55,11 +55,19 @@ class TeamRepository:
         base_stmt = select(TeamNode)
 
         if search:
+            from sqlalchemy import or_
+            # Normalize search term for accent insensitivity
+            # Note: unaccent removes accents, ilike handles case.
             search_query = f"%{search}%"
+            unaccented_query = func.unaccent(search_query)
+
             base_stmt = base_stmt.where(
                 or_(
-                    TeamNode.legal_name.ilike(search_query),
-                    TeamNode.display_name.ilike(search_query)
+                    func.unaccent(TeamNode.legal_name).ilike(unaccented_query),
+                    func.unaccent(TeamNode.display_name).ilike(unaccented_query),
+                    # Search across ALL eras using exists (any) to find historical names/codes/sponsors
+                    TeamNode.eras.any(func.unaccent(TeamEra.registered_name).ilike(unaccented_query)),
+                    TeamNode.eras.any(func.unaccent(TeamEra.uci_code).ilike(unaccented_query))
                 )
             )
 
@@ -90,11 +98,20 @@ class TeamRepository:
         count_stmt = count_stmt.select_from(TeamNode)
         
         if search:
+            # Re-apply same search logic for count
+            # Note: imports (func, or_) are available from previous block or top level if moved
+            # But local import in previous block scope is not available here unless we re-import or move it up
+            from sqlalchemy import or_
+            
             search_query = f"%{search}%"
+            unaccented_query = func.unaccent(search_query)
+            
             count_stmt = count_stmt.where(
                 or_(
-                    TeamNode.legal_name.ilike(search_query),
-                    TeamNode.display_name.ilike(search_query)
+                    func.unaccent(TeamNode.legal_name).ilike(unaccented_query),
+                    func.unaccent(TeamNode.display_name).ilike(unaccented_query),
+                    TeamNode.eras.any(func.unaccent(TeamEra.registered_name).ilike(unaccented_query)),
+                    TeamNode.eras.any(func.unaccent(TeamEra.uci_code).ilike(unaccented_query))
                 )
             )
 

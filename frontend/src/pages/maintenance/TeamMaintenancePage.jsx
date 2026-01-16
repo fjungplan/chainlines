@@ -19,6 +19,7 @@ export default function TeamMaintenancePage() {
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'node' | 'era'
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const [selectedEraId, setSelectedEraId] = useState(null);
+    const [baseEraId, setBaseEraId] = useState(null); // The era ID to clone from when creating new
 
     // List State
     const [teams, setTeams] = useState([]);
@@ -116,7 +117,7 @@ export default function TeamMaintenancePage() {
         setViewMode('list');
         setSelectedNodeId(null);
         setSelectedEraId(null);
-        fetchTeams();
+        fetchTeams(searchQuery);
     };
 
     // Called when Team Node is saved (create or update)
@@ -156,14 +157,17 @@ export default function TeamMaintenancePage() {
     const handleEraSuccess = (newEraId) => {
         // If searching/switching within Era Editor:
         if (newEraId === 'NEW') {
+            setBaseEraId(selectedEraId); // Capture current selection as base for new era
             setSelectedEraId(null);
             setViewMode('era');
         } else if (newEraId) {
             setSelectedEraId(newEraId);
+            setBaseEraId(null); // Clear base era once saved/switched
             // Ensure we stay in era view?
             setViewMode('era');
         } else {
             // If passed empty/undefined, means "Back" or "Done"
+            setBaseEraId(null);
             handleBackToNode();
         }
     };
@@ -186,6 +190,7 @@ export default function TeamMaintenancePage() {
                 <TeamEraEditor
                     eraId={selectedEraId}
                     nodeId={selectedNodeId}
+                    baseEraId={baseEraId}
                     onSuccess={handleEraSuccess}
                     onDelete={handleBackToNode}
                 />
@@ -213,7 +218,7 @@ export default function TeamMaintenancePage() {
                     {loading ? (
                         <LoadingSpinner message="Loading teams..." />
                     ) : error ? (
-                        <ErrorDisplay error={error} onRetry={fetchTeams} />
+                        <ErrorDisplay error={error} onRetry={() => fetchTeams(searchQuery)} />
                     ) : (
                         <div className="team-list">
                             {teams.length === 0 ? (

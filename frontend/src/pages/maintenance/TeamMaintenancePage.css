@@ -117,49 +117,24 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: 15px;
-    overflow-y: auto;
+    overflow: hidden;
+    /* Changed from overflow-y: auto */
     display: flex;
     flex-direction: column;
 }
 
-/* Badges & Misc */
-.team-name {
-    font-weight: 500;
-    color: var(--color-text-light);
-    display: inline-block;
-}
-
-.protected-badge {
-    margin-left: 0.5rem;
-    font-size: 1rem;
-}
-
-.empty-state {
-    padding: 3rem;
-    text-align: center;
-    color: var(--color-text-secondary);
-}
-
-/* Era Bubbles - Keeping specific era bubble styles as they are unique to this domain */
-.bubbles-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 0.5rem;
-}
-
-.bubbles-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: var(--color-text-light);
-}
+/* ... */
 
 .bubbles-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
+    /* Take remaining space */
+    overflow-y: auto;
+    /* Scroll here */
+    padding-right: 4px;
+    /* Space for scrollbar */
 }
 
 .era-bubble {
