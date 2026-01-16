@@ -20,7 +20,7 @@ if ($Mode -eq "pull") {
     
     # 2. Download
     Write-Host "   Downloading dump..."
-    scp "root@$ServerIP:/tmp/$TempDump" "./$TempDump"
+    scp "root@${ServerIP}:/tmp/$TempDump" "./$TempDump"
     
     # 3. Cleanup Remote
     ssh "root@$ServerIP" "rm /tmp/$TempDump"
@@ -51,11 +51,12 @@ elseif ($Mode -eq "push") {
     
     # 1. Dump Local DB
     Write-Host "   Creating local dump..."
-    docker exec $ContainerName pg_dump -U $DbUser $DbName > $TempDump
+    # Use cmd /c to avoid PowerShell encoding (UTF-16) issues with > redirection
+    cmd /c "docker exec $ContainerName pg_dump -U $DbUser $DbName > $TempDump"
     
     # 2. Upload
     Write-Host "   Uploading dump..."
-    scp "./$TempDump" "root@$ServerIP:/tmp/$TempDump"
+    scp "./$TempDump" "root@${ServerIP}:/tmp/$TempDump"
     
     # 3. Restore Remote
     # We stop the backend first to ensure no connections lock the DB
