@@ -19,7 +19,9 @@ export default function TeamSearch({
     label = "Search Team",
     placeholder = "Type to search...",
     excludeIds = [],
-    initialSelection = null
+    initialSelection = null,
+    className = "",
+    style = {}
 }) {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
@@ -107,7 +109,7 @@ export default function TeamSearch({
     };
 
     return (
-        <div className="team-search-container" ref={wrapperRef}>
+        <div className={`team-search-container ${className}`} style={style} ref={wrapperRef}>
             <label>{label}</label>
 
             <div className="search-input-wrapper">

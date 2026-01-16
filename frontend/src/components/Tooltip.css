@@ -88,3 +88,9 @@
   color: #999;
   line-height: 1.4;
 }
+
+.era-hint {
+  color: #777;
+  font-size: 0.9em;
+  margin-left: 4px;
+}

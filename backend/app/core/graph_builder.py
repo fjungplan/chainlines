@@ -27,6 +27,8 @@ class GraphBuilder:
             # Build base node in snake_case for API schema
             base = {
                 "id": str(getattr(node, "node_id", "")),
+                "display_name": getattr(node, "display_name", None),
+                "legal_name": getattr(node, "legal_name", None),
                 "founding_year": getattr(node, "founding_year", None),
                 "dissolution_year": getattr(node, "dissolution_year", None),
             }

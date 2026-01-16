@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { lineageApi } from '../../api/lineage';
+import { teamsApi } from '../../api/teams';
 import TeamSearch from '../../components/common/TeamSearch';
 import { LoadingSpinner } from '../../components/Loading';
 import '../../components/maintenance/SponsorEditor.css';
@@ -101,6 +102,49 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
 
         setWarnings(newWarnings);
     }, [eventYear, predecessorNode, successorNode]);
+
+    // Fetch full team details (including eras) for context display
+    const [fullPredecessor, setFullPredecessor] = useState(null);
+    const [fullSuccessor, setFullSuccessor] = useState(null);
+
+    useEffect(() => {
+        if (predecessorNode?.node_id) {
+            teamsApi.getTeam(predecessorNode.node_id).then(setFullPredecessor).catch(console.error);
+        } else {
+            setFullPredecessor(null);
+        }
+    }, [predecessorNode?.node_id]);
+
+    useEffect(() => {
+        if (successorNode?.node_id) {
+            teamsApi.getTeam(successorNode.node_id).then(setFullSuccessor).catch(console.error);
+        } else {
+            setFullSuccessor(null);
+        }
+    }, [successorNode?.node_id]);
+
+    const getEraHint = (fullNode, offsetYear) => {
+        if (!fullNode || !fullNode.eras || !fullNode.eras.length || !eventYear) return null;
+
+        const targetYear = parseInt(eventYear, 10) + offsetYear;
+        // In full API response, eras have 'season_year' and 'registered_name'
+
+        // 1. Try exact match
+        const exact = fullNode.eras.find(e => e.season_year === targetYear);
+        if (exact) return exact.registered_name;
+
+        // 2. Fallback
+        if (offsetYear < 0) {
+            // Predecessor (Year-1): Find max year (latest era)
+            return fullNode.eras.reduce((prev, current) => (prev.season_year > current.season_year) ? prev : current).registered_name;
+        } else {
+            // Successor (Year): Find min year (earliest era)
+            return fullNode.eras.reduce((prev, current) => (prev.season_year < current.season_year) ? prev : current).registered_name;
+        }
+    };
+
+    const predEraName = getEraHint(fullPredecessor, -1);
+    const succEraName = getEraHint(fullSuccessor, 0);
 
     const handleSave = async (shouldClose = false) => {
         setError(null);
@@ -285,7 +329,7 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                         </div>
 
                         {/* Row 2: Predecessor / Successor */}
-                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
                             <div style={{ flex: 1 }}>
                                 <TeamSearch
                                     label="Predecessor Team *"
@@ -293,10 +337,25 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                                     initialSelection={predecessorNode}
                                     onSelect={setPredecessorNode}
                                     excludeIds={successorNode ? [successorNode.node_id] : []}
+                                    style={{ marginBottom: 0 }}
                                 />
+                                {predEraName && (
+                                    <div style={{ fontSize: '0.85rem', color: '#cbd5e0', marginTop: '0', marginBottom: '8px', paddingLeft: '2px' }}>
+                                        {predEraName} <span style={{ opacity: 0.7 }}>(Era: {parseInt(eventYear, 10) - 1})</span>
+                                    </div>
+                                )}
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.5rem', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 0.5rem', marginBottom: '0' }}>
+                                <label style={{
+                                    opacity: 0,
+                                    pointerEvents: 'none',
+                                    marginBottom: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    fontWeight: 500,
+                                    display: 'block',
+                                    whiteSpace: 'nowrap'
+                                }}>Swap</label>
                                 <Button
                                     variant="secondary"
                                     onClick={(e) => {
@@ -328,7 +387,13 @@ export default function LineageEventEditor({ eventId, onClose, onSuccess }) {
                                     initialSelection={successorNode}
                                     onSelect={setSuccessorNode}
                                     excludeIds={predecessorNode ? [predecessorNode.node_id] : []}
+                                    style={{ marginBottom: 0 }}
                                 />
+                                {succEraName && (
+                                    <div style={{ fontSize: '0.85rem', color: '#cbd5e0', marginTop: '0', marginBottom: '8px', paddingLeft: '2px' }}>
+                                        {succEraName} <span style={{ opacity: 0.7 }}>(Era: {eventYear})</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
