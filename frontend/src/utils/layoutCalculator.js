@@ -35,8 +35,10 @@ export class LayoutCalculator {
 
     // Dynamic Vertical Scaling
     // Node Height = pixelsPerYear * HEIGHT_FACTOR
-    // Row Height = Node Height * 1.5
     this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
+
+    // Row Height = Node Height * 1.5
+    // Effectively caps row height at 60px
     this.rowHeight = this.nodeHeight * 1.5;
 
     console.log('LayoutCalculator Vertical Scaling:', {
@@ -192,210 +194,688 @@ export class LayoutCalculator {
   }
 
   assignYPositions(nodes) {
-    // Build lineage families: groups of nodes connected by any link
-    const adjacencyMap = new Map();
+    // Phase 1: Chain Decomposition
+    const chains = this.buildChains(nodes, this.links);
 
-    // Initialize adjacency map with all nodes
+    // Phase 2: Macro-Level Organization (Family Stacking)
+    const families = this.buildFamilies(chains);
+
+    // Phase 3: Micro-Level Layout (Per Family)
+    const activeLanes = new Map(); // Global tracking to prevent overlaps if we were doing global, 
+    // but we are doing stacked families.
+
+    let globalYOffset = 50;
+    const positionedNodes = [];
+
+    families.forEach(family => {
+      // Layout this family internally
+      const familyHeight = this.layoutFamily(family);
+
+      // Assign final Y coordinates based on global stack
+      family.chains.forEach(chain => {
+        const chainY = globalYOffset + (chain.yIndex * this.rowHeight);
+        chain.nodes.forEach(node => {
+          node.y = chainY;
+          node.height = this.nodeHeight;
+          positionedNodes.push(node);
+        });
+      });
+
+      // No padding between families as requested by user
+      globalYOffset += familyHeight;
+    });
+
+    return { positioned: positionedNodes, rowHeight: this.rowHeight };
+  }
+
+  buildChains(nodes, links) {
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    const preds = new Map();
+    const succs = new Map();
+
+    // specific check for 1-to-1ness
+    links.forEach(l => {
+      if (!preds.has(l.target)) preds.set(l.target, []);
+      if (!succs.has(l.source)) succs.set(l.source, []);
+      preds.get(l.target).push(l.source);
+      succs.get(l.source).push(l.target);
+    });
+
+    const chains = [];
+    const visited = new Set();
+
+    // 1. Identification of "Chain Starter" nodes
+    // A node starts a chain if:
+    // - It has 0 predecessors 
+    // - OR It has > 1 predecessors (Merge)
+    // - OR Its predecessor has > 1 successors (Split parent)
+
+    const isChainStart = (nodeId) => {
+      const p = preds.get(nodeId) || [];
+      if (p.length !== 1) return true; // 0 or >1 preds
+      const parentId = p[0];
+      const parentSuccs = succs.get(parentId) || [];
+      if (parentSuccs.length > 1) return true; // Parent splits
+
+      // ALSO: Check for temporal overlap with the single parent.
+      // If we overlap, we MUST be a chain start (because parent broke the chain).
+      const parentNode = nodeMap.get(parentId);
+      const myNode = nodeMap.get(nodeId);
+
+      let parentEnd = parentNode.dissolution_year;
+      if (!parentEnd) {
+        const lastEra = parentNode.eras?.[parentNode.eras.length - 1];
+        parentEnd = lastEra ? lastEra.year : parentNode.founding_year;
+      }
+
+      if (parentEnd > myNode.founding_year) return true; // Parent overlaps me, so I start new
+
+      return false; // Linear, no overlap
+    };
+
     nodes.forEach(node => {
-      if (!adjacencyMap.has(node.id)) {
-        adjacencyMap.set(node.id, new Set());
+      if (visited.has(node.id)) return;
+
+      // If it's a start node, build a chain from it
+      // Note: If we traverse properly, we only need to find start nodes.
+      // However, cycles might confuse this. For DAGs (timelines), this works.
+      // To be safe, we iterate all, and if unvisited and isChainStart, we consume.
+      if (isChainStart(node.id)) {
+        const chainNodes = [];
+        let curr = node.id;
+
+        while (curr) {
+          visited.add(curr);
+          chainNodes.push(nodeMap.get(curr));
+
+          const s = succs.get(curr) || [];
+          // Stop if:
+          // - No successors
+          // - > 1 successors (Split) -> curr is LAST in this chain
+          // - Successor has > 1 predecessors (Merge) -> succ is START of NEW chain
+          if (s.length !== 1) break;
+
+          const nextId = s[0];
+          const nextPreds = preds.get(nextId) || [];
+          if (nextPreds.length > 1) break;
+
+          // Continue
+          // CRITICAL: Check for temporal overlap (Dirty Data Protection)
+          // If curr ends AFTER next starts, they visually overlap on the same row.
+          // We MUST break the chain here to force them onto different rows (parent/child relationship).
+          const currNode = nodeMap.get(curr);
+          const nextNode = nodeMap.get(nextId);
+
+          // Use a tolerance of 0. If curr.dissolution_year (or inferred end) > next.founding_year
+          // But strict inequality might be too aggressive if they effectively touch.
+          // Let's assume touch is fine (end == start). Overlap is end > start.
+
+          let currEnd = currNode.dissolution_year;
+          if (!currEnd) {
+            const lastEra = currNode.eras?.[currNode.eras.length - 1];
+            currEnd = lastEra ? lastEra.year : currNode.founding_year;
+          }
+
+          if (currEnd > nextNode.founding_year) {
+            // Overlap detected!
+            break;
+          }
+
+          curr = nextId;
+        }
+
+        chains.push({
+          id: `chain-${chains.length}`,
+          nodes: chainNodes,
+          startTime: chainNodes[0].founding_year,
+          endTime: chainNodes[chainNodes.length - 1].dissolution_year || 9999,
+          yIndex: 0 // to be assigned
+        });
       }
     });
 
-    const nodeSet = new Set(nodes.map(n => n.id));
-
-    // Add all links (both directions for undirected family grouping)
-    this.links.forEach(link => {
-      // Skip links with missing nodes
-      if (!nodeSet.has(link.source) || !nodeSet.has(link.target)) return;
-
-      if (!adjacencyMap.has(link.source)) adjacencyMap.set(link.source, new Set());
-      if (!adjacencyMap.has(link.target)) adjacencyMap.set(link.target, new Set());
-      adjacencyMap.get(link.source).add(link.target);
-      adjacencyMap.get(link.target).add(link.source);
+    // Catch-up: If any nodes remain unvisited (e.g. part of a cycle or logic gap), make them single chains
+    nodes.forEach(node => {
+      if (!visited.has(node.id)) {
+        visited.add(node.id);
+        chains.push({
+          id: `chain-${chains.length}`,
+          nodes: [node],
+          startTime: node.founding_year,
+          endTime: node.dissolution_year || 9999,
+          yIndex: 0
+        });
+      }
     });
 
-    // Find connected components (families) using BFS
-    const visited = new Set();
+    return chains;
+  }
+
+  buildFamilies(chains) {
+    // Group chains into connected components
+    const chainMap = new Map(); // nodeId -> chainId
+    chains.forEach(c => c.nodes.forEach(n => chainMap.set(n.id, c)));
+
+    const adj = new Map();
+    chains.forEach(c => adj.set(c, new Set()));
+
+    this.links.forEach(l => {
+      const c1 = chainMap.get(l.source);
+      const c2 = chainMap.get(l.target);
+      if (c1 && c2 && c1 !== c2) {
+        adj.get(c1).add(c2);
+        adj.get(c2).add(c1);
+      }
+    });
+
     const families = [];
+    const visited = new Set();
 
-    const buildFamily = (startNodeId) => {
-      const family = [];
-      const queue = [startNodeId];
-      const familyVisited = new Set();
+    chains.forEach(c => {
+      if (visited.has(c)) return;
+      const familyChains = [];
+      const q = [c];
+      visited.add(c);
 
-      while (queue.length > 0) {
-        const nodeId = queue.shift();
-        if (familyVisited.has(nodeId)) continue;
+      let minStart = c.startTime;
 
-        familyVisited.add(nodeId);
-        family.push(nodeId);
-        visited.add(nodeId);
+      while (q.length) {
+        const cur = q.shift();
+        familyChains.push(cur);
+        if (cur.startTime < minStart) minStart = cur.startTime;
 
-        const neighbors = adjacencyMap.get(nodeId) || new Set();
-        neighbors.forEach(neighborId => {
-          if (!familyVisited.has(neighborId)) {
-            queue.push(neighborId);
+        adj.get(cur).forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            q.push(neighbor);
           }
         });
       }
 
-      return family;
+      families.push({
+        chains: familyChains,
+        minStart
+      });
+    });
+
+    // Sort families by start year (Gantt style), then by size (largest first)
+    families.sort((a, b) => {
+      if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+      // Tie-breaker: larger families first (optional preference)
+      if (a.chains.length !== b.chains.length) return b.chains.length - a.chains.length;
+      // Tie-breaker: ID stability (assuming chains[0] exists)
+      return a.chains[0].id.localeCompare(b.chains[0].id);
+    });
+
+    return families;
+  }
+
+  layoutFamily(family) {
+    if (family.chains.length === 0) return 0;
+
+    // 1. Initial Placement (Topological / Barycenter guess)
+    // Sort chains by start time to process legal parents first
+    family.chains.sort((a, b) => a.startTime - b.startTime);
+
+    const ySlots = new Map(); // yIndex -> Array of {start, end, chainId}
+    let maxY = 0;
+
+    const checkCollision = (y, start, end, excludeChainId) => {
+      if (!ySlots.has(y)) return false;
+      const slots = ySlots.get(y);
+      // Check intersection: !(end1 < start2 || start1 > end2)
+      // Strict inequality ensures that if End1 == Start2 (shared year), it IS a collision.
+      // because End1 < Start2 is FALSE.
+      const collision = slots.some(s => {
+        if (s.chainId === excludeChainId) return false;
+        // Debug
+        const collide = !(s.end < start || s.start > end);
+        if (collide && (s.end === start || s.start === end)) {
+          // console.log(`Strict Collision Conflict: Lane ${y}. Existing [${s.start}-${s.end}] vs New [${start}-${end}]`);
+        }
+        return collide;
+      });
+      return collision;
     };
 
-    // Build all families
-    nodes.forEach(node => {
-      if (!visited.has(node.id)) {
-        const family = buildFamily(node.id);
-        families.push(family);
-      }
+    const occupySlot = (y, chain) => {
+      if (!ySlots.has(y)) ySlots.set(y, []);
+      ySlots.get(y).push({ start: chain.startTime, end: chain.endTime, chainId: chain.id });
+      chain.yIndex = y;
+      if (y > maxY) maxY = y;
+    };
+
+    // Calculate parents map for forces
+    // chainId -> [parentChainId, ...]
+    const chainParents = new Map();
+    const nodeToChain = new Map();
+    family.chains.forEach(c => c.nodes.forEach(n => nodeToChain.set(n.id, c)));
+
+    family.chains.forEach(c => {
+      const parents = new Set();
+      const firstNode = c.nodes[0];
+      // Find links pointing to firstNode
+      this.links.forEach(l => {
+        if (l.target === firstNode.id) {
+          const pChain = nodeToChain.get(l.source);
+          if (pChain && pChain !== c) parents.add(pChain);
+        }
+      });
+      chainParents.set(c.id, Array.from(parents));
     });
 
-    // Sort families by earliest founding year
-    families.sort((familyA, familyB) => {
-      const earliestA = Math.min(...familyA.map(nodeId =>
-        nodes.find(n => n.id === nodeId)?.founding_year || Infinity
-      ));
-      const earliestB = Math.min(...familyB.map(nodeId =>
-        nodes.find(n => n.id === nodeId)?.founding_year || Infinity
-      ));
-      return earliestA - earliestB;
+    // Initial Placement
+    // STRATEGY CHANGE: Instead of sorting by StartTime (Temporal packing),
+    // we use a BFS/Hierarchy traversal to place Children immediately after Parents.
+    // This prioritizes Lineage Locality (child near parent) over global packing.
+
+    const placedChains = new Set();
+    const chainsToPlace = [...family.chains].sort((a, b) => a.startTime - b.startTime); // Default pool
+
+    // Helper to pick next chain
+    // 1. Pick a chain whose parents are already placed.
+    // 2. If none, pick the earliest unplaced chain (new root).
+
+    // We already built 'chainParents'. Let's build 'chainChildren' for traversal.
+    const chainChildrenMap = new Map();
+    family.chains.forEach(c => chainChildrenMap.set(c.id, []));
+
+    // Populate children map
+    family.chains.forEach(child => {
+      const parents = chainParents.get(child.id) || [];
+      parents.forEach(p => {
+        chainChildrenMap.get(p.id).push(child);
+      });
     });
 
-    // PROPORTIONAL SCALING: rowHeight and nodeHeight are now dynamic based on pixelsPerYear
-    // this.rowHeight was calculated in constructor
-    const positioned = [];
-    const nodePositions = new Map();
-    let swimlaneIndex = 0;
+    const queue = [];
+    // Initialize queue with roots (no parents)
+    const roots = family.chains.filter(c => (chainParents.get(c.id) || []).length === 0);
+    // Sort roots by start time to keep top-left sanity
+    roots.sort((a, b) => a.startTime - b.startTime);
+    roots.forEach(r => queue.push(r));
 
-    families.forEach(family => {
-      let swimlaneAssignments = this.assignSwimlanes(family, nodes);
+    // Consumed set to avoid re-queueing
+    const queuedIds = new Set(roots.map(r => r.id));
 
-      // OPTIMIZE: Detect and minimize connector crossings while respecting temporal constraints
-      const optimized = this.optimizeCrossings(family, swimlaneAssignments, nodes);
-      if (optimized) {
-        swimlaneAssignments = optimized;
+    // Fallback list for disconnected or cycle-remainder nodes
+    let fallbackIndex = 0;
+
+    const processChain = (chain) => {
+      let targetY = 0;
+      const parents = chainParents.get(chain.id) || [];
+      const placedParents = parents.filter(p => placedChains.has(p.id));
+
+      if (placedParents.length > 0) {
+        // Barycenter of parents
+        // FIX: Removed double division. sumY is sum.
+        const sumY = placedParents.reduce((sum, p) => sum + p.yIndex, 0);
+        targetY = Math.round(sumY / placedParents.length);
+      } else {
+        // scan for lowest free Y from 0?
+        // Or just 0. Spiral search works outwards.
+        targetY = 0;
       }
 
-      // Get all unique swimlane indices and sort them
-      const uniqueLanes = [...new Set(Object.values(swimlaneAssignments))].sort((a, b) => a - b);
-
-      // NEW: Group nodes by swimlane and sort within each lane by temporal position
-      const nodesPerLane = new Map();
-      family.forEach(nodeId => {
-        const node = nodes.find(n => n.id === nodeId);
-        if (node) {
-          const relativeLane = swimlaneAssignments[nodeId];
-          if (!nodesPerLane.has(relativeLane)) {
-            nodesPerLane.set(relativeLane, []);
+      // Spiral Search
+      let placed = false;
+      let offset = 0;
+      while (!placed) {
+        let candidate = targetY + offset;
+        if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id)) {
+          occupySlot(candidate, chain);
+          placed = true;
+          break;
+        }
+        if (offset > 0) {
+          candidate = targetY - offset;
+          if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id)) {
+            occupySlot(candidate, chain);
+            placed = true;
+            break;
           }
-          nodesPerLane.get(relativeLane).push(node);
+        }
+        offset++;
+        if (offset > 100) {
+          occupySlot(maxY + 1, chain);
+          placed = true;
+        }
+      }
+      placedChains.add(chain.id);
+
+      // Add children to queue
+      const children = chainChildrenMap.get(chain.id) || [];
+      // Sort children by start time
+      children.sort((a, b) => a.startTime - b.startTime);
+
+      children.forEach(child => {
+        if (!queuedIds.has(child.id)) {
+          queuedIds.add(child.id);
+          queue.push(child);
+        }
+      });
+    };
+
+    while (placedChains.size < family.chains.length) {
+      if (queue.length > 0) {
+        const chain = queue.shift();
+        processChain(chain);
+      } else {
+        // Pick from fallback (earliest unplaced)
+        while (fallbackIndex < chainsToPlace.length && placedChains.has(chainsToPlace[fallbackIndex].id)) {
+          fallbackIndex++;
+        }
+        if (fallbackIndex < chainsToPlace.length) {
+          const chain = chainsToPlace[fallbackIndex];
+          if (!queuedIds.has(chain.id)) {
+            queuedIds.add(chain.id);
+            queue.push(chain);
+          }
+        }
+      }
+    }
+
+    // 2. Iterative Relaxation (Force-Directed with Cost Function)
+    const ITERATIONS = 50;
+
+    // Map children for outgoing link checks
+    const chainChildren = new Map();
+    family.chains.forEach(c => chainChildren.set(c.id, []));
+
+    // Iterate all chains to populate their parents' children list
+    family.chains.forEach(childChain => {
+      const parents = chainParents.get(childChain.id) || [];
+      parents.forEach(p => {
+        if (chainChildren.has(p.id)) {
+          chainChildren.get(p.id).push(childChain);
+        }
+      });
+    });
+
+    // Pre-calculate all active vertical segments to optimize "Blocker Penalty"
+    // List of { y1, y2, time, childId, parentId }
+    let verticalSegments = [];
+    const rebuildSegments = () => {
+      verticalSegments = [];
+      family.chains.forEach(chain => {
+        // Incoming (Parents)
+        const parents = chainParents.get(chain.id) || [];
+        parents.forEach(p => {
+          if (Math.abs(p.yIndex - chain.yIndex) > 1) {
+            verticalSegments.push({
+              y1: Math.min(p.yIndex, chain.yIndex),
+              y2: Math.max(p.yIndex, chain.yIndex),
+              time: chain.startTime,
+              childId: chain.id,
+              parentId: p.id
+            });
+          }
+        });
+        // Outgoing not needed (covered by child's incoming)
+      });
+    };
+
+    const calculateCost = (chain, y) => {
+      // 1. Attraction (Distance to connected nodes)
+      // STRATEGY: Bi-Directional Attraction.
+      // Previously: Only Child -> Parent.
+      // Now: Child <-> Parent. This pulls parents down towards children and children up towards parents.
+      // This centers "Star" topologies and closes gaps.
+
+      let attractionCost = 0;
+      const ATTRACTION_WEIGHT = 50.0; // Increased from 1.0 to prioritize short links (Priority #2)
+
+      const parents = chainParents.get(chain.id) || [];
+      if (parents.length > 0) {
+        const avgParentY = parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length;
+        attractionCost += Math.abs(y - avgParentY) * ATTRACTION_WEIGHT;
+      }
+
+      const childrenForAttraction = chainChildren.get(chain.id) || [];
+      if (childrenForAttraction.length > 0) {
+        const avgChildY = childrenForAttraction.reduce((sum, c) => sum + c.yIndex, 0) / childrenForAttraction.length;
+        attractionCost += Math.abs(y - avgChildY) * ATTRACTION_WEIGHT;
+      }
+
+      // 2. Cut-Through Penalty (Self Crossing)
+      let cutThroughCost = 0;
+      const PENALTY = 10000.0; // Moderate penalty (collision logic fixed)
+
+      // Check Incoming Links (Parent -> Chain)
+      parents.forEach(p => {
+        const y1 = Math.min(p.yIndex, y);
+        const y2 = Math.max(p.yIndex, y);
+        if (y2 - y1 > 1) {
+          // Check if intermediate lanes are blocked
+          for (let lane = y1 + 1; lane < y2; lane++) {
+            if (checkCollision(lane, chain.startTime, chain.startTime, chain.id)) {
+              cutThroughCost += PENALTY;
+            }
+          }
         }
       });
 
-      // Sort nodes within each lane by temporal position (founding_year, then dissolution_year)
-      nodesPerLane.forEach((laneNodes, lane) => {
-        laneNodes.sort((a, b) => {
-          if (a.founding_year !== b.founding_year) {
-            return a.founding_year - b.founding_year;
+      // Check Outgoing Links (Chain -> Child)
+      // Note: Children are FIXED at their current yIndex during this calc
+      // So we interpret "If I move to Y, how does it affect links to my children?"
+      const children = chainChildren.get(chain.id) || [];
+      children.forEach(c => {
+        const y1 = Math.min(y, c.yIndex);
+        const y2 = Math.max(y, c.yIndex);
+        if (y2 - y1 > 1) {
+          for (let lane = y1 + 1; lane < y2; lane++) {
+            if (checkCollision(lane, c.startTime, c.startTime, chain.id)) {
+              cutThroughCost += PENALTY;
+            }
           }
-          const aEnd = a.dissolution_year || Infinity;
-          const bEnd = b.dissolution_year || Infinity;
-          return aEnd - bEnd;
-        });
+        }
       });
 
-      // Assign Y positions based on swimlane assignments and temporal ordering
-      nodesPerLane.forEach((laneNodes, relativeLane) => {
-        laneNodes.forEach(node => {
-          // Use dynamic rowHeight
-          const y = 50 + (swimlaneIndex + relativeLane) * this.rowHeight;
-          nodePositions.set(node.id, {
-            ...node,
-            y,
-            height: this.nodeHeight // Use dynamic nodeHeight
-          });
-          positioned.push(nodePositions.get(node.id));
-        });
+      // 3. Blocker Penalty (Am I blocking others?)
+      // If 'chain' is at 'y', does it intersect any vertical segment?
+      // Segment: y1 < y < y2 AND time within chain [start, end]
+      let blockerCost = 0;
+      const BLOCKER_PENALTY = 5000.0; // Slightly less than self-cut? Or same.
+
+      verticalSegments.forEach(seg => {
+        // IGNORANCE IS BLISS: Don't count my own links as obstacles!
+        if (seg.childId === chain.id || seg.parentId === chain.id) return;
+
+        // If I sit on this lane
+        if (y > seg.y1 && y < seg.y2) {
+          // And I exist at the time of the link
+          // use strict inequality for collision?
+          // Link is at seg.time.
+          // Chain is [start, end].
+          // Collision if start <= time && end >= time (inclusive? or strict?)
+          // checkCollision uses strict !(end < time || start > time)
+          // i.e. start <= time && end >= time.
+          // But specifically for blocking, we use the same rules.
+
+          // Optimized inline check
+          if (seg.time >= chain.startTime && seg.time <= chain.endTime) {
+            // Check strict single-point overlap if needed?
+            // If Node ends at 2000, Link at 2000. Strict inequality says NO collision.
+            // So we should match checkCollision logic:
+            // !(chain.end < seg.time || chain.start > seg.time)
+
+            if (!(chain.endTime < seg.time || chain.startTime > seg.time)) {
+              blockerCost += BLOCKER_PENALTY;
+            }
+          }
+        }
       });
 
-      // Move swimlane index past this family
-      swimlaneIndex += uniqueLanes.length;
-    });
-
-    return { positioned, rowHeight: this.rowHeight };
-  }
-
-  /**
-   * Assign a node to a lane, finding the closest available lane without temporal overlap.
-   * Returns the final lane assignment for the node.
-   */
-  assignToLaneWithSpaceMaking(nodeId, preferredLane, assignments, nodeMap, family, visited) {
-    const node = nodeMap.get(nodeId);
-    const nodeStart = node.founding_year;
-    const nodeEnd = node.dissolution_year || Infinity;
-
-    // Helper to check if a lane has overlap with our node
-    const hasOverlapInLane = (lane) => {
-      const nodesInLane = family.filter(id =>
-        visited.has(id) && id !== nodeId && assignments[id] === lane
-      );
-
-      return nodesInLane.some(otherId => {
-        const otherNode = nodeMap.get(otherId);
-        const otherStart = otherNode.founding_year;
-        const otherEnd = otherNode.dissolution_year || Infinity;
-
-        // Overlap if: (start1 < end2) AND (start2 < end1)
-        return nodeStart < otherEnd && otherStart < nodeEnd;
-      });
+      return attractionCost + cutThroughCost + blockerCost;
     };
 
-    // Try preferred lane first
-    if (!hasOverlapInLane(preferredLane)) {
-      return preferredLane;
+    for (let iter = 0; iter < ITERATIONS; iter++) {
+      let energyChanged = false;
+
+      // Rebuild segments at start of iteration
+      rebuildSegments();
+
+      // STRATEGY: Alternating Iteration Direction
+      // Iteration 0 (Even): Sort by StartTime ASC ("Forward") -> Propagates Push/Pull from Parents down to Children.
+      // Iteration 1 (Odd): Sort by StartTime DESC ("Backward") -> Propagates Pull from Children up to Parents.
+      // This solves the "Stuck Cluster" issue where a child (Cilo) wants to move down but its parent (Piz Buin) hasn't moved yet.
+      if (iter % 2 === 0) {
+        family.chains.sort((a, b) => a.startTime - b.startTime);
+      } else {
+        family.chains.sort((a, b) => b.startTime - a.startTime);
+      }
+
+      family.chains.forEach(chain => {
+        const currentY = chain.yIndex;
+        // Optimization: exclude my own links from verticalSegments? 
+
+        // Calculate Base Cost
+        let currentCost = calculateCost(chain, currentY);
+
+        // Add "Lane Sharing / Stranger Danger" Penalty to Base Cost
+        // We calculate this "On the Fly" during candidate evaluation, but we need it for currentY too.
+        const getSharingPenalty = (y, myChain) => {
+          const slots = ySlots.get(y);
+          if (!slots || slots.length === 0) return 0;
+
+          // If I share with someone, check if they are family.
+          // Parents or Children?
+          // Expensive lookup? We have chainParents map.
+          const parents = chainParents.get(myChain.id) || [];
+          const children = chainChildren.get(myChain.id) || [];
+
+          // Check every occupant
+          let penalty = 0;
+          const SHARING_PENALTY = 2000.0; // Preference for empty lanes
+
+          for (const s of slots) {
+            if (s.chainId === myChain.id) continue;
+            // Are they related?
+            const isParent = parents.some(p => p.id === s.chainId);
+            const isChild = children.some(c => c.id === s.chainId);
+
+            if (!isParent && !isChild) {
+              penalty += SHARING_PENALTY;
+              // Add extra if gap is small (< 2 years)?
+              // s.end vs myChain.start
+              // gap = myChain.start - s.end
+              // if gap == 1, visual touch.
+              if (myChain.startTime - s.end <= 1 || s.start - myChain.endTime <= 1) {
+                penalty += 2000.0; // Extra "Visual Breathing Room" penalty
+              }
+            }
+          }
+          return penalty;
+        };
+
+        currentCost += getSharingPenalty(currentY, chain);
+
+        // Explore wider neighborhood to jump over obstacles
+        // Increased radius to escape deep blocks
+        const SEARCH_RADIUS = 20;
+        const candidates = new Set();
+
+        // Add neighbors
+        for (let i = 1; i <= SEARCH_RADIUS; i++) {
+          candidates.add(currentY - i);
+          candidates.add(currentY + i);
+        }
+
+        // Add parent target vicinity explicitly
+        const parents = chainParents.get(chain.id) || [];
+        if (parents.length > 0) {
+          const avg = Math.round(parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length);
+          // Search around the parent's average too! Parent itself might block 'avg', 
+          // but 'avg+1' might be free and perfect.
+          const TARGET_RADIUS = 5;
+          for (let k = 0; k <= TARGET_RADIUS; k++) {
+            candidates.add(avg - k);
+            candidates.add(avg + k);
+          }
+        }
+
+        // Add child target vicinity
+        const children = chainChildren.get(chain.id) || [];
+        if (children.length > 0) {
+          const avg = Math.round(children.reduce((sum, c) => sum + c.yIndex, 0) / children.length);
+          const TARGET_RADIUS = 5;
+          for (let k = 0; k <= TARGET_RADIUS; k++) {
+            candidates.add(avg - k);
+            candidates.add(avg + k);
+          }
+        }
+
+        let bestY = currentY;
+        let bestCost = currentCost;
+
+        candidates.forEach(y => {
+          if (y < 0) return;
+          if (y === currentY) return;
+
+          // Check Hard Collision
+          if (!checkCollision(y, chain.startTime, chain.endTime, chain.id)) {
+
+            let cost = calculateCost(chain, y);
+            // ADD SHARING PENALTY
+            cost += getSharingPenalty(y, chain);
+
+            if (cost < bestCost) {
+              bestCost = cost;
+              bestY = y;
+            }
+          }
+        });
+
+        if (bestY !== currentY) {
+          // Apply Move
+          const oldSlots = ySlots.get(currentY);
+          const idx = oldSlots.findIndex(s => s.chainId === chain.id);
+          if (idx !== -1) oldSlots.splice(idx, 1);
+
+          occupySlot(bestY, chain);
+          chain.yIndex = bestY;
+          energyChanged = true;
+        }
+      });
+
+      if (!energyChanged) break;
     }
 
-    // Preferred lane has conflict - search for nearest available lane
-    // Try: preferred, preferred+1, preferred-1, preferred+2, preferred-2, etc.
-    for (let offset = 1; offset <= 20; offset++) {
-      const laneAbove = preferredLane + offset;
-      const laneBelow = preferredLane - offset;
+    // 3. Post-Processing: Compaction
+    // Remove empty lanes
+    let maxLane = 0;
+    ySlots.forEach((slots, y) => { if (slots.length > 0 && y > maxLane) maxLane = y; });
 
-      if (!hasOverlapInLane(laneAbove)) {
-        return laneAbove;
-      }
-      if (!hasOverlapInLane(laneBelow)) {
-        return laneBelow;
+    for (let y = 0; y <= maxLane; y++) {
+      // If lane y is empty (no slots or empty slots array)
+      if (!ySlots.has(y) || ySlots.get(y).length === 0) {
+        // Shift everything > y down by 1
+        let shifted = false;
+        for (let k = y + 1; k <= maxLane; k++) {
+          if (ySlots.has(k)) {
+            const slots = ySlots.get(k);
+            ySlots.delete(k);
+            ySlots.set(k - 1, slots);
+            slots.forEach(s => {
+              // Update chain object
+              const c = family.chains.find(ch => ch.id === s.chainId);
+              if (c) c.yIndex = k - 1;
+            });
+            shifted = true;
+          }
+        }
+        if (shifted) {
+          maxLane--;
+          y--; // Re-check this index (now filled with k)
+        }
       }
     }
 
-    // Fallback (should rarely happen)
-    return preferredLane + 21;
-  }
+    // Recalc maxY after moves
+    maxY = 0;
+    family.chains.forEach(c => { if (c.yIndex > maxY) maxY = c.yIndex; });
 
-  /**
-   * DEPRECATED: Replaced by finding available lanes during assignment
-   * Push a set of nodes down by incrementing their lane assignments,
-   * and recursively push their descendants as well.
-   */
-  pushNodesDown(nodeIds, assignments, family, visited) {
-    // Find all nodes that need to move (the conflicts + anything at or below them)
-    const nodesToMove = new Set(nodeIds);
-
-    // Also move any nodes in lanes equal to or greater than the max conflicting lane
-    const maxConflictLane = Math.max(...nodeIds.map(id => assignments[id]));
-
-    family.forEach(id => {
-      if (visited.has(id) && assignments[id] >= maxConflictLane) {
-        nodesToMove.add(id);
-      }
-    });
-
-    // Increment all their lanes
-    nodesToMove.forEach(id => {
-      assignments[id] = (assignments[id] || 0) + 1;
-    });
+    return (maxY + 1) * this.rowHeight;
   }
 
   /**
@@ -684,20 +1164,9 @@ export class LayoutCalculator {
    * Returns a heuristic value (lower is better)
    */
   estimateLinkCrossings(fromNodeId, toNodeId, testLane, assignments, nodeMap) {
-    // Simple heuristic: crossing distance from assigned neighbors
-    let crossings = 0;
-    const nodeMap2 = nodeMap;
-
-    // Check distance from neighboring assigned nodes
-    Object.entries(assignments).forEach(([otherId, otherLane]) => {
-      if (otherId === fromNodeId || otherId === toNodeId) return;
-
-      // Penalty for being far from the main line
-      const laneDiff = Math.abs(testLane - otherLane);
-      if (laneDiff > 2) crossings += 1;
-    });
-
-    return crossings;
+    // Legacy method preserved for reference if needed, but unused by new algorithm.
+    // Can be removed in future cleanup.
+    return 0;
   }
 
 
