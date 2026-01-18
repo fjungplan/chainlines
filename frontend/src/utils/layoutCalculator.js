@@ -439,6 +439,167 @@ export class LayoutCalculator {
     return families;
   }
 
+  /**
+   * Identifies chains whose cost might change when a specific chain moves.
+   * Affected chains include:
+   * 1. Direct parents and children of the moved chain.
+   * 2. Chains that might now be blocked or have new cut-throughs in oldY or newY.
+   */
+  getAffectedChains(movedChain, oldY, newY, chains, chainParents, chainChildren, verticalSegments) {
+    const affected = new Set();
+
+    // 1. Direct connections
+    const parents = chainParents.get(movedChain.id) || [];
+    const children = chainChildren.get(movedChain.id) || [];
+    parents.forEach(p => affected.add(p.id));
+    children.forEach(c => affected.add(c.id));
+
+    // 2. Chains affected by vertical visibility changes
+    // Any chain whose time overlaps with movedChain and sits in or near the lanes involved
+    chains.forEach(other => {
+      if (other.id === movedChain.id) return;
+      if (affected.has(other.id)) return;
+
+      const timeOverlap = (movedChain.startTime <= other.endTime + 1) && (other.startTime <= movedChain.endTime + 1);
+      if (timeOverlap) {
+        // If they share lanes or intermediate lanes
+        // This is a broad heuristic; we can refine it if needed
+        affected.add(other.id);
+      }
+    });
+
+    return affected;
+  }
+
+  /**
+   * Calculates the total cost of all chains in a family.
+   */
+  calculateGlobalCost(chains, chainParents, chainChildren, verticalSegments, checkCollision) {
+    let total = 0;
+    chains.forEach(chain => {
+      total += this._calculateSingleChainCost(chain, chain.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+    });
+    return total;
+  }
+
+  /**
+   * Calculates the net change in global cost if a chain moves from oldY to newY.
+   */
+  calculateCostDelta(chain, oldY, newY, affectedChains, chains, chainParents, chainChildren, verticalSegments, checkCollision) {
+    // Current total cost of the subset
+    let oldSubtotal = this._calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
+    affectedChains.forEach(id => {
+      const other = chains.find(c => c.id === id);
+      if (other) {
+        oldSubtotal += this._calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+      }
+    });
+
+    // New total cost of the subset
+    // Temporarily update yIndex for the subtotal calculation
+    const originalY = chain.yIndex;
+    chain.yIndex = newY;
+
+    let newSubtotal = this._calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
+    affectedChains.forEach(id => {
+      const other = chains.find(c => c.id === id);
+      if (other) {
+        newSubtotal += this._calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+      }
+    });
+
+    // Restore original Y
+    chain.yIndex = originalY;
+
+    return newSubtotal - oldSubtotal;
+  }
+
+  /**
+   * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
+   * This is a lift of the layoutFamily.calculateCost logic.
+   */
+  _calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision) {
+    let attractionCost = 0;
+    const ATTRACTION_WEIGHT = LAYOUT_CONFIG.WEIGHTS.ATTRACTION;
+
+    const parents = chainParents.get(chain.id) || [];
+    if (parents.length > 0) {
+      const avgParentY = parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length;
+      const dist = Math.abs(y - avgParentY);
+      attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
+    }
+
+    const childrenForAttraction = chainChildren.get(chain.id) || [];
+    if (childrenForAttraction.length > 0) {
+      const avgChildY = childrenForAttraction.reduce((sum, c) => sum + c.yIndex, 0) / childrenForAttraction.length;
+      const dist = Math.abs(y - avgChildY);
+      attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
+    }
+
+    let cutThroughCost = 0;
+    const CUT_THROUGH_WEIGHT = LAYOUT_CONFIG.WEIGHTS.CUT_THROUGH;
+
+    parents.forEach(p => {
+      const y1 = Math.min(p.yIndex, y);
+      const y2 = Math.max(p.yIndex, y);
+      if (y2 - y1 > 1) {
+        for (let lane = y1 + 1; lane < y2; lane++) {
+          if (checkCollision(lane, chain.startTime, chain.startTime, chain.id, chain)) {
+            cutThroughCost += CUT_THROUGH_WEIGHT;
+          }
+        }
+      }
+    });
+
+    const children = chainChildren.get(chain.id) || [];
+    children.forEach(c => {
+      const y1 = Math.min(y, c.yIndex);
+      const y2 = Math.max(y, c.yIndex);
+      if (y2 - y1 > 1) {
+        for (let lane = y1 + 1; lane < y2; lane++) {
+          if (checkCollision(lane, c.startTime, c.startTime, chain.id, chain)) {
+            cutThroughCost += CUT_THROUGH_WEIGHT;
+          }
+        }
+      }
+    });
+
+    let blockerCost = 0;
+    const BLOCKER_WEIGHT = LAYOUT_CONFIG.WEIGHTS.BLOCKER;
+    verticalSegments.forEach(seg => {
+      if (seg.childId === chain.id || seg.parentId === chain.id) return;
+      if (y > seg.y1 && y < seg.y2) {
+        if (seg.time >= chain.startTime && seg.time <= chain.endTime + 1) {
+          blockerCost += BLOCKER_WEIGHT;
+        }
+      }
+    });
+
+    let yShapeCost = 0;
+    const Y_SHAPE_WEIGHT = LAYOUT_CONFIG.WEIGHTS.Y_SHAPE;
+    childrenForAttraction.forEach(c => {
+      const spouses = chainParents.get(c.id) || [];
+      spouses.forEach(spouse => {
+        if (spouse.id === chain.id) return;
+        if (Math.abs(spouse.yIndex - y) < 2) {
+          yShapeCost += Y_SHAPE_WEIGHT;
+        }
+      });
+    });
+
+    parents.forEach(p => {
+      const siblings = chainChildren.get(p.id) || [];
+      siblings.forEach(sib => {
+        if (sib.id === chain.id) return;
+        if (Math.abs(sib.yIndex - y) < 2) {
+          yShapeCost += Y_SHAPE_WEIGHT;
+        }
+      });
+    });
+
+    return attractionCost + cutThroughCost + blockerCost + yShapeCost;
+  }
+
   layoutFamily(family) {
     if (family.chains.length === 0) return 0;
 
@@ -682,118 +843,7 @@ export class LayoutCalculator {
     };
 
     const calculateCost = (chain, y) => {
-      // 1. Attraction (Distance to connected nodes)
-      // STRATEGY: Quadratic Bi-Directional Attraction.
-      // Dist^2 punishment forces long links to snap, overcoming local penalties.
-
-      let attractionCost = 0;
-      const ATTRACTION_WEIGHT = LAYOUT_CONFIG.WEIGHTS.ATTRACTION;
-
-      const parents = chainParents.get(chain.id) || [];
-      if (parents.length > 0) {
-        const avgParentY = parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length;
-        const dist = Math.abs(y - avgParentY);
-        attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
-      }
-
-      const childrenForAttraction = chainChildren.get(chain.id) || [];
-      if (childrenForAttraction.length > 0) {
-        const avgChildY = childrenForAttraction.reduce((sum, c) => sum + c.yIndex, 0) / childrenForAttraction.length;
-        const dist = Math.abs(y - avgChildY);
-        attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
-      }
-
-      // 2. Cut-Through Penalty (Self Crossing)
-      let cutThroughCost = 0;
-      const PENALTY = LAYOUT_CONFIG.WEIGHTS.CUT_THROUGH;
-
-      // Check Incoming Links (Parent -> Chain)
-      parents.forEach(p => {
-        const y1 = Math.min(p.yIndex, y);
-        const y2 = Math.max(p.yIndex, y);
-        if (y2 - y1 > 1) {
-          // Check if intermediate lanes are blocked
-          for (let lane = y1 + 1; lane < y2; lane++) {
-            if (checkCollision(lane, chain.startTime, chain.startTime, chain.id, chain)) {
-              cutThroughCost += PENALTY;
-            }
-          }
-        }
-      });
-
-      // Check Outgoing Links (Chain -> Child)
-      // Note: Children are FIXED at their current yIndex during this calc
-      // So we interpret "If I move to Y, how does it affect links to my children?"
-      const children = chainChildren.get(chain.id) || [];
-      children.forEach(c => {
-        const y1 = Math.min(y, c.yIndex);
-        const y2 = Math.max(y, c.yIndex);
-        if (y2 - y1 > 1) {
-          for (let lane = y1 + 1; lane < y2; lane++) {
-            if (checkCollision(lane, c.startTime, c.startTime, chain.id, chain)) {
-              cutThroughCost += PENALTY;
-            }
-          }
-        }
-      });
-
-      // 3. Blocker Penalty (Am I blocking others?)
-      // If 'chain' is at 'y', does it intersect any vertical segment?
-      // Segment: y1 < y < y2 AND time within chain [start, end]
-      let blockerCost = 0;
-      const BLOCKER_PENALTY = LAYOUT_CONFIG.WEIGHTS.BLOCKER;
-
-      verticalSegments.forEach(seg => {
-        // IGNORANCE IS BLISS: Don't count my own links as obstacles!
-        if (seg.childId === chain.id || seg.parentId === chain.id) return;
-
-        // If I sit on this lane
-        if (y > seg.y1 && y < seg.y2) {
-          // And I exist at the time of the link
-          // Since nodes render to dissolution_year + 1, we check against endTime + 1
-          // Example: Node ends 2009 (renders to 2010), Link at 2010 → should detect blocker
-          if (seg.time >= chain.startTime && seg.time <= chain.endTime + 1) {
-            blockerCost += BLOCKER_PENALTY;
-          }
-        }
-      });
-
-      // 4. Y-Shape Symmetry (Merge/Split Separation)
-      // Goal: If I share a child/parent with another node, we should be 2 lanes apart
-      // to let the common node sit in the middle.
-      let yShapeCost = 0;
-      const Y_SHAPE_PENALTY = LAYOUT_CONFIG.WEIGHTS.Y_SHAPE;
-
-      // Check Spouses (Shared Child)
-      childrenForAttraction.forEach(c => {
-        // Who else parents this child?
-        const spouses = chainParents.get(c.id) || [];
-        spouses.forEach(spouse => {
-          if (spouse.id === chain.id) return;
-          // If spouse is too close (< 2 lanes)
-          if (Math.abs(spouse.yIndex - y) < 2) {
-            yShapeCost += Y_SHAPE_PENALTY;
-          }
-        });
-      });
-
-      // Check Siblings (Shared Parent)
-      parents.forEach(p => {
-        // Who else is a child of this parent?
-        const siblings = chainChildren.get(p.id) || [];
-        siblings.forEach(sib => {
-          if (sib.id === chain.id) return; // Don't check against self
-          // If sibling is too close (< 2 lanes)
-          if (Math.abs(sib.yIndex - y) < 2) {
-            yShapeCost += Y_SHAPE_PENALTY;
-          }
-        });
-      });
-
-      if (chain.nodes.some(n => n.id.includes('Ceramica'))) {
-        // console.log ... (Debug logs removed)
-      }
-      return attractionCost + cutThroughCost + blockerCost + yShapeCost;
+      return this._calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
     };
 
     for (let iter = 0; iter < ITERATIONS; iter++) {
