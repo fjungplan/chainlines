@@ -1,6 +1,32 @@
 import { VISUALIZATION } from '../constants/visualization';
 
 /**
+ * Configuration for the Physics Layout Engine
+ * Tuned for global convergence of large blocks and tight local clustering.
+ */
+export const LAYOUT_CONFIG = {
+  // Iteration Control
+  ITERATIONS: {
+    MIN: 50,              // Minimum for tiny families
+    MAX: 500,             // Cap for huge families
+    MULTIPLIER: 10        // Iterations per chain (N * 10)
+  },
+
+  // Search Space
+  SEARCH_RADIUS: 50,        // Look +/- 50 lanes away for a better spot (Global Vision)
+  TARGET_RADIUS: 10,        // Look +/- 10 lanes around the exact parent/child center (Precision Snapping)
+
+  // Forces & Penalties (Cost Function)
+  WEIGHTS: {
+    ATTRACTION: 100.0,       // Pull per lane of distance (High = tight families)
+    CUT_THROUGH: 10000.0,   // Penalty for being sliced by a vertical link (Avoids crossings)
+    BLOCKER: 5000.0,        // Penalty for sitting on someone else's link (Get out of the way)
+    LANE_SHARING: 500.0,    // Base Penalty for sharing (Decays with distance: 500/Gap)
+    Y_SHAPE: 150.0,         // Penalty for "Uneven" Merges/Splits (Forces Spouses/Siblings 2 lanes apart)
+  }
+};
+
+/**
  * Calculate positions for all nodes using Sankey-like layout
  */
 export class LayoutCalculator {
@@ -576,16 +602,36 @@ export class LayoutCalculator {
     }
 
     // 2. Iterative Relaxation (Force-Directed with Cost Function)
-    const ITERATIONS = 50;
+    const ITERATIONS = Math.min(
+      LAYOUT_CONFIG.ITERATIONS.MAX,
+      Math.max(
+        LAYOUT_CONFIG.ITERATIONS.MIN,
+        family.chains.length * LAYOUT_CONFIG.ITERATIONS.MULTIPLIER
+      )
+    );
 
     // Map children for outgoing link checks
     const chainChildren = new Map();
     family.chains.forEach(c => chainChildren.set(c.id, []));
 
     // Iterate all chains to populate their parents' children list
+    // AND Calculate Degree (Connectivity) for Gravity Sort
+    const chainDegrees = new Map();
+
     family.chains.forEach(childChain => {
+      // Init degree if not present
+      if (!chainDegrees.has(childChain.id)) chainDegrees.set(childChain.id, 0);
+
       const parents = chainParents.get(childChain.id) || [];
+      // Add In-Degree (1 per parent)
+      chainDegrees.set(childChain.id, chainDegrees.get(childChain.id) + parents.length);
+
       parents.forEach(p => {
+        // Init parent degree
+        if (!chainDegrees.has(p.id)) chainDegrees.set(p.id, 0);
+        // Add Out-Degree to Parent
+        chainDegrees.set(p.id, chainDegrees.get(p.id) + 1);
+
         if (chainChildren.has(p.id)) {
           chainChildren.get(p.id).push(childChain);
         }
@@ -617,29 +663,29 @@ export class LayoutCalculator {
 
     const calculateCost = (chain, y) => {
       // 1. Attraction (Distance to connected nodes)
-      // STRATEGY: Bi-Directional Attraction.
-      // Previously: Only Child -> Parent.
-      // Now: Child <-> Parent. This pulls parents down towards children and children up towards parents.
-      // This centers "Star" topologies and closes gaps.
+      // STRATEGY: Quadratic Bi-Directional Attraction.
+      // Dist^2 punishment forces long links to snap, overcoming local penalties.
 
       let attractionCost = 0;
-      const ATTRACTION_WEIGHT = 50.0; // Increased from 1.0 to prioritize short links (Priority #2)
+      const ATTRACTION_WEIGHT = LAYOUT_CONFIG.WEIGHTS.ATTRACTION;
 
       const parents = chainParents.get(chain.id) || [];
       if (parents.length > 0) {
         const avgParentY = parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length;
-        attractionCost += Math.abs(y - avgParentY) * ATTRACTION_WEIGHT;
+        const dist = Math.abs(y - avgParentY);
+        attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
       }
 
       const childrenForAttraction = chainChildren.get(chain.id) || [];
       if (childrenForAttraction.length > 0) {
         const avgChildY = childrenForAttraction.reduce((sum, c) => sum + c.yIndex, 0) / childrenForAttraction.length;
-        attractionCost += Math.abs(y - avgChildY) * ATTRACTION_WEIGHT;
+        const dist = Math.abs(y - avgChildY);
+        attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
       }
 
       // 2. Cut-Through Penalty (Self Crossing)
       let cutThroughCost = 0;
-      const PENALTY = 10000.0; // Moderate penalty (collision logic fixed)
+      const PENALTY = LAYOUT_CONFIG.WEIGHTS.CUT_THROUGH;
 
       // Check Incoming Links (Parent -> Chain)
       parents.forEach(p => {
@@ -675,7 +721,7 @@ export class LayoutCalculator {
       // If 'chain' is at 'y', does it intersect any vertical segment?
       // Segment: y1 < y < y2 AND time within chain [start, end]
       let blockerCost = 0;
-      const BLOCKER_PENALTY = 5000.0; // Slightly less than self-cut? Or same.
+      const BLOCKER_PENALTY = LAYOUT_CONFIG.WEIGHTS.BLOCKER;
 
       verticalSegments.forEach(seg => {
         // IGNORANCE IS BLISS: Don't count my own links as obstacles!
@@ -706,7 +752,39 @@ export class LayoutCalculator {
         }
       });
 
-      return attractionCost + cutThroughCost + blockerCost;
+      // 4. Y-Shape Symmetry (Merge/Split Separation)
+      // Goal: If I share a child/parent with another node, we should be 2 lanes apart
+      // to let the common node sit in the middle.
+      let yShapeCost = 0;
+      const Y_SHAPE_PENALTY = LAYOUT_CONFIG.WEIGHTS.Y_SHAPE;
+
+      // Check Spouses (Shared Child)
+      childrenForAttraction.forEach(c => {
+        // Who else parents this child?
+        const spouses = chainParents.get(c.id) || [];
+        spouses.forEach(spouse => {
+          if (spouse.id === chain.id) return;
+          // If spouse is too close (< 2 lanes)
+          if (Math.abs(spouse.yIndex - y) < 2) {
+            yShapeCost += Y_SHAPE_PENALTY;
+          }
+        });
+      });
+
+      // Check Siblings (Shared Parent)
+      parents.forEach(p => {
+        // Who else is a child of this parent?
+        const siblings = chainChildren.get(p.id) || [];
+        siblings.forEach(sib => {
+          if (sib.id === chain.id) return; // Don't check against self
+          // If sibling is too close (< 2 lanes)
+          if (Math.abs(sib.yIndex - y) < 2) {
+            yShapeCost += Y_SHAPE_PENALTY;
+          }
+        });
+      });
+
+      return attractionCost + cutThroughCost + blockerCost + yShapeCost;
     };
 
     for (let iter = 0; iter < ITERATIONS; iter++) {
@@ -715,14 +793,23 @@ export class LayoutCalculator {
       // Rebuild segments at start of iteration
       rebuildSegments();
 
-      // STRATEGY: Alternating Iteration Direction
-      // Iteration 0 (Even): Sort by StartTime ASC ("Forward") -> Propagates Push/Pull from Parents down to Children.
-      // Iteration 1 (Odd): Sort by StartTime DESC ("Backward") -> Propagates Pull from Children up to Parents.
-      // This solves the "Stuck Cluster" issue where a child (Cilo) wants to move down but its parent (Piz Buin) hasn't moved yet.
-      if (iter % 2 === 0) {
+      // STRATEGY: Tri-State Alternating Iteration
+      // 0 (Forward): Parents Push (Time ASC)
+      // 1 (Backward): Children Pull (Time DESC)
+      // 2 (Gravity): Hubs Anchor (Degree DESC) - Allows "Loose Ends" to snap to heavy Hubs
+      const cycle = iter % 3;
+
+      if (cycle === 0) {
         family.chains.sort((a, b) => a.startTime - b.startTime);
-      } else {
+      } else if (cycle === 1) {
         family.chains.sort((a, b) => b.startTime - a.startTime);
+      } else {
+        // Cycle 2: Gravity Sort (Degree DESC)
+        family.chains.sort((a, b) => {
+          const degA = chainDegrees.get(a.id) || 0;
+          const degB = chainDegrees.get(b.id) || 0;
+          return degB - degA; // Highest connectivity first (Hubs)
+        });
       }
 
       family.chains.forEach(chain => {
@@ -733,46 +820,53 @@ export class LayoutCalculator {
         let currentCost = calculateCost(chain, currentY);
 
         // Add "Lane Sharing / Stranger Danger" Penalty to Base Cost
-        // We calculate this "On the Fly" during candidate evaluation, but we need it for currentY too.
         const getSharingPenalty = (y, myChain) => {
           const slots = ySlots.get(y);
           if (!slots || slots.length === 0) return 0;
 
           // If I share with someone, check if they are family.
-          // Parents or Children?
-          // Expensive lookup? We have chainParents map.
           const parents = chainParents.get(myChain.id) || [];
           const children = chainChildren.get(myChain.id) || [];
 
           // Check every occupant
-          let penalty = 0;
-          const SHARING_PENALTY = 2000.0; // Preference for empty lanes
+          let minGap = Infinity;
+          let hasStranger = false;
+
+          const BASE_SHARING_WEIGHT = LAYOUT_CONFIG.WEIGHTS.LANE_SHARING;
 
           for (const s of slots) {
             if (s.chainId === myChain.id) continue;
-            // Are they related?
+
             const isParent = parents.some(p => p.id === s.chainId);
             const isChild = children.some(c => c.id === s.chainId);
 
             if (!isParent && !isChild) {
-              penalty += SHARING_PENALTY;
-              // Add extra if gap is small (< 2 years)?
-              // s.end vs myChain.start
-              // gap = myChain.start - s.end
-              // if gap == 1, visual touch.
-              if (myChain.startTime - s.end <= 1 || s.start - myChain.endTime <= 1) {
-                penalty += 2000.0; // Extra "Visual Breathing Room" penalty
-              }
+              hasStranger = true;
+
+              // Calculate Gap
+              const gap1 = myChain.startTime - s.end;
+              const gap2 = s.start - myChain.endTime;
+
+              const gap = Math.max(gap1, gap2);
+              if (gap < minGap) minGap = gap;
             }
           }
-          return penalty;
+
+          if (!hasStranger) return 0;
+
+          // Distance-Based Decay
+          // Formula: Cost = WEIGHT / Gap
+          // Gap 1 (Tight): Cost ~500. (Repels > 2 lane attraction)
+          // Gap 10 (Far): Cost ~50. (Attracts Pack)
+          const safeGap = Math.max(0.5, minGap);
+          return BASE_SHARING_WEIGHT / safeGap;
         };
 
         currentCost += getSharingPenalty(currentY, chain);
 
         // Explore wider neighborhood to jump over obstacles
         // Increased radius to escape deep blocks
-        const SEARCH_RADIUS = 20;
+        const SEARCH_RADIUS = LAYOUT_CONFIG.SEARCH_RADIUS;
         const candidates = new Set();
 
         // Add neighbors
@@ -787,7 +881,7 @@ export class LayoutCalculator {
           const avg = Math.round(parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length);
           // Search around the parent's average too! Parent itself might block 'avg', 
           // but 'avg+1' might be free and perfect.
-          const TARGET_RADIUS = 5;
+          const TARGET_RADIUS = LAYOUT_CONFIG.TARGET_RADIUS;
           for (let k = 0; k <= TARGET_RADIUS; k++) {
             candidates.add(avg - k);
             candidates.add(avg + k);
@@ -798,7 +892,7 @@ export class LayoutCalculator {
         const children = chainChildren.get(chain.id) || [];
         if (children.length > 0) {
           const avg = Math.round(children.reduce((sum, c) => sum + c.yIndex, 0) / children.length);
-          const TARGET_RADIUS = 5;
+          const TARGET_RADIUS = LAYOUT_CONFIG.TARGET_RADIUS;
           for (let k = 0; k <= TARGET_RADIUS; k++) {
             candidates.add(avg - k);
             candidates.add(avg + k);

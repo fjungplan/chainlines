@@ -250,5 +250,35 @@ describe('LayoutCalculator Refactor (Force-Directed)', () => {
       expect(f1.y).toBeLessThan(f2.y);
       expect(f3.y).toBeLessThan(f2.y);
     });
+
+    it('should cluster leaves around a hub (Star Topology)', () => {
+      // Hub: Central Node (1950)
+      // Leaves: L1 (1940), L2 (1960) connected to Hub
+      const graphData = {
+        nodes: [
+          { id: 'Hub', founding_year: 1950, eras: [{ year: 1950, name: 'Hub' }] },
+          { id: 'L1', founding_year: 1940, dissolution_year: 1950, eras: [{ year: 1940, name: 'L1' }] },
+          { id: 'L2', founding_year: 1960, eras: [{ year: 1960, name: 'L2' }] },
+        ],
+        links: [
+          { source: 'L1', target: 'Hub', type: 'LEGAL_TRANSFER', year: 1950 },
+          { source: 'Hub', target: 'L2', type: 'LEGAL_TRANSFER', year: 1960 },
+        ]
+      };
+
+      const calculator = new LayoutCalculator(graphData, 1000, 800);
+      const layout = calculator.calculateLayout();
+
+      const hub = layout.nodes.find(n => n.id === 'Hub');
+      const l1 = layout.nodes.find(n => n.id === 'L1');
+      const l2 = layout.nodes.find(n => n.id === 'L2');
+
+      const getLane = (n) => Math.round((n.y - 50) / calculator.rowHeight);
+      const hubLane = getLane(hub);
+
+      // All leaves should be within 1 lane of the Hub (direct neighbors)
+      expect(Math.abs(getLane(l1) - hubLane)).toBeLessThanOrEqual(1);
+      expect(Math.abs(getLane(l2) - hubLane)).toBeLessThanOrEqual(1);
+    });
   });
 });
