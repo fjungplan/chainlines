@@ -1314,7 +1314,7 @@ export class LayoutCalculator {
 
   generateLinkPath(source, target, link, sameSwimlane) {
     // Restore logic: same-swimlane transitions use markers (null path)
-    if (sameSwimlane && link?.type !== 'MERGE' && link?.type !== 'SPLIT') {
+    if (sameSwimlane) {
       return { d: null, debugPoints: null, topPathD: null, bottomPathD: null };
     }
 

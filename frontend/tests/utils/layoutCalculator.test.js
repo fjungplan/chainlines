@@ -251,6 +251,26 @@ describe('LayoutCalculator Refactor (Force-Directed)', () => {
       expect(f3.y).toBeLessThan(f2.y);
     });
 
+    it('should use markers (null path) for same-swimlane MERGE', () => {
+      const parent = { id: 'P', name: 'Parent', founding_year: 1990, dissolution_year: 2000, eras: [{ start_year: 1990, end_year: 2000 }] };
+      const child = { id: 'C', name: 'Child', founding_year: 2000, dissolution_year: 2010, eras: [{ start_year: 2000, end_year: 2010 }] };
+      const nodes = [parent, child];
+      const links = [{ source: 'P', target: 'C', type: 'MERGE' }];
+
+      const layout = new LayoutCalculator({ nodes, links }, 1000, 500);
+      const outputLinks = layout.calculateLinkPaths(layout.nodes);
+
+      // Setup mock positions on same lane
+      Object.assign(layout.nodes[0], { x: 0, y: 50, width: 100, height: 10 });
+      Object.assign(layout.nodes[1], { x: 200, y: 50, width: 100, height: 10 });
+
+      // Re-run path calculation with forced positions
+      const finalLinks = layout.calculateLinkPaths(layout.nodes);
+
+      expect(finalLinks[0].sameSwimlane).toBe(true);
+      expect(finalLinks[0].path).toBeNull(); // Should be null to trigger MarkerRenderer
+    });
+
     it('should cluster leaves around a hub (Star Topology)', () => {
       // Hub: Central Node (1950)
       // Leaves: L1 (1940), L2 (1960) connected to Hub
