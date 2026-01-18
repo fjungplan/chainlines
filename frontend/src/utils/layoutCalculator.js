@@ -1801,8 +1801,8 @@ export class LayoutCalculator {
         const otherStart = otherNode.founding_year;
         const otherEnd = otherNode.dissolution_year || Infinity;
 
-        // Check for temporal overlap: (start1 < end2) AND (start2 < end1)
-        if (node1Start < otherEnd && otherStart < node1End) {
+        // Check for temporal overlap: (start1 <= end2) AND (start2 <= end1)
+        if (node1Start <= otherEnd && otherStart <= node1End) {
           return true; // Overlap detected
         }
       }
@@ -1814,7 +1814,7 @@ export class LayoutCalculator {
         const otherEnd = otherNode.dissolution_year || Infinity;
 
         // Check for temporal overlap
-        if (node2Start < otherEnd && otherStart < node2End) {
+        if (node2Start <= otherEnd && otherStart <= node2End) {
           return true; // Overlap detected
         }
       }
@@ -1923,8 +1923,9 @@ export class LayoutCalculator {
       const otherStart = otherNode.founding_year;
       const otherEnd = otherNode.dissolution_year || Infinity;
 
-      // Check for overlap: (start1 < end2) AND (start2 < end1)
-      if (nodeStart < otherEnd && otherStart < nodeEnd) {
+      // Check for overlap: (start1 <= end2) AND (start2 <= end1)
+      // Uses inclusive comparison to match visual rendering
+      if (nodeStart <= otherEnd && otherStart <= nodeEnd) {
         return true;
       }
     }
@@ -2171,8 +2172,8 @@ export class LayoutCalculator {
         const otherStart = otherNode.founding_year;
         const otherEnd = otherNode.dissolution_year || Infinity;
 
-        // Check for temporal overlap: (start1 < end2) AND (start2 < end1)
-        if (node1Start < otherEnd && otherStart < node1End) {
+        // Check for temporal overlap: (start1 <= end2) AND (start2 <= end1)
+        if (node1Start <= otherEnd && otherStart <= node1End) {
           return true; // Overlap detected
         }
       }
@@ -2184,7 +2185,7 @@ export class LayoutCalculator {
         const otherEnd = otherNode.dissolution_year || Infinity;
 
         // Check for temporal overlap
-        if (node2Start < otherEnd && otherStart < node2End) {
+        if (node2Start <= otherEnd && otherStart <= node2End) {
           return true; // Overlap detected
         }
       }
@@ -2293,8 +2294,9 @@ export class LayoutCalculator {
       const otherStart = otherNode.founding_year;
       const otherEnd = otherNode.dissolution_year || Infinity;
 
-      // Check for overlap: (start1 < end2) AND (start2 < end1)
-      if (nodeStart < otherEnd && otherStart < nodeEnd) {
+      // Check for overlap: (start1 <= end2) AND (start2 <= end1)
+      // Uses inclusive comparison to match visual rendering (which extends to end of year)
+      if (nodeStart <= otherEnd && otherStart <= nodeEnd) {
         return true;
       }
     }

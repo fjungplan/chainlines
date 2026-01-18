@@ -271,6 +271,28 @@ describe('LayoutCalculator Refactor (Force-Directed)', () => {
       expect(finalLinks[0].path).toBeNull(); // Should be null to trigger MarkerRenderer
     });
 
+    it('should detect overlap when start year equals end year of previous node (Sanson/Famcucine)', () => {
+      // Sanson: 1963-1980
+      // Famcucine: 1980-1981
+      // Visually: Sanson draws [Start, 1981). Famcucine draws [1980, 1982). Intersection: 1980.
+      // Current Logic: 1980 < 1980 is False.
+      // Expected Logic Update: 1980 < 1981 is True.
+
+      const nodes = [
+        { id: 'Sanson', founding_year: 1963, dissolution_year: 1980, eras: [{ year: 1963 }] },
+        { id: 'Famcucine', founding_year: 1980, dissolution_year: 1981, eras: [{ year: 1980 }] }
+      ];
+      const calculator = new LayoutCalculator({ nodes, links: [] }, 1000, 500);
+      const family = ['Sanson', 'Famcucine'];
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const assignments = { 'Sanson': 0, 'Famcucine': 0 };
+
+      const hasOverlap = calculator.hasTemporalOverlapInLane('Famcucine', 0, assignments, nodeMap, family);
+
+      // This fails if logic is < End. Passes if logic is < End + 1.
+      expect(hasOverlap).toBe(true);
+    });
+
     it('should cluster leaves around a hub (Star Topology)', () => {
       // Hub: Central Node (1950)
       // Leaves: L1 (1940), L2 (1960) connected to Hub
