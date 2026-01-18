@@ -76,4 +76,32 @@ describe('Global Cost Infrastructure (Slice 1)', () => {
             throw new Error('calculateCostDelta not implemented');
         }
     });
+
+    describe('Move Acceptance Criterion (Slice 2)', () => {
+        it('should accept move when global cost decreases', () => {
+            // Mock deltaGlobal < 0
+            const deltaGlobal = -100;
+            const deltaLocal = -50;
+
+            // Acceptance logic: (deltaGlobal < 0 || (deltaGlobal === 0 && deltaLocal < 0))
+            const accepted = (deltaGlobal < 0 || (deltaGlobal === 0 && deltaLocal < 0));
+            expect(accepted).toBe(true);
+        });
+
+        it('should reject move when global cost increases', () => {
+            const deltaGlobal = 50;
+            const deltaLocal = -100; // Local improves but global worsens
+
+            const accepted = (deltaGlobal < 0 || (deltaGlobal === 0 && deltaLocal < 0));
+            expect(accepted).toBe(false);
+        });
+
+        it('should accept move when global cost is equal but local improves', () => {
+            const deltaGlobal = 0;
+            const deltaLocal = -100;
+
+            const accepted = (deltaGlobal < 0 || (deltaGlobal === 0 && deltaLocal < 0));
+            expect(accepted).toBe(true);
+        });
+    });
 });

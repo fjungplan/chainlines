@@ -485,7 +485,7 @@ export class LayoutCalculator {
   /**
    * Calculates the net change in global cost if a chain moves from oldY to newY.
    */
-  calculateCostDelta(chain, oldY, newY, affectedChains, chains, chainParents, chainChildren, verticalSegments, checkCollision) {
+  calculateCostDelta(chain, oldY, newY, affectedChains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
     // Current total cost of the subset
     let oldSubtotal = this._calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
     affectedChains.forEach(id => {
@@ -496,9 +496,25 @@ export class LayoutCalculator {
     });
 
     // New total cost of the subset
-    // Temporarily update yIndex for the subtotal calculation
+    // Temporarily update yIndex AND ySlots for the subtotal calculation
+    // This is crucial because checkCollision depends on ySlots
     const originalY = chain.yIndex;
-    chain.yIndex = newY;
+    chain.yIndex = newY; // Update object
+
+    let movedSlot = null;
+    if (ySlots) {
+      const oldSlots = ySlots.get(oldY);
+      if (oldSlots) {
+        const idx = oldSlots.findIndex(s => s.chainId === chain.id);
+        if (idx !== -1) {
+          movedSlot = oldSlots.splice(idx, 1)[0];
+        }
+      }
+      if (!ySlots.has(newY)) ySlots.set(newY, []);
+      // If movedSlot not found (sanity check), create new
+      const slotToAdd = movedSlot || { start: chain.startTime, end: chain.endTime, chainId: chain.id };
+      ySlots.get(newY).push(slotToAdd);
+    }
 
     let newSubtotal = this._calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
     affectedChains.forEach(id => {
@@ -508,8 +524,19 @@ export class LayoutCalculator {
       }
     });
 
-    // Restore original Y
+    // Revert State
     chain.yIndex = originalY;
+    if (ySlots && movedSlot) {
+      // Remove from newY
+      const newSlots = ySlots.get(newY);
+      if (newSlots) {
+        const idx = newSlots.findIndex(s => s.chainId === chain.id);
+        if (idx !== -1) newSlots.splice(idx, 1);
+      }
+      // Add back to oldY
+      if (!ySlots.has(oldY)) ySlots.set(oldY, []);
+      ySlots.get(oldY).push(movedSlot);
+    }
 
     return newSubtotal - oldSubtotal;
   }
@@ -797,8 +824,7 @@ export class LayoutCalculator {
       Math.max(
         LAYOUT_CONFIG.ITERATIONS.MIN,
         family.chains.length * LAYOUT_CONFIG.ITERATIONS.MULTIPLIER
-      )
-    );
+      ));
 
     // Calculate Degree (Connectivity) for Gravity Sort
     const chainDegrees = new Map();
@@ -959,31 +985,40 @@ export class LayoutCalculator {
         }
 
         let bestY = currentY;
-        let bestCost = currentCost;
+        let bestGlobalDelta = 0; // Initialize bestGlobalDelta to 0 (no change)
 
+        // Global Optimization Loop
         candidates.forEach(y => {
-          // Allow negative Y during optimization (we normalize later)
           if (y === currentY) return;
 
           // Check Hard Collision
           if (!checkCollision(y, chain.startTime, chain.endTime, chain.id, chain)) {
 
-            let cost = calculateCost(chain, y);
-            // ADD SHARING PENALTY
-            cost += getSharingPenalty(y, chain);
+            // Calculate Global Delta
+            const affected = this.getAffectedChains(chain, currentY, y, family.chains, chainParents, chainChildren, verticalSegments);
+            const globalDelta = this.calculateCostDelta(chain, currentY, y, affected, family.chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
 
-            if (cost < bestCost) {
-              bestCost = cost;
+            // Add Sharing Penalty to Global Delta
+            const sharingPenalty = getSharingPenalty(y, chain);
+            const currentSharing = getSharingPenalty(currentY, chain);
+            const sharingDelta = sharingPenalty - currentSharing;
+
+            const totalGlobalDelta = globalDelta + sharingDelta;
+
+            if (totalGlobalDelta < bestGlobalDelta) {
+              bestGlobalDelta = totalGlobalDelta;
               bestY = y;
             }
           }
         });
 
-        if (bestY !== currentY) {
+        if (bestGlobalDelta < 0) {
           // Apply Move
           const oldSlots = ySlots.get(currentY);
-          const idx = oldSlots.findIndex(s => s.chainId === chain.id);
-          if (idx !== -1) oldSlots.splice(idx, 1);
+          if (oldSlots) {
+            const idx = oldSlots.findIndex(s => s.chainId === chain.id);
+            if (idx !== -1) oldSlots.splice(idx, 1);
+          }
 
           occupySlot(bestY, chain);
           chain.yIndex = bestY;
