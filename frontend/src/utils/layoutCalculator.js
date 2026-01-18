@@ -21,7 +21,7 @@ export const LAYOUT_CONFIG = {
     ATTRACTION: 100.0,       // Pull per lane of distance (High = tight families)
     CUT_THROUGH: 10000.0,   // Penalty for being sliced by a vertical link (Avoids crossings)
     BLOCKER: 5000.0,        // Penalty for sitting on someone else's link (Get out of the way)
-    LANE_SHARING: 500.0,    // Base Penalty for sharing (Decays with distance: 500/Gap)
+    LANE_SHARING: 0.0,      // Temporarily disabled (strict collision handles strangers)
     Y_SHAPE: 150.0,         // Penalty for "Uneven" Merges/Splits (Forces Spouses/Siblings 2 lanes apart)
   }
 };
@@ -283,8 +283,9 @@ export class LayoutCalculator {
       const parentSuccs = succs.get(parentId) || [];
       if (parentSuccs.length > 1) return true; // Parent splits
 
-      // ALSO: Check for temporal overlap with the single parent.
-      // If we overlap, we MUST be a chain start (because parent broke the chain).
+      // ALSO: Check for VISUAL overlap with the single parent.
+      // Since nodes render to dissolution_year + 1, we must check visual boundaries.
+      // If parent visually extends into my start year, we overlap and must break the chain.
       const parentNode = nodeMap.get(parentId);
       const myNode = nodeMap.get(nodeId);
 
@@ -294,9 +295,12 @@ export class LayoutCalculator {
         parentEnd = lastEra ? lastEra.year : parentNode.founding_year;
       }
 
-      if (parentEnd > myNode.founding_year) return true; // Parent overlaps me, so I start new
+      // Visual overlap check: parent renders to (parentEnd + 1), so check if that > myStart
+      // Example: Parent ends 2009 (renders to 2010), Child starts 2010 → 2010 > 2010 = FALSE (no overlap, can chain)
+      // Example: Parent ends 2009 (renders to 2010), Child starts 2009 → 2010 > 2009 = TRUE (overlap, must break)
+      if (parentEnd + 1 > myNode.founding_year) return true; // Visual overlap, break chain
 
-      return false; // Linear, no overlap
+      return false; // No visual overlap, can continue chain
     };
 
     nodes.forEach(node => {
@@ -326,15 +330,11 @@ export class LayoutCalculator {
           if (nextPreds.length > 1) break;
 
           // Continue
-          // CRITICAL: Check for temporal overlap (Dirty Data Protection)
-          // If curr ends AFTER next starts, they visually overlap on the same row.
-          // We MUST break the chain here to force them onto different rows (parent/child relationship).
+          // CRITICAL: Check for VISUAL overlap (Dirty Data Protection)
+          // Since nodes render to dissolution_year + 1, we must check visual boundaries.
+          // If curr visually extends into next's start year, they overlap and must break.
           const currNode = nodeMap.get(curr);
           const nextNode = nodeMap.get(nextId);
-
-          // Use a tolerance of 0. If curr.dissolution_year (or inferred end) > next.founding_year
-          // But strict inequality might be too aggressive if they effectively touch.
-          // Let's assume touch is fine (end == start). Overlap is end > start.
 
           let currEnd = currNode.dissolution_year;
           if (!currEnd) {
@@ -342,8 +342,11 @@ export class LayoutCalculator {
             currEnd = lastEra ? lastEra.year : currNode.founding_year;
           }
 
-          if (currEnd > nextNode.founding_year) {
-            // Overlap detected!
+          // Visual overlap check: curr renders to (currEnd + 1), so check if that > nextStart
+          // Example: Curr ends 2009 (renders to 2010), Next starts 2010 → 2010 > 2010 = FALSE (no overlap, continue)
+          // Example: Curr ends 2009 (renders to 2010), Next starts 2009 → 2010 > 2009 = TRUE (overlap, break)
+          if (currEnd + 1 > nextNode.founding_year) {
+            // Visual overlap detected - break chain
             break;
           }
 
@@ -446,20 +449,34 @@ export class LayoutCalculator {
     const ySlots = new Map(); // yIndex -> Array of {start, end, chainId}
     let maxY = 0;
 
-    const checkCollision = (y, start, end, excludeChainId) => {
+    // Family-aware collision check
+    // For strangers: require 1-year gap (end+1 to start)
+    // For family: allow temporal overlap
+    const checkCollision = (y, start, end, excludeChainId, movingChain) => {
       if (!ySlots.has(y)) return false;
       const slots = ySlots.get(y);
-      // Check intersection: !(end1 < start2 || start1 > end2)
-      // Strict inequality ensures that if End1 == Start2 (shared year), it IS a collision.
-      // because End1 < Start2 is FALSE.
+
       const collision = slots.some(s => {
         if (s.chainId === excludeChainId) return false;
-        // Debug
-        const collide = !(s.end < start || s.start > end);
-        if (collide && (s.end === start || s.start === end)) {
-          // console.log(`Strict Collision Conflict: Lane ${y}. Existing [${s.start}-${s.end}] vs New [${start}-${end}]`);
+
+        // Check if this slot's chain is family (parent or child)
+        const slotChain = family.chains.find(c => c.id === s.chainId);
+        if (!slotChain) return false;
+
+        const parents = chainParents.get(movingChain.id) || [];
+        const children = chainChildren.get(movingChain.id) || [];
+        const isFamily = parents.some(p => p.id === s.chainId) ||
+          children.some(c => c.id === s.chainId);
+
+        if (isFamily) {
+          // Family: allow overlap, use standard collision (touching is OK)
+          return !(s.end < start || s.start > end);
+        } else {
+          // Strangers: enforce 1-year gap
+          // Node renders to end+1, so we need: s.end+1 < start OR s.start > end+1
+          // Collision if NOT (gap >= 1)
+          return !(s.end + 1 < start || s.start > end + 1);
         }
-        return collide;
       });
       return collision;
     };
@@ -471,11 +488,15 @@ export class LayoutCalculator {
       if (y > maxY) maxY = y;
     };
 
-    // Calculate parents map for forces
+    // Calculate parents and children maps for forces and collision detection
     // chainId -> [parentChainId, ...]
     const chainParents = new Map();
+    const chainChildren = new Map();
     const nodeToChain = new Map();
-    family.chains.forEach(c => c.nodes.forEach(n => nodeToChain.set(n.id, c)));
+    family.chains.forEach(c => {
+      c.nodes.forEach(n => nodeToChain.set(n.id, c));
+      chainChildren.set(c.id, []);
+    });
 
     family.chains.forEach(c => {
       const parents = new Set();
@@ -488,6 +509,14 @@ export class LayoutCalculator {
         }
       });
       chainParents.set(c.id, Array.from(parents));
+    });
+
+    // Populate children map
+    family.chains.forEach(child => {
+      const parents = chainParents.get(child.id) || [];
+      parents.forEach(p => {
+        chainChildren.get(p.id).push(child);
+      });
     });
 
     // Initial Placement
@@ -548,14 +577,14 @@ export class LayoutCalculator {
       let offset = 0;
       while (!placed) {
         let candidate = targetY + offset;
-        if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id)) {
+        if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id, chain)) {
           occupySlot(candidate, chain);
           placed = true;
           break;
         }
         if (offset > 0) {
           candidate = targetY - offset;
-          if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id)) {
+          if (candidate >= 0 && !checkCollision(candidate, chain.startTime, chain.endTime, chain.id, chain)) {
             occupySlot(candidate, chain);
             placed = true;
             break;
@@ -610,12 +639,7 @@ export class LayoutCalculator {
       )
     );
 
-    // Map children for outgoing link checks
-    const chainChildren = new Map();
-    family.chains.forEach(c => chainChildren.set(c.id, []));
-
-    // Iterate all chains to populate their parents' children list
-    // AND Calculate Degree (Connectivity) for Gravity Sort
+    // Calculate Degree (Connectivity) for Gravity Sort
     const chainDegrees = new Map();
 
     family.chains.forEach(childChain => {
@@ -631,10 +655,6 @@ export class LayoutCalculator {
         if (!chainDegrees.has(p.id)) chainDegrees.set(p.id, 0);
         // Add Out-Degree to Parent
         chainDegrees.set(p.id, chainDegrees.get(p.id) + 1);
-
-        if (chainChildren.has(p.id)) {
-          chainChildren.get(p.id).push(childChain);
-        }
       });
     });
 
@@ -694,7 +714,7 @@ export class LayoutCalculator {
         if (y2 - y1 > 1) {
           // Check if intermediate lanes are blocked
           for (let lane = y1 + 1; lane < y2; lane++) {
-            if (checkCollision(lane, chain.startTime, chain.startTime, chain.id)) {
+            if (checkCollision(lane, chain.startTime, chain.startTime, chain.id, chain)) {
               cutThroughCost += PENALTY;
             }
           }
@@ -710,7 +730,7 @@ export class LayoutCalculator {
         const y2 = Math.max(y, c.yIndex);
         if (y2 - y1 > 1) {
           for (let lane = y1 + 1; lane < y2; lane++) {
-            if (checkCollision(lane, c.startTime, c.startTime, chain.id)) {
+            if (checkCollision(lane, c.startTime, c.startTime, chain.id, chain)) {
               cutThroughCost += PENALTY;
             }
           }
@@ -730,24 +750,10 @@ export class LayoutCalculator {
         // If I sit on this lane
         if (y > seg.y1 && y < seg.y2) {
           // And I exist at the time of the link
-          // use strict inequality for collision?
-          // Link is at seg.time.
-          // Chain is [start, end].
-          // Collision if start <= time && end >= time (inclusive? or strict?)
-          // checkCollision uses strict !(end < time || start > time)
-          // i.e. start <= time && end >= time.
-          // But specifically for blocking, we use the same rules.
-
-          // Optimized inline check
-          if (seg.time >= chain.startTime && seg.time <= chain.endTime) {
-            // Check strict single-point overlap if needed?
-            // If Node ends at 2000, Link at 2000. Strict inequality says NO collision.
-            // So we should match checkCollision logic:
-            // !(chain.end < seg.time || chain.start > seg.time)
-
-            if (!(chain.endTime < seg.time || chain.startTime > seg.time)) {
-              blockerCost += BLOCKER_PENALTY;
-            }
+          // Since nodes render to dissolution_year + 1, we check against endTime + 1
+          // Example: Node ends 2009 (renders to 2010), Link at 2010 → should detect blocker
+          if (seg.time >= chain.startTime && seg.time <= chain.endTime + 1) {
+            blockerCost += BLOCKER_PENALTY;
           }
         }
       });
@@ -784,6 +790,9 @@ export class LayoutCalculator {
         });
       });
 
+      if (chain.nodes.some(n => n.id.includes('Ceramica'))) {
+        // console.log ... (Debug logs removed)
+      }
       return attractionCost + cutThroughCost + blockerCost + yShapeCost;
     };
 
@@ -903,11 +912,11 @@ export class LayoutCalculator {
         let bestCost = currentCost;
 
         candidates.forEach(y => {
-          if (y < 0) return;
+          // Allow negative Y during optimization (we normalize later)
           if (y === currentY) return;
 
           // Check Hard Collision
-          if (!checkCollision(y, chain.startTime, chain.endTime, chain.id)) {
+          if (!checkCollision(y, chain.startTime, chain.endTime, chain.id, chain)) {
 
             let cost = calculateCost(chain, y);
             // ADD SHARING PENALTY
@@ -935,7 +944,28 @@ export class LayoutCalculator {
       if (!energyChanged) break;
     }
 
-    // 3. Post-Processing: Compaction
+    // 3. Post-Processing: Normalization & Compaction
+
+    // Normalize Y indices (Shift so min Y is 0)
+    let minY = 0;
+    family.chains.forEach(c => { if (c.yIndex < minY) minY = c.yIndex; });
+
+    if (minY < 0) {
+      const shift = -minY;
+      ySlots.clear();
+      maxY = 0; // Reset maxY tracking
+      family.chains.forEach(c => {
+        // occupySlot updates chain.yIndex and ySlots and maxY
+        // But wait, occupySlot pushes to array.
+        // We must manually update chain.yIndex first? 
+        // Helper occupySlot: 
+        //   ySlots.get(y).push(...)
+        //   chain.yIndex = y;
+        // So we just call occupySlot with new Y.
+        occupySlot(c.yIndex + shift, c);
+      });
+    }
+
     // Remove empty lanes
     let maxLane = 0;
     ySlots.forEach((slots, y) => { if (slots.length > 0 && y > maxLane) maxLane = y; });

@@ -5,12 +5,12 @@ describe('LayoutCalculator Refactor (Force-Directed)', () => {
   const createMockGraphData = () => ({
     nodes: [
       { id: 'n1', founding_year: 2000, dissolution_year: 2005, eras: [{ year: 2000, name: 'A' }] },
-      { id: 'n2', founding_year: 2005, dissolution_year: 2010, eras: [{ year: 2005, name: 'B' }] },
+      { id: 'n2', founding_year: 2006, dissolution_year: 2010, eras: [{ year: 2006, name: 'B' }] },
       { id: 'n3', founding_year: 2000, dissolution_year: 2010, eras: [{ year: 2000, name: 'C' }] },
       { id: 'n4', founding_year: 2010, dissolution_year: null, eras: [{ year: 2010, name: 'D' }] } // Active
     ],
     links: [
-      { source: 'n1', target: 'n2', type: 'LEGAL_TRANSFER', year: 2005 }
+      { source: 'n1', target: 'n2', type: 'LEGAL_TRANSFER', year: 2006 }
     ]
   });
 
@@ -253,6 +253,12 @@ describe('LayoutCalculator Refactor (Force-Directed)', () => {
 
     it('should use markers (null path) for same-swimlane MERGE', () => {
       const parent = { id: 'P', name: 'Parent', founding_year: 1990, dissolution_year: 2000, eras: [{ start_year: 1990, end_year: 2000 }] };
+      const n2 = {
+        id: 'n2',
+        founding_year: 2001,
+        dissolution_year: 2010,
+        eras: [{ start_year: 2001, end_year: 2010 }]
+      };
       const child = { id: 'C', name: 'Child', founding_year: 2000, dissolution_year: 2010, eras: [{ start_year: 2000, end_year: 2010 }] };
       const nodes = [parent, child];
       const links = [{ source: 'P', target: 'C', type: 'MERGE' }];
