@@ -2,6 +2,7 @@ import { VISUALIZATION } from '../constants/visualization';
 import { LAYOUT_CONFIG } from './layout/config.js';
 import { calculateYearRange, createXScale } from './layout/utils/scales.js';
 import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
+import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -737,31 +738,6 @@ export class LayoutCalculator {
 
     // Pre-calculate all active vertical segments to optimize "Blocker Penalty"
     // List of { y1, y2, time, childId, parentId }
-    let verticalSegments = [];
-    const rebuildSegments = () => {
-      verticalSegments = [];
-      family.chains.forEach(chain => {
-        // Incoming (Parents)
-        const parents = chainParents.get(chain.id) || [];
-        parents.forEach(p => {
-          if (Math.abs(p.yIndex - chain.yIndex) > 1) {
-            verticalSegments.push({
-              y1: Math.min(p.yIndex, chain.yIndex),
-              y2: Math.max(p.yIndex, chain.yIndex),
-              time: chain.startTime,
-              childId: chain.id,
-              parentId: p.id
-            });
-          }
-        });
-        // Outgoing not needed (covered by child's incoming)
-      });
-    };
-
-    const calculateCost = (chain, y) => {
-      return this._calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
-    };
-
     // Slice 8A: Configurable Pass Orchestrator
     // Replaces fixed Tri-State loop
     this._executePassSchedule(
@@ -2769,9 +2745,9 @@ export class LayoutCalculator {
     const schedule = scheduleOverride || LAYOUT_CONFIG.PASS_SCHEDULE;
 
     // Calculate family metrics
-    const familySize = family.length || family.size || 0;
+    const familySize = chains.length || 0;
     let linkCount = 0;
-    family.forEach(c => {
+    chains.forEach(c => {
       linkCount += (chainParents.get(c.id)?.length || 0);
       linkCount += (chainChildren.get(c.id)?.length || 0);
     });
@@ -2785,7 +2761,7 @@ export class LayoutCalculator {
       for (let i = 0; i < pass.iterations; i++) {
         for (const strategy of pass.strategies) {
           // Rebuild vertical segments for accurate blocker calculation
-          const verticalSegments = this._rebuildVerticalSegments(family, chainParents);
+          const verticalSegments = generateVerticalSegments(chains, chainParents);
 
           if (strategy === 'HYBRID') {
             this._runGroupwiseOptimization(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
@@ -2806,24 +2782,7 @@ export class LayoutCalculator {
     return true;
   }
 
-  _rebuildVerticalSegments(family, chainParents) {
-    const segments = [];
-    family.forEach(chain => {
-      const parents = chainParents.get(chain.id) || [];
-      parents.forEach(p => {
-        if (Math.abs(p.yIndex - chain.yIndex) > 1) {
-          segments.push({
-            y1: Math.min(p.yIndex, chain.yIndex),
-            y2: Math.max(p.yIndex, chain.yIndex),
-            time: chain.startTime,
-            childId: chain.id,
-            parentId: p.id
-          });
-        }
-      });
-    });
-    return segments;
-  }
+
 
   _runOptimizationPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy) {
     const sortedChains = Array.from(family);
