@@ -2462,4 +2462,168 @@ export class LayoutCalculator {
 
     return group;
   }
+
+  // Slice 4: Pairwise Swap Operations
+
+  /**
+   * Generate all pairwise combinations from a group of chains.
+   * For a group of N chains, returns C(N,2) = N*(N-1)/2 pairs.
+   */
+  _generatePairwiseCombinations(group) {
+    const chains = Array.from(group);
+    const pairs = [];
+
+    for (let i = 0; i < chains.length; i++) {
+      for (let j = i + 1; j < chains.length; j++) {
+        pairs.push([chains[i], chains[j]]);
+      }
+    }
+
+    return pairs;
+  }
+
+  /**
+   * Evaluate the global cost delta of swapping two chains.
+   * Temporarily swaps their yIndex values, calculates the delta, then reverts.
+   */
+  _evaluateSwap(chainA, chainB, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    // Store original positions
+    const originalAY = chainA.yIndex;
+    const originalBY = chainB.yIndex;
+
+    // Temporarily swap yIndex values
+    chainA.yIndex = originalBY;
+    chainB.yIndex = originalAY;
+
+    // Update ySlots temporarily
+    const slotsA = ySlots.get(originalAY);
+    const slotsB = ySlots.get(originalBY);
+
+    if (slotsA) {
+      const idxA = slotsA.findIndex(s => s.chainId === chainA.id);
+      if (idxA !== -1) {
+        const slotA = slotsA.splice(idxA, 1)[0];
+        if (!ySlots.has(originalBY)) ySlots.set(originalBY, []);
+        ySlots.get(originalBY).push(slotA);
+      }
+    }
+
+    if (slotsB) {
+      const idxB = slotsB.findIndex(s => s.chainId === chainB.id);
+      if (idxB !== -1) {
+        const slotB = slotsB.splice(idxB, 1)[0];
+        if (!ySlots.has(originalAY)) ySlots.set(originalAY, []);
+        ySlots.get(originalAY).push(slotB);
+      }
+    }
+
+    // Get all affected chains (both swapped chains and their neighbors)
+    const affectedA = this.getAffectedChains(chainA, originalBY, originalAY, chains, chainParents, chainChildren, verticalSegments);
+    const affectedB = this.getAffectedChains(chainB, originalAY, originalBY, chains, chainParents, chainChildren, verticalSegments);
+    const allAffected = new Set([...affectedA, ...affectedB, chainA.id, chainB.id]);
+
+    // Calculate cost delta for all affected chains
+    let delta = 0;
+    allAffected.forEach(chainId => {
+      const chain = chains.find(c => c.id === chainId);
+      if (chain) {
+        const oldY = chain.id === chainA.id ? originalAY : (chain.id === chainB.id ? originalBY : chain.yIndex);
+        const newY = chain.yIndex;
+
+        // Calculate cost difference for this chain
+        const oldCost = this._calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
+        const newCost = this._calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
+        delta += (newCost - oldCost);
+      }
+    });
+
+    // Revert swap
+    chainA.yIndex = originalAY;
+    chainB.yIndex = originalBY;
+
+    // Revert ySlots
+    if (slotsB) {
+      const idxA = ySlots.get(originalBY)?.findIndex(s => s.chainId === chainA.id);
+      if (idxA !== undefined && idxA !== -1) {
+        const slotA = ySlots.get(originalBY).splice(idxA, 1)[0];
+        if (!ySlots.has(originalAY)) ySlots.set(originalAY, []);
+        ySlots.get(originalAY).push(slotA);
+      }
+    }
+
+    if (slotsA) {
+      const idxB = ySlots.get(originalAY)?.findIndex(s => s.chainId === chainB.id);
+      if (idxB !== undefined && idxB !== -1) {
+        const slotB = ySlots.get(originalAY).splice(idxB, 1)[0];
+        if (!ySlots.has(originalBY)) ySlots.set(originalBY, []);
+        ySlots.get(originalBY).push(slotB);
+      }
+    }
+
+    return delta;
+  }
+
+  /**
+   * Find the best swap within a group that maximizes global cost reduction.
+   * Returns null if no swap improves the cost.
+   */
+  _findBestSwap(group, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    const pairs = this._generatePairwiseCombinations(group);
+    let bestSwap = null;
+    let bestDelta = 0;
+
+    for (const [chainA, chainB] of pairs) {
+      const delta = this._evaluateSwap(chainA, chainB, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestSwap = { chainA, chainB, delta };
+      }
+    }
+
+    return bestSwap;
+  }
+
+  /**
+   * Apply a swap by exchanging yIndex values and updating ySlots.
+   */
+  _applySwap(chainA, chainB, ySlots) {
+    const tempY = chainA.yIndex;
+    chainA.yIndex = chainB.yIndex;
+    chainB.yIndex = tempY;
+
+    // Update ySlots
+    const slotsA = ySlots.get(tempY);
+    const slotsB = ySlots.get(chainB.yIndex);
+
+    if (slotsA) {
+      const idxA = slotsA.findIndex(s => s.chainId === chainA.id);
+      if (idxA !== -1) {
+        slotsA.splice(idxA, 1);
+      }
+    }
+
+    if (slotsB) {
+      const idxB = slotsB.findIndex(s => s.chainId === chainB.id);
+      if (idxB !== -1) {
+        slotsB.splice(idxB, 1);
+      }
+    }
+
+    // Add to new positions
+    if (!ySlots.has(chainA.yIndex)) ySlots.set(chainA.yIndex, []);
+    if (!ySlots.has(chainB.yIndex)) ySlots.set(chainB.yIndex, []);
+
+    ySlots.get(chainA.yIndex).push({
+      start: chainA.startTime,
+      end: chainA.endTime,
+      chainId: chainA.id
+    });
+
+    ySlots.get(chainB.yIndex).push({
+      start: chainB.startTime,
+      end: chainB.endTime,
+      chainId: chainB.id
+    });
+  }
 }
