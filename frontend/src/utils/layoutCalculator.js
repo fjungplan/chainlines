@@ -3,6 +3,7 @@ import { LAYOUT_CONFIG } from './layout/config.js';
 import { calculateYearRange, createXScale } from './layout/utils/scales.js';
 import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
 import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
+import { calculateSingleChainCost } from './layout/utils/costCalculator.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -457,86 +458,12 @@ export class LayoutCalculator {
    * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
    * This is a lift of the layoutFamily.calculateCost logic.
    */
+  /**
+   * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
+   * This is a lift of the layoutFamily.calculateCost logic.
+   */
   _calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision) {
-    let attractionCost = 0;
-    const ATTRACTION_WEIGHT = LAYOUT_CONFIG.WEIGHTS.ATTRACTION;
-
-    const parents = chainParents.get(chain.id) || [];
-    if (parents.length > 0) {
-      const avgParentY = parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length;
-      const dist = Math.abs(y - avgParentY);
-      attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
-    }
-
-    const childrenForAttraction = chainChildren.get(chain.id) || [];
-    if (childrenForAttraction.length > 0) {
-      const avgChildY = childrenForAttraction.reduce((sum, c) => sum + c.yIndex, 0) / childrenForAttraction.length;
-      const dist = Math.abs(y - avgChildY);
-      attractionCost += (dist * dist) * ATTRACTION_WEIGHT;
-    }
-
-    let cutThroughCost = 0;
-    const CUT_THROUGH_WEIGHT = LAYOUT_CONFIG.WEIGHTS.CUT_THROUGH;
-
-    parents.forEach(p => {
-      const y1 = Math.min(p.yIndex, y);
-      const y2 = Math.max(p.yIndex, y);
-      if (y2 - y1 > 1) {
-        for (let lane = y1 + 1; lane < y2; lane++) {
-          if (checkCollision(lane, chain.startTime, chain.startTime, chain.id, chain)) {
-            cutThroughCost += CUT_THROUGH_WEIGHT;
-          }
-        }
-      }
-    });
-
-    const children = chainChildren.get(chain.id) || [];
-    children.forEach(c => {
-      const y1 = Math.min(y, c.yIndex);
-      const y2 = Math.max(y, c.yIndex);
-      if (y2 - y1 > 1) {
-        for (let lane = y1 + 1; lane < y2; lane++) {
-          if (checkCollision(lane, c.startTime, c.startTime, chain.id, chain)) {
-            cutThroughCost += CUT_THROUGH_WEIGHT;
-          }
-        }
-      }
-    });
-
-    let blockerCost = 0;
-    const BLOCKER_WEIGHT = LAYOUT_CONFIG.WEIGHTS.BLOCKER;
-    verticalSegments.forEach(seg => {
-      if (seg.childId === chain.id || seg.parentId === chain.id) return;
-      if (y > seg.y1 && y < seg.y2) {
-        if (seg.time >= chain.startTime && seg.time <= chain.endTime + 1) {
-          blockerCost += BLOCKER_WEIGHT;
-        }
-      }
-    });
-
-    let yShapeCost = 0;
-    const Y_SHAPE_WEIGHT = LAYOUT_CONFIG.WEIGHTS.Y_SHAPE;
-    childrenForAttraction.forEach(c => {
-      const spouses = chainParents.get(c.id) || [];
-      spouses.forEach(spouse => {
-        if (spouse.id === chain.id) return;
-        if (Math.abs(spouse.yIndex - y) < 2) {
-          yShapeCost += Y_SHAPE_WEIGHT;
-        }
-      });
-    });
-
-    parents.forEach(p => {
-      const siblings = chainChildren.get(p.id) || [];
-      siblings.forEach(sib => {
-        if (sib.id === chain.id) return;
-        if (Math.abs(sib.yIndex - y) < 2) {
-          yShapeCost += Y_SHAPE_WEIGHT;
-        }
-      });
-    });
-
-    return attractionCost + cutThroughCost + blockerCost + yShapeCost;
+    return calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
   }
 
   layoutFamily(family) {
