@@ -2626,4 +2626,160 @@ export class LayoutCalculator {
       chainId: chainB.id
     });
   }
+
+  // Slice 5: Rigid Group Move Operations
+
+  /**
+   * Calculate valid deltas for rigid group move.
+   * A rigid move shifts all chains in the group by the same delta,
+   * preserving their relative spacing.
+   * 
+   * Returns an array of valid deltas within [-maxDelta, +maxDelta]
+   * that don't cause collisions or negative yIndex values.
+   */
+  _calculateRigidMoveDeltas(group, ySlots, checkCollision, maxDelta) {
+    const chains = Array.from(group);
+    const validDeltas = [];
+
+    // Find min yIndex in group to prevent negative positions
+    const minY = Math.min(...chains.map(c => c.yIndex));
+
+    // Test each delta from -maxDelta to +maxDelta
+    for (let delta = -maxDelta; delta <= maxDelta; delta++) {
+      if (delta === 0) continue; // Skip no-op
+
+      // Check if delta would cause negative yIndex
+      if (minY + delta < 0) continue;
+
+      // Check if any chain would collide at new position
+      let hasCollision = false;
+      for (const chain of chains) {
+        const newY = chain.yIndex + delta;
+        if (checkCollision(newY, chain.startTime, chain.endTime, chain.id, chain)) {
+          hasCollision = true;
+          break;
+        }
+      }
+
+      if (!hasCollision) {
+        validDeltas.push(delta);
+      }
+    }
+
+    return validDeltas;
+  }
+
+  /**
+   * Evaluate the global cost delta of a rigid group move.
+   * Temporarily shifts all chains by delta, calculates cost change, then reverts.
+   */
+  _evaluateRigidMove(group, delta, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    const groupChains = Array.from(group);
+
+    // Store original positions
+    const originalPositions = new Map(groupChains.map(c => [c.id, c.yIndex]));
+
+    // Temporarily apply move
+    groupChains.forEach(chain => {
+      chain.yIndex += delta;
+    });
+
+    // Update ySlots temporarily
+    const movedSlots = [];
+    groupChains.forEach(chain => {
+      const oldY = originalPositions.get(chain.id);
+      const newY = chain.yIndex;
+
+      const slots = ySlots.get(oldY);
+      if (slots) {
+        const idx = slots.findIndex(s => s.chainId === chain.id);
+        if (idx !== -1) {
+          const slot = slots.splice(idx, 1)[0];
+          movedSlots.push({ slot, oldY, newY, chainId: chain.id });
+
+          if (!ySlots.has(newY)) ySlots.set(newY, []);
+          ySlots.get(newY).push(slot);
+        }
+      }
+    });
+
+    // Get all affected chains (group members and their neighbors)
+    const allAffected = new Set();
+    groupChains.forEach(chain => {
+      const oldY = originalPositions.get(chain.id);
+      const newY = chain.yIndex;
+      const affected = this.getAffectedChains(chain, oldY, newY, chains, chainParents, chainChildren, verticalSegments);
+      affected.forEach(id => allAffected.add(id));
+      allAffected.add(chain.id);
+    });
+
+    // Calculate cost delta
+    let costDelta = 0;
+    allAffected.forEach(chainId => {
+      const chain = chains.find(c => c.id === chainId);
+      if (chain) {
+        const oldY = originalPositions.has(chain.id) ? originalPositions.get(chain.id) : chain.yIndex;
+        const newY = chain.yIndex;
+
+        const oldCost = this._calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
+        const newCost = this._calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
+        costDelta += (newCost - oldCost);
+      }
+    });
+
+    // Revert positions
+    groupChains.forEach(chain => {
+      chain.yIndex = originalPositions.get(chain.id);
+    });
+
+    // Revert ySlots
+    movedSlots.forEach(({ slot, oldY, newY, chainId }) => {
+      const newSlots = ySlots.get(newY);
+      if (newSlots) {
+        const idx = newSlots.findIndex(s => s.chainId === chainId);
+        if (idx !== -1) {
+          newSlots.splice(idx, 1);
+        }
+      }
+
+      if (!ySlots.has(oldY)) ySlots.set(oldY, []);
+      ySlots.get(oldY).push(slot);
+    });
+
+    return costDelta;
+  }
+
+  /**
+   * Apply a rigid group move by shifting all chains by the same delta.
+   * Updates both yIndex values and ySlots.
+   */
+  _applyRigidMove(group, delta, ySlots) {
+    const chains = Array.from(group);
+
+    // Collect slots to move
+    const slotsToMove = [];
+    chains.forEach(chain => {
+      const oldY = chain.yIndex;
+      const slots = ySlots.get(oldY);
+
+      if (slots) {
+        const idx = slots.findIndex(s => s.chainId === chain.id);
+        if (idx !== -1) {
+          const slot = slots.splice(idx, 1)[0];
+          slotsToMove.push({ slot, oldY, newY: oldY + delta, chainId: chain.id });
+        }
+      }
+    });
+
+    // Update yIndex values
+    chains.forEach(chain => {
+      chain.yIndex += delta;
+    });
+
+    // Add slots to new positions
+    slotsToMove.forEach(({ slot, newY }) => {
+      if (!ySlots.has(newY)) ySlots.set(newY, []);
+      ySlots.get(newY).push(slot);
+    });
+  }
 }
