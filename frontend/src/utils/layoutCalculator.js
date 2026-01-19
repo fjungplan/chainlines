@@ -2418,4 +2418,48 @@ export class LayoutCalculator {
 
     return false;
   }
+
+  // Slice 3: Bottom-Up Group Builder Methods
+
+  /**
+   * Sort chains by connectivity degree (ASC).
+   * Leaves (Degree 1) come first, Hubs (High Degree) come last.
+   * This ensures we build groups starting from extremities inwards.
+   */
+  _sortChainsByDegree(chains, chainDegrees) {
+    return [...chains].sort((a, b) => {
+      const degA = chainDegrees.get(a.id) || 0;
+      const degB = chainDegrees.get(b.id) || 0;
+      return degA - degB;
+    });
+  }
+
+  /**
+   * Build a tightly coupled group starting from a seed chain.
+   * Uses BFS to find the connected component of immediate lineage.
+   * "Rigid Group" = Connected Component (for now).
+   */
+  _buildGroup(startChain, chains, chainParents, chainChildren) {
+    const group = new Set();
+    const queue = [startChain];
+    group.add(startChain);
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+
+      // Neighbors: Parents and Children
+      const parents = chainParents.get(current.id) || [];
+      const children = chainChildren.get(current.id) || [];
+      const neighbors = [...parents, ...children];
+
+      for (const neighbor of neighbors) {
+        if (!group.has(neighbor)) {
+          group.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    return group;
+  }
 }
