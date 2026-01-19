@@ -1,26 +1,28 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { LayoutCalculator } from '../../src/utils/layoutCalculator';
+import { Scoreboard } from '../../src/utils/layout/analytics/layoutScoreboard';
 import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
+import * as CostCalculator from '../../src/utils/layout/utils/costCalculator';
 
-describe('Layout Scoreboard (Slice 8B)', () => {
-    let layoutCalculator;
-    let family;
+// Mock CostCalculator
+vi.mock('../../src/utils/layout/utils/costCalculator', () => ({
+    calculateSingleChainCost: vi.fn().mockReturnValue(10)
+}));
+
+describe('Scoreboard (Slice R10)', () => {
+    let scoreboard;
+    let chains;
     let configBackup;
 
     beforeEach(() => {
         configBackup = JSON.parse(JSON.stringify(LAYOUT_CONFIG));
-        layoutCalculator = new LayoutCalculator({ nodes: [], links: [] }, 1000, 800);
+        scoreboard = new Scoreboard();
 
-        // Mock Family Setup
-        family = new Set();
-        const chains = [
-            { id: 'c1', startTime: 1900, endTime: 1910, yIndex: 0, nodes: [] },
-            { id: 'c2', startTime: 1905, endTime: 1915, yIndex: 0, nodes: [] },
-            { id: 'c3', startTime: 1920, endTime: 1930, yIndex: 1, nodes: [] }
+        // Mock Data
+        chains = [
+            { id: 'c1', yIndex: 0 },
+            { id: 'c2', yIndex: 0 }
         ];
-        chains.forEach(c => family.add(c));
-        layoutCalculator.chains = chains;
     });
 
     afterEach(() => {
@@ -28,10 +30,14 @@ describe('Layout Scoreboard (Slice 8B)', () => {
         vi.clearAllMocks();
     });
 
-    it('should calculate Crossings metric correctly', () => {
-        const score = layoutCalculator._calculateScore(family, new Map(), new Map(), [], () => false, new Map());
-        expect(score).toHaveProperty('crossings');
-        expect(score).toHaveProperty('vacantLanes');
+    it('should calculate metrics correctly', () => {
+        const metrics = scoreboard.calculateScore(
+            chains, new Map(), new Map(), [], () => false, new Map()
+        );
+
+        expect(metrics).toHaveProperty('totalCost', 20); // 2 chains * 10 cost
+        expect(metrics).toHaveProperty('crossings');
+        expect(metrics).toHaveProperty('vacantLanes');
     });
 
     it('should not log scores if disabled in config', () => {
@@ -39,10 +45,10 @@ describe('Layout Scoreboard (Slice 8B)', () => {
         const logSpy = vi.fn();
         LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION = logSpy;
 
-        // Pass dummy arguments
-        layoutCalculator._logScore(0, new Set(), [], new Map(), new Map(), [], () => false, new Map());
+        scoreboard.logScore(0, chains, new Map(), new Map(), [], () => false, new Map());
 
         expect(logSpy).not.toHaveBeenCalled();
+        expect(scoreboard.scoreHistory).toHaveLength(0);
     });
 
     it('should log scores via LOG_FUNCTION if enabled', () => {
@@ -51,11 +57,23 @@ describe('Layout Scoreboard (Slice 8B)', () => {
             LOG_FUNCTION: vi.fn()
         };
 
-        const metrics = { crossings: 5, totalCost: 100 };
-        vi.spyOn(layoutCalculator, '_calculateScore').mockReturnValue(metrics);
+        scoreboard.logScore(1, chains, new Map(), new Map(), [], () => false, new Map());
 
-        layoutCalculator._logScore(1, family, [], new Map(), new Map(), [], () => false, new Map());
+        expect(LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION).toHaveBeenCalledWith(1, expect.objectContaining({
+            totalCost: 20
+        }));
+        expect(scoreboard.scoreHistory).toHaveLength(1);
+        expect(scoreboard.scoreHistory[0].pass).toBe(1);
+        expect(scoreboard.scoreHistory[0].totalCost).toBe(20);
+    });
 
-        expect(LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION).toHaveBeenCalledWith(1, metrics);
+    it('should handle invalid input gracefully', () => {
+        LAYOUT_CONFIG.SCOREBOARD = { ENABLED: true };
+        const notArray = {};
+
+        scoreboard.logScore(1, notArray, new Map(), new Map(), [], () => false, new Map());
+
+        // Should not crash, cost 0
+        expect(scoreboard.scoreHistory[0].totalCost).toBe(0);
     });
 });

@@ -6,6 +6,7 @@ import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
 import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from './layout/utils/costCalculator.js';
 import { buildFamilies } from './layout/utils/chainBuilder.js';
 import { executePassSchedule } from './layout/orchestrator/layoutOrchestrator.js';
+import { Scoreboard } from './layout/analytics/layoutScoreboard.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -54,6 +55,8 @@ export class LayoutCalculator {
       rowHeight: this.rowHeight,
       factor: VISUALIZATION.HEIGHT_FACTOR
     });
+
+    this.scoreboard = new Scoreboard();
   }
 
 
@@ -1912,40 +1915,15 @@ export class LayoutCalculator {
       unusedVs,
       checkCollision,
       ySlots,
-      this._logScore.bind(this),
+      this.scoreboard.logScore.bind(this.scoreboard),
       scheduleOverride
     );
   }
-
-
-
-
-
-
-  // Slice 8B: Layout Scoreboard
-  _logScore(passIndex, family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
-    if (!LAYOUT_CONFIG.SCOREBOARD.ENABLED) return;
-
-    const metrics = this._calculateScore(family, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
-
-    // Use injected logger if available (safe for browser/node separation)
-    if (typeof LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION === 'function') {
-      LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION(passIndex, metrics);
-    }
-  }
-
-  _calculateScore(family, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
-    let totalCost = 0;
-
-    family.forEach(chain => {
-      totalCost += this._calculateSingleChainCost(chain, chain.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
-    });
-
-    return {
-      totalCost,
-      crossings: 0,
-      vacantLanes: ySlots.size,
-      familySplay: 0
-    };
-  }
 }
+
+
+
+
+
+
+
