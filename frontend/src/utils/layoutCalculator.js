@@ -1,6 +1,7 @@
 import { VISUALIZATION } from '../constants/visualization';
 import { LAYOUT_CONFIG } from './layout/config.js';
 import { calculateYearRange, createXScale } from './layout/utils/scales.js';
+import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -547,37 +548,11 @@ export class LayoutCalculator {
     const ySlots = new Map(); // yIndex -> Array of {start, end, chainId}
     let maxY = 0;
 
-    // Family-aware collision check
-    // For strangers: require 1-year gap (end+1 to start)
-    // For family: allow temporal overlap
-    const checkCollision = (y, start, end, excludeChainId, movingChain) => {
-      if (!ySlots.has(y)) return false;
-      const slots = ySlots.get(y);
+    // Collision check wrapper using extracted utility
+    // Moved definition down to where it is used or after dependencies are initialized
+    // to avoid TDZ if called early, though here it's passed as a callback.
+    // Effectively we will define it before usage.
 
-      const collision = slots.some(s => {
-        if (s.chainId === excludeChainId) return false;
-
-        // Check if this slot's chain is family (parent or child)
-        const slotChain = family.chains.find(c => c.id === s.chainId);
-        if (!slotChain) return false;
-
-        const parents = chainParents.get(movingChain.id) || [];
-        const children = chainChildren.get(movingChain.id) || [];
-        const isFamily = parents.some(p => p.id === s.chainId) ||
-          children.some(c => c.id === s.chainId);
-
-        if (isFamily) {
-          // Family: allow overlap, use standard collision (touching is OK)
-          return !(s.end < start || s.start > end);
-        } else {
-          // Strangers: enforce 1-year gap
-          // Node renders to end+1, so we need: s.end+1 < start OR s.start > end+1
-          // Collision if NOT (gap >= 1)
-          return !(s.end + 1 < start || s.start > end + 1);
-        }
-      });
-      return collision;
-    };
 
     const occupySlot = (y, chain) => {
       if (!ySlots.has(y)) ySlots.set(y, []);
@@ -642,6 +617,11 @@ export class LayoutCalculator {
     });
 
     const queue = [];
+    // Wrapper for family-aware collision check using extracted utility
+    // We define it here where dependencies (chainParents, etc.) are available.
+    const checkCollision = (y, start, end, excludeChainId, movingChain) =>
+      checkCollisionUtil(y, start, end, excludeChainId, movingChain, ySlots, family, chainParents, chainChildren);
+
     // Initialize queue with roots (no parents)
     const roots = family.chains.filter(c => (chainParents.get(c.id) || []).length === 0);
     // Sort roots by start time to keep top-left sanity
