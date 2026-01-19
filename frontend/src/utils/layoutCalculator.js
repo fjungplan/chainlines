@@ -9,7 +9,13 @@ import { executePassSchedule } from './layout/orchestrator/layoutOrchestrator.js
 import { Scoreboard } from './layout/analytics/layoutScoreboard.js';
 
 /**
- * Calculate positions for all nodes using Sankey-like layout
+ * Calculate positions for all nodes using Sankey-like layout.
+ * Acts as the main coordinator for the layout process, delegating specific
+ * logic to specialized modules:
+ * - ChainBuilder: Constructs lineage chains from raw nodes
+ * - LayoutOrchestrator: Manages optimization passes
+ * - Scoreboard: Tracks layout quality metrics
+ * - GroupwiseOptimizer: Handles vertical placement optimization
  */
 export class LayoutCalculator {
   constructor(graphData, width, height, yearRange = null, stretchFactor = 1) {
@@ -175,148 +181,11 @@ export class LayoutCalculator {
   buildChains(nodes, links) {
     return buildChains(nodes, links);
   }
-  // LEGACY CODE REMOVED
-  /*
-
-
-    const chains = [];
-    const visited = new Set();
-
-    // 1. Identification of "Chain Starter" nodes
-    // A node starts a chain if:
-    // - It has 0 predecessors 
-    // - OR It has > 1 predecessors (Merge)
-    // - OR Its predecessor has > 1 successors (Split parent)
-
-    const isChainStart = (nodeId) => {
-      const p = preds.get(nodeId) || [];
-      if (p.length !== 1) return true; // 0 or >1 preds
-      const parentId = p[0];
-      const parentSuccs = succs.get(parentId) || [];
-      if (parentSuccs.length > 1) return true; // Parent splits
-
-      // ALSO: Check for VISUAL overlap with the single parent.
-      // Since nodes render to dissolution_year + 1, we must check visual boundaries.
-      // If parent visually extends into my start year, we overlap and must break the chain.
-      const parentNode = nodeMap.get(parentId);
-      const myNode = nodeMap.get(nodeId);
-
-      let parentEnd = parentNode.dissolution_year;
-      if (!parentEnd) {
-        const lastEra = parentNode.eras?.[parentNode.eras.length - 1];
-        parentEnd = lastEra ? lastEra.year : parentNode.founding_year;
-      }
-
-      // Visual overlap check: parent renders to (parentEnd + 1), so check if that > myStart
-      // Example: Parent ends 2009 (renders to 2010), Child starts 2010 → 2010 > 2010 = FALSE (no overlap, can chain)
-      // Example: Parent ends 2009 (renders to 2010), Child starts 2009 → 2010 > 2009 = TRUE (overlap, must break)
-      if (parentEnd + 1 > myNode.founding_year) return true; // Visual overlap, break chain
-
-      return false; // No visual overlap, can continue chain
-    };
-
-    nodes.forEach(node => {
-      if (visited.has(node.id)) return;
-
-      // If it's a start node, build a chain from it
-      // Note: If we traverse properly, we only need to find start nodes.
-      // However, cycles might confuse this. For DAGs (timelines), this works.
-      // To be safe, we iterate all, and if unvisited and isChainStart, we consume.
-      if (isChainStart(node.id)) {
-        const chainNodes = [];
-        let curr = node.id;
-
-        while (curr) {
-          visited.add(curr);
-          chainNodes.push(nodeMap.get(curr));
-
-          const s = succs.get(curr) || [];
-          // Stop if:
-          // - No successors
-          // - > 1 successors (Split) -> curr is LAST in this chain
-          // - Successor has > 1 predecessors (Merge) -> succ is START of NEW chain
-          if (s.length !== 1) break;
-
-          const nextId = s[0];
-          const nextPreds = preds.get(nextId) || [];
-          if (nextPreds.length > 1) break;
-
-          // Continue
-          // CRITICAL: Check for VISUAL overlap (Dirty Data Protection)
-          // Since nodes render to dissolution_year + 1, we must check visual boundaries.
-          // If curr visually extends into next's start year, they overlap and must break.
-          const currNode = nodeMap.get(curr);
-          const nextNode = nodeMap.get(nextId);
-
-          let currEnd = currNode.dissolution_year;
-          if (!currEnd) {
-            const lastEra = currNode.eras?.[currNode.eras.length - 1];
-            currEnd = lastEra ? lastEra.year : currNode.founding_year;
-          }
-
-          // Visual overlap check: curr renders to (currEnd + 1), so check if that > nextStart
-          // Example: Curr ends 2009 (renders to 2010), Next starts 2010 → 2010 > 2010 = FALSE (no overlap, continue)
-          // Example: Curr ends 2009 (renders to 2010), Next starts 2009 → 2010 > 2009 = TRUE (overlap, break)
-          if (currEnd + 1 > nextNode.founding_year) {
-            // Visual overlap detected - break chain
-            break;
-          }
-
-          curr = nextId;
-        }
-
-        chains.push({
-          id: `chain-${chains.length}`,
-          nodes: chainNodes,
-          startTime: chainNodes[0].founding_year,
-          endTime: chainNodes[chainNodes.length - 1].dissolution_year || 9999,
-          yIndex: 0 // to be assigned
-        });
-      }
-    });
-
-    // Catch-up: If any nodes remain unvisited (e.g. part of a cycle or logic gap), make them single chains
-    nodes.forEach(node => {
-      if (!visited.has(node.id)) {
-        visited.add(node.id);
-        chains.push({
-          id: `chain-${chains.length}`,
-          nodes: [node],
-          startTime: node.founding_year,
-          endTime: node.dissolution_year || 9999,
-          yIndex: 0
-        });
-      }
-    });
-
-    return chains;
-    */
-
-
   buildFamilies(chains) {
     return buildFamilies(chains, this.links);
   }
 
-  // getAffectedChains removed - moved to costCalculator.js
 
-  /**
-   * Calculates the total cost of all chains in a family.
-   */
-  // calculateGlobalCost removed - logic moved/refactored
-
-  /**
-   * Calculates the net change in global cost if a chain moves from oldY to newY.
-   */
-  // calculateCostDelta removed - moved to costCalculator.js
-
-  /**
-   * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
-   * This is a lift of the layoutFamily.calculateCost logic.
-   */
-  /**
-   * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
-   * This is a lift of the layoutFamily.calculateCost logic.
-   */
   _calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision) {
     return calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
   }
