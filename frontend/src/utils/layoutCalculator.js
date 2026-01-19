@@ -21,6 +21,43 @@ export const LAYOUT_CONFIG = {
     SEARCH_RADIUS: 10          // Region around group for SA
   },
 
+  SCOREBOARD: {
+    ENABLED: false,             // Enable to dump layout metrics to JSON
+    OUTPUT_DIR: 'logs/layout_scores'
+  },
+
+  // Slice 8A: Configurable Pass Orchestrator
+  PASS_SCHEDULE: [
+    // Phase 1: Rough sorting (Parents Push / Children Pull) - 30 iterations
+    {
+      strategies: ['PARENTS', 'CHILDREN'],
+      iterations: 30,
+      minFamilySize: 0,
+      minLinks: 0
+    },
+    // Phase 2: Hub anchoring for structure - 10 iterations
+    {
+      strategies: ['HUBS'],
+      iterations: 10,
+      minFamilySize: 5,
+      minLinks: 3
+    },
+    // Phase 3: Fine-tuning - 20 iterations
+    {
+      strategies: ['PARENTS', 'CHILDREN', 'HUBS'],
+      iterations: 20,
+      minFamilySize: 0,
+      minLinks: 0
+    },
+    // Phase 4: Hybrid Optimization (Groupwise) - 1 pass
+    {
+      strategies: ['HYBRID'],
+      iterations: 1,
+      minFamilySize: 5,
+      minLinks: 2
+    }
+  ],
+
   // Search Space
   SEARCH_RADIUS: 50,        // Look +/- 50 lanes away for a better spot (Global Vision)
   TARGET_RADIUS: 10,        // Look +/- 10 lanes around the exact parent/child center (Precision Snapping)
@@ -881,167 +918,14 @@ export class LayoutCalculator {
       return this._calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
     };
 
-    for (let iter = 0; iter < ITERATIONS; iter++) {
-      let energyChanged = false;
+    // Slice 8A: Configurable Pass Orchestrator
+    // Replaces fixed Tri-State loop
+    this._executePassSchedule(
+      family, family.chains, chainParents, chainChildren,
+      [], // verticalSegments are rebuilt internally per pass
+      checkCollision, ySlots
+    );
 
-      // Rebuild segments at start of iteration
-      rebuildSegments();
-
-      // STRATEGY: Tri-State Alternating Iteration
-      // 0 (Forward): Parents Push (Time ASC)
-      // 1 (Backward): Children Pull (Time DESC)
-      // 2 (Gravity): Hubs Anchor (Degree DESC) - Allows "Loose Ends" to snap to heavy Hubs
-      const cycle = iter % 3;
-
-      if (cycle === 0) {
-        family.chains.sort((a, b) => a.startTime - b.startTime);
-      } else if (cycle === 1) {
-        family.chains.sort((a, b) => b.startTime - a.startTime);
-      } else {
-        // Cycle 2: Gravity Sort (Degree DESC)
-        family.chains.sort((a, b) => {
-          const degA = chainDegrees.get(a.id) || 0;
-          const degB = chainDegrees.get(b.id) || 0;
-          return degB - degA; // Highest connectivity first (Hubs)
-        });
-      }
-
-      family.chains.forEach(chain => {
-        const currentY = chain.yIndex;
-        // Optimization: exclude my own links from verticalSegments? 
-
-        // Calculate Base Cost
-        let currentCost = calculateCost(chain, currentY);
-
-        // Add "Lane Sharing / Stranger Danger" Penalty to Base Cost
-        const getSharingPenalty = (y, myChain) => {
-          const slots = ySlots.get(y);
-          if (!slots || slots.length === 0) return 0;
-
-          // If I share with someone, check if they are family.
-          const parents = chainParents.get(myChain.id) || [];
-          const children = chainChildren.get(myChain.id) || [];
-
-          // Check every occupant
-          let minGap = Infinity;
-          let hasStranger = false;
-
-          const BASE_SHARING_WEIGHT = LAYOUT_CONFIG.WEIGHTS.LANE_SHARING;
-
-          for (const s of slots) {
-            if (s.chainId === myChain.id) continue;
-
-            const isParent = parents.some(p => p.id === s.chainId);
-            const isChild = children.some(c => c.id === s.chainId);
-
-            if (!isParent && !isChild) {
-              hasStranger = true;
-
-              // Calculate Gap
-              const gap1 = myChain.startTime - s.end;
-              const gap2 = s.start - myChain.endTime;
-
-              const gap = Math.max(gap1, gap2);
-              if (gap < minGap) minGap = gap;
-            }
-          }
-
-          if (!hasStranger) return 0;
-
-          // Distance-Based Decay
-          // Formula: Cost = WEIGHT / Gap
-          // Gap 1 (Tight): Cost ~500. (Repels > 2 lane attraction)
-          // Gap 10 (Far): Cost ~50. (Attracts Pack)
-          const safeGap = Math.max(0.5, minGap);
-          return BASE_SHARING_WEIGHT / safeGap;
-        };
-
-        currentCost += getSharingPenalty(currentY, chain);
-
-        // Explore wider neighborhood to jump over obstacles
-        // Increased radius to escape deep blocks
-        const SEARCH_RADIUS = LAYOUT_CONFIG.SEARCH_RADIUS;
-        const candidates = new Set();
-
-        // Add neighbors
-        for (let i = 1; i <= SEARCH_RADIUS; i++) {
-          candidates.add(currentY - i);
-          candidates.add(currentY + i);
-        }
-
-        // Add parent target vicinity explicitly
-        const parents = chainParents.get(chain.id) || [];
-        if (parents.length > 0) {
-          const avg = Math.round(parents.reduce((sum, p) => sum + p.yIndex, 0) / parents.length);
-          // Search around the parent's average too! Parent itself might block 'avg', 
-          // but 'avg+1' might be free and perfect.
-          const TARGET_RADIUS = LAYOUT_CONFIG.TARGET_RADIUS;
-          for (let k = 0; k <= TARGET_RADIUS; k++) {
-            candidates.add(avg - k);
-            candidates.add(avg + k);
-          }
-        }
-
-        // Add child target vicinity
-        const children = chainChildren.get(chain.id) || [];
-        if (children.length > 0) {
-          const avg = Math.round(children.reduce((sum, c) => sum + c.yIndex, 0) / children.length);
-          const TARGET_RADIUS = LAYOUT_CONFIG.TARGET_RADIUS;
-          for (let k = 0; k <= TARGET_RADIUS; k++) {
-            candidates.add(avg - k);
-            candidates.add(avg + k);
-          }
-        }
-
-        let bestY = currentY;
-        let bestGlobalDelta = 0; // Initialize bestGlobalDelta to 0 (no change)
-
-        // Global Optimization Loop
-        candidates.forEach(y => {
-          if (y === currentY) return;
-
-          // Check Hard Collision
-          if (!checkCollision(y, chain.startTime, chain.endTime, chain.id, chain)) {
-
-            // Calculate Global Delta
-            const affected = this.getAffectedChains(chain, currentY, y, family.chains, chainParents, chainChildren, verticalSegments);
-            const globalDelta = this.calculateCostDelta(chain, currentY, y, affected, family.chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
-
-            // Add Sharing Penalty to Global Delta
-            const sharingPenalty = getSharingPenalty(y, chain);
-            const currentSharing = getSharingPenalty(currentY, chain);
-            const sharingDelta = sharingPenalty - currentSharing;
-
-            const totalGlobalDelta = globalDelta + sharingDelta;
-
-            if (totalGlobalDelta < bestGlobalDelta) {
-              bestGlobalDelta = totalGlobalDelta;
-              bestY = y;
-            }
-          }
-        });
-
-        if (bestGlobalDelta < 0) {
-          // Apply Move
-          const oldSlots = ySlots.get(currentY);
-          if (oldSlots) {
-            const idx = oldSlots.findIndex(s => s.chainId === chain.id);
-            if (idx !== -1) oldSlots.splice(idx, 1);
-          }
-
-          occupySlot(bestY, chain);
-          chain.yIndex = bestY;
-          energyChanged = true;
-        }
-      });
-
-      if (!energyChanged) break;
-    }
-
-    // 2.5 Hybrid Groupwise Optimization
-    if (LAYOUT_CONFIG.HYBRID_MODE) {
-      this._runGroupwiseOptimization(family.chains, family.chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
-    }
 
     // 3. Post-Processing: Normalization & Compaction
 
@@ -3032,5 +2916,200 @@ export class LayoutCalculator {
         this._simulatedAnnealingReposition(group, saRegion, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, saOptions);
       }
     }
+  }
+
+
+  // Slice 8A: Configurable Pass Orchestrator Helpers
+
+  _executePassSchedule(family, chains, chainParents, chainChildren, unusedVs, checkCollision, ySlots, scheduleOverride = null) {
+    const schedule = scheduleOverride || LAYOUT_CONFIG.PASS_SCHEDULE;
+
+    // Calculate family metrics
+    const familySize = family.length || family.size || 0;
+    let linkCount = 0;
+    family.forEach(c => {
+      linkCount += (chainParents.get(c.id)?.length || 0);
+      linkCount += (chainChildren.get(c.id)?.length || 0);
+    });
+    linkCount = linkCount / 2; // undirected edges
+
+    let globalPassIndex = 0;
+
+    for (const pass of schedule) {
+      if (!this._shouldApplyPass(familySize, linkCount, pass)) continue;
+
+      for (let i = 0; i < pass.iterations; i++) {
+        for (const strategy of pass.strategies) {
+          // Rebuild vertical segments for accurate blocker calculation
+          const verticalSegments = this._rebuildVerticalSegments(family, chainParents);
+
+          if (strategy === 'HYBRID') {
+            this._runGroupwiseOptimization(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+          } else {
+            this._runOptimizationPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy);
+          }
+
+          // Slice 8B: Log metrics
+          this._logScore(globalPassIndex++, family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+        }
+      }
+    }
+  }
+
+  _shouldApplyPass(familySize, linkCount, passConfig) {
+    if (familySize < (passConfig.minFamilySize || 0)) return false;
+    if (linkCount < (passConfig.minLinks || 0)) return false;
+    return true;
+  }
+
+  _rebuildVerticalSegments(family, chainParents) {
+    const segments = [];
+    family.forEach(chain => {
+      const parents = chainParents.get(chain.id) || [];
+      parents.forEach(p => {
+        if (Math.abs(p.yIndex - chain.yIndex) > 1) {
+          segments.push({
+            y1: Math.min(p.yIndex, chain.yIndex),
+            y2: Math.max(p.yIndex, chain.yIndex),
+            time: chain.startTime,
+            childId: chain.id,
+            parentId: p.id
+          });
+        }
+      });
+    });
+    return segments;
+  }
+
+  _runOptimizationPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy) {
+    const sortedChains = Array.from(family);
+
+    // 1. Sort
+    if (strategy === 'PARENTS') {
+      sortedChains.sort((a, b) => a.startTime - b.startTime);
+    } else if (strategy === 'CHILDREN') {
+      sortedChains.sort((a, b) => b.startTime - a.startTime);
+    } else if (strategy === 'HUBS') {
+      const getDegree = (c) => (chainParents.get(c.id)?.length || 0) + (chainChildren.get(c.id)?.length || 0);
+      sortedChains.sort((a, b) => getDegree(b) - getDegree(a));
+    }
+
+    // 2. Optimize each chain (Greedy Layout Move)
+    for (const chain of sortedChains) {
+      const currentY = chain.yIndex;
+
+      // A. Identify Candidates
+      // ----------------------
+      // Search Radius: Global exploration
+      // Target Radius: Local exploitation (near parents/children)
+      let candidates = new Set();
+
+      // 1. Local Neighborhood
+      for (let dy = -LAYOUT_CONFIG.SEARCH_RADIUS; dy <= LAYOUT_CONFIG.SEARCH_RADIUS; dy++) {
+        candidates.add(currentY + dy);
+      }
+
+      // 2. Parent Vicinity
+      const parents = chainParents.get(chain.id) || [];
+      for (const p of parents) {
+        const parentChain = chains.find(c => c.id === p.id);
+        if (parentChain) {
+          const py = parentChain.yIndex;
+          for (let dy = -LAYOUT_CONFIG.TARGET_RADIUS; dy <= LAYOUT_CONFIG.TARGET_RADIUS; dy++) {
+            candidates.add(py + dy);
+          }
+        }
+      }
+
+      // 3. Child Vicinity
+      const children = chainChildren.get(chain.id) || [];
+      for (const c of children) {
+        const childChain = chains.find(ch => ch.id === c.id);
+        if (childChain) {
+          const cy = childChain.yIndex;
+          for (let dy = -LAYOUT_CONFIG.TARGET_RADIUS; dy <= LAYOUT_CONFIG.TARGET_RADIUS; dy++) {
+            candidates.add(cy + dy);
+          }
+        }
+      }
+
+      // B. Evaluate Candidates
+      // ----------------------
+      let bestY = currentY;
+
+      // Calculate current cost (baseline)
+      const currentCost = this._calculateSingleChainCost(chain, currentY, chainParents, chainChildren, verticalSegments, checkCollision);
+      let minCost = currentCost;
+
+      const candidateArray = Array.from(candidates).sort((a, b) => a - b);
+
+      for (const y of candidateArray) {
+        if (y === currentY) continue;
+
+        // 1. Collision Check
+        if (checkCollision(y, chain.startTime, chain.endTime, chain.id, chain)) continue;
+
+        // 2. Cost Calculation
+        const cost = this._calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
+
+        // 3. Selection
+        // STRICTLY BETTER acceptance for main loop
+        if (cost < minCost) {
+          minCost = cost;
+          bestY = y;
+        }
+      }
+
+      // C. Apply Move (Global Acceptance Check)
+      // ---------------------------------------
+      // We only move if it passes the Net Global Cost improvement check (Slice 2 logic)
+      if (bestY !== currentY) {
+        if (this._verifyTotalCostImprovement(chain, currentY, bestY, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots)) {
+          // Apply Move
+          const oldSlots = ySlots.get(currentY);
+          if (oldSlots) {
+            const idx = oldSlots.findIndex(s => s.chainId === chain.id);
+            if (idx !== -1) oldSlots.splice(idx, 1);
+          }
+
+          chain.yIndex = bestY;
+
+          if (!ySlots.has(bestY)) ySlots.set(bestY, []);
+          ySlots.get(bestY).push({
+            start: chain.startTime,
+            end: chain.endTime,
+            chainId: chain.id
+          });
+        }
+      }
+    }
+  }
+
+
+  // Slice 8B: Layout Scoreboard
+  _logScore(passIndex, family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    if (!LAYOUT_CONFIG.SCOREBOARD.ENABLED) return;
+
+    const metrics = this._calculateScore(family, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+
+    // Use injected logger if available (safe for browser/node separation)
+    if (typeof LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION === 'function') {
+      LAYOUT_CONFIG.SCOREBOARD.LOG_FUNCTION(passIndex, metrics);
+    }
+  }
+
+  _calculateScore(family, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    let totalCost = 0;
+
+    family.forEach(chain => {
+      totalCost += this._calculateSingleChainCost(chain, chain.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+    });
+
+    return {
+      totalCost,
+      crossings: 0,
+      vacantLanes: ySlots.size,
+      familySplay: 0
+    };
   }
 }
