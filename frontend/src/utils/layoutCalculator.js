@@ -4,7 +4,7 @@ import { calculateYearRange, createXScale } from './layout/utils/scales.js';
 import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
 import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
 import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from './layout/utils/costCalculator.js';
-import { buildFamilies } from './layout/utils/chainBuilder.js';
+import { buildFamilies, buildChains } from './layout/utils/chainBuilder.js';
 import { executePassSchedule } from './layout/orchestrator/layoutOrchestrator.js';
 import { Scoreboard } from './layout/analytics/layoutScoreboard.js';
 
@@ -173,17 +173,11 @@ export class LayoutCalculator {
   }
 
   buildChains(nodes, links) {
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    const preds = new Map();
-    const succs = new Map();
+    return buildChains(nodes, links);
+  }
+  // LEGACY CODE REMOVED
+  /*
 
-    // specific check for 1-to-1ness
-    links.forEach(l => {
-      if (!preds.has(l.target)) preds.set(l.target, []);
-      if (!succs.has(l.source)) succs.set(l.source, []);
-      preds.get(l.target).push(l.source);
-      succs.get(l.source).push(l.target);
-    });
 
     const chains = [];
     const visited = new Set();
@@ -296,7 +290,8 @@ export class LayoutCalculator {
     });
 
     return chains;
-  }
+    */
+
 
   buildFamilies(chains) {
     return buildFamilies(chains, this.links);
@@ -597,258 +592,134 @@ export class LayoutCalculator {
    * - Linear chains (single predecessor/successor) share the same lane if temporally compatible
    * - Splits/merges create Y-patterns with branches surrounding the common node
    * - Minimize link crossings by keeping related nodes close
-   * - Priority: legal transfers over spiritual successions
-   */
-  assignSwimlanes(family, allNodes) {
-    const assignments = {};
-    const nodeMap = new Map(allNodes.map(n => [n.id, n]));
-
-    // Build predecessor/successor maps with event types
-    const predecessors = new Map(); // nodeId -> [{nodeId, type}]
-    const successors = new Map();   // nodeId -> [{nodeId, type}]
-
-    this.links.forEach(link => {
-      if (family.includes(link.source) && family.includes(link.target)) {
-        if (!predecessors.has(link.target)) predecessors.set(link.target, []);
-        if (!successors.has(link.source)) successors.set(link.source, []);
-        predecessors.get(link.target).push({ nodeId: link.source, type: link.type });
-        successors.get(link.source).push({ nodeId: link.target, type: link.type });
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    // Check if we have a clear hierarchy (legal transfer as first, and it's unique)
+    const hasLegalPriority = sortedSuccs[0].type === 'LEGAL_TRANSFER' &&
+      (sortedSuccs.length === 1 || sortedSuccs[1].type !== 'LEGAL_TRANSFER');
+  
+    if (hasLegalPriority) {
+      // Clear hierarchy: legal transfer gets priority
+      const legalSucc = sortedSuccs[0];
+      const legalNode = nodeMap.get(legalSucc.nodeId);
+      const legalStart = legalNode.founding_year;
+      const noOverlap = currentEnd < legalStart;
+  
+      // Legal transfer can share lane if no temporal overlap
+      if (noOverlap) {
+        assignNode(legalSucc.nodeId, suggestedLane);
+      } else {
+        // Temporal overlap - place slightly offset
+        assignNode(legalSucc.nodeId, suggestedLane + 1);
       }
-    });
-
-    // Find the starting node (earliest founding year, or node with no predecessors)
-    const rootNodes = family.filter(id => !predecessors.has(id) || predecessors.get(id).length === 0);
-    let startNode;
-    if (rootNodes.length > 0) {
-      startNode = rootNodes.reduce((earliest, nodeId) => {
-        const node = nodeMap.get(nodeId);
-        const earliestNode = nodeMap.get(earliest);
-        return (!earliestNode || node.founding_year < earliestNode.founding_year) ? nodeId : earliest;
+  
+      // Place other branches in Y-pattern around the legal transfer
+      const otherSuccs = sortedSuccs.slice(1);
+      otherSuccs.forEach((succ, idx) => {
+        const offset = Math.floor((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
+        const branchLane = suggestedLane + offset * 2;
+        assignNode(succ.nodeId, branchLane);
       });
     } else {
-      // Circular or complex graph - start with earliest founding year
-      startNode = family.reduce((earliest, nodeId) => {
-        const node = nodeMap.get(nodeId);
-        const earliestNode = nodeMap.get(earliest);
-        return (!earliestNode || node.founding_year < earliestNode.founding_year) ? nodeId : earliest;
+      // No clear priority - check temporal compatibility for ALL successors
+      const compatibleSuccs = [];
+      const incompatibleSuccs = [];
+  
+      sortedSuccs.forEach(succ => {
+        const succNode = nodeMap.get(succ.nodeId);
+        const succStart = succNode.founding_year;
+        const noOverlap = currentEnd < succStart;
+  
+        if (noOverlap) {
+          compatibleSuccs.push(succ);
+        } else {
+          incompatibleSuccs.push(succ);
+        }
       });
-    }
-
-    // Assign swimlanes using topological sort with crossing minimization
-    const visited = new Set();
-    let nextAvailableLane = 0;
-
-    const assignNode = (nodeId, preferredLane) => {
-      if (visited.has(nodeId)) return;
-      visited.add(nodeId);
-
-      // Check if this lane has temporal overlap - if so, push conflicting nodes down
-      const finalLane = this.assignToLaneWithSpaceMaking(
-        nodeId, preferredLane, assignments, nodeMap, family, visited
-      );
-
-      assignments[nodeId] = finalLane;
-
-      const preds = predecessors.get(nodeId) || [];
-      const succs = successors.get(nodeId) || [];
-
-      // Try to use predecessor's lane to minimize crossings
-      // Use the confirmed assignment of the current node as the baseline for successors
-      // This ensures linear chains maintain their lane (e.g. in Splits or if shifted)
-      let suggestedLane = assignments[nodeId];
-
-      // Process successors
-      if (succs.length === 0) {
-        // Terminal node
-        return;
-      } else if (succs.length === 1) {
-        // Linear chain - check temporal overlap
-        const successor = succs[0];
-        const currentNode = nodeMap.get(nodeId);
-        const successorNode = nodeMap.get(successor.nodeId);
-
-        const currentEnd = currentNode.dissolution_year || Infinity;
-        const successorStart = successorNode.founding_year;
-        const noTemporalOverlap = currentEnd < successorStart;
-
-        if (noTemporalOverlap) {
-          // No overlap - share lane with predecessor if possible
-          // UNLESS it's a standard merge (multiple predecessors, no legal transfer priority),
-          // in which case we force a Y-shape for symmetry.
-
-          const isMergeTarget = predecessors.get(successor.nodeId)?.length > 1;
-          const isLegalTransfer = successor.type === 'LEGAL_TRANSFER';
-
-          if (isMergeTarget && !isLegalTransfer) {
-            // Force offset for symmetry (this creates the first leg of the Y)
-            // We use +1 as the default offset for the "main" predecessor
-            assignNode(successor.nodeId, suggestedLane + 1);
-          } else {
-            assignNode(successor.nodeId, suggestedLane);
-          }
-        } else {
-          // Temporal overlap - need different lane
-          // Check if we can place it without increasing lane count too much
-          const node = nodeMap.get(nodeId);
-          const succNode = nodeMap.get(successor.nodeId);
-
-          // Find the best alternative lane to minimize crossings
-          // Prefer lanes closer to parent, but avoid temporal overlaps
-          let bestLane = suggestedLane + 1;
-          let minCrossings = Infinity;
-
-          // Try a few lane options
-          for (let offset = 1; offset <= 3; offset++) {
-            const testLane = suggestedLane + offset;
-            const crossings = this.estimateLinkCrossings(nodeId, successor.nodeId, testLane, assignments, nodeMap);
-            if (crossings < minCrossings) {
-              minCrossings = crossings;
-              bestLane = testLane;
-            }
-
-            // Also try negative offset
-            const negTestLane = suggestedLane - offset;
-            const negCrossings = this.estimateLinkCrossings(nodeId, successor.nodeId, negTestLane, assignments, nodeMap);
-            if (negCrossings < minCrossings) {
-              minCrossings = negCrossings;
-              bestLane = negTestLane;
-            }
-          }
-
-          assignNode(successor.nodeId, bestLane);
-        }
-      } else {
-        // Split: multiple successors
-        const sortedSuccs = [...succs].sort((a, b) => {
-          const priorityA = a.type === 'LEGAL_TRANSFER' ? 3 : a.type === 'SPIRITUAL_SUCCESSION' ? 2 : 1;
-          const priorityB = b.type === 'LEGAL_TRANSFER' ? 3 : b.type === 'SPIRITUAL_SUCCESSION' ? 2 : 1;
-          return priorityB - priorityA;
+  
+      // If only one is temporally compatible, it can share the lane
+      if (compatibleSuccs.length === 1 && incompatibleSuccs.length > 0) {
+        assignNode(compatibleSuccs[0].nodeId, suggestedLane);
+  
+        // Others form Y-pattern
+        incompatibleSuccs.forEach((succ, idx) => {
+          const offset = Math.ceil((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
+          const branchLane = suggestedLane + offset;
+          assignNode(succ.nodeId, branchLane);
         });
-
-        const currentNode = nodeMap.get(nodeId);
-        const currentEnd = currentNode.dissolution_year || Infinity;
-
-        // Check if we have a clear hierarchy (legal transfer as first, and it's unique)
-        const hasLegalPriority = sortedSuccs[0].type === 'LEGAL_TRANSFER' &&
-          (sortedSuccs.length === 1 || sortedSuccs[1].type !== 'LEGAL_TRANSFER');
-
-        if (hasLegalPriority) {
-          // Clear hierarchy: legal transfer gets priority
-          const legalSucc = sortedSuccs[0];
-          const legalNode = nodeMap.get(legalSucc.nodeId);
-          const legalStart = legalNode.founding_year;
-          const noOverlap = currentEnd < legalStart;
-
-          // Legal transfer can share lane if no temporal overlap
-          if (noOverlap) {
-            assignNode(legalSucc.nodeId, suggestedLane);
-          } else {
-            // Temporal overlap - place slightly offset
-            assignNode(legalSucc.nodeId, suggestedLane + 1);
-          }
-
-          // Place other branches in Y-pattern around the legal transfer
-          const otherSuccs = sortedSuccs.slice(1);
-          otherSuccs.forEach((succ, idx) => {
-            const offset = Math.floor((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
-            const branchLane = suggestedLane + offset * 2;
-            assignNode(succ.nodeId, branchLane);
-          });
-        } else {
-          // No clear priority - check temporal compatibility for ALL successors
-          const compatibleSuccs = [];
-          const incompatibleSuccs = [];
-
-          sortedSuccs.forEach(succ => {
-            const succNode = nodeMap.get(succ.nodeId);
-            const succStart = succNode.founding_year;
-            const noOverlap = currentEnd < succStart;
-
-            if (noOverlap) {
-              compatibleSuccs.push(succ);
-            } else {
-              incompatibleSuccs.push(succ);
-            }
-          });
-
-          // If only one is temporally compatible, it can share the lane
-          if (compatibleSuccs.length === 1 && incompatibleSuccs.length > 0) {
-            assignNode(compatibleSuccs[0].nodeId, suggestedLane);
-
-            // Others form Y-pattern
-            incompatibleSuccs.forEach((succ, idx) => {
-              const offset = Math.ceil((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
-              const branchLane = suggestedLane + offset;
-              assignNode(succ.nodeId, branchLane);
-            });
-          } else {
-            // All compatible OR all incompatible OR multiple compatible: TRUE Y-SHAPE
-            // Distribute all branches symmetrically away from parent
-            sortedSuccs.forEach((succ, idx) => {
-              const offset = Math.ceil((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
-              const branchLane = suggestedLane + offset;
-              assignNode(succ.nodeId, branchLane);
-            });
-          }
-        }
+      } else {
+        // All compatible OR all incompatible OR multiple compatible: TRUE Y-SHAPE
+        // Distribute all branches symmetrically away from parent
+        sortedSuccs.forEach((succ, idx) => {
+          const offset = Math.ceil((idx + 1) / 2) * (idx % 2 === 0 ? 1 : -1);
+          const branchLane = suggestedLane + offset;
+          assignNode(succ.nodeId, branchLane);
+        });
       }
-    };
-
-    // Start assignment
-    assignNode(startNode, 0);
-
-    // Handle unvisited nodes
-    // Handle unvisited nodes (e.g. the other legs of a merge)
-    // "Smart Start": Place them symmetrically relative to their already-assigned successors
-    family.forEach(nodeId => {
-      if (!visited.has(nodeId)) {
-        let startLane = nextAvailableLane + 1;
-
-        // Check if this node merges into an already-assigned node
-        const nodeSuccs = successors.get(nodeId) || [];
-        const assignedSuccessor = nodeSuccs.find(s => visited.has(s.nodeId));
-
-        if (assignedSuccessor) {
-          const successorLane = assignments[assignedSuccessor.nodeId];
-          const isStandardMerge = predecessors.get(assignedSuccessor.nodeId).length > 1 &&
-            assignedSuccessor.type !== 'LEGAL_TRANSFER';
-
-          if (isStandardMerge) {
-            // Find a symmetric lane relative to the successor
-            // We search in a radiating pattern: target-1, target+1, target-2, target+2...
-            // skipping lanes that result in overlap.
-
-            let foundLane = null;
-            for (let offset = 1; offset <= 5; offset++) {
-              // Try "above" (relative to target) first, then "below"
-              // Because the first predecessor usually pushed target to +1, 
-              // we expect target-1 to be taken by that first predecessor.
-              // So we check: target+1 (Lane 2), target-1 (Lane 0 - likely taken), target+2...
-
-              const candidates = [successorLane + offset, successorLane - offset];
-
-              for (const candidate of candidates) {
-                // Check if this lane is free for this node's duration
-                const hasOverlap = this.hasTemporalOverlapInLane(nodeId, candidate, assignments, nodeMap, family);
-                if (!hasOverlap) {
-                  foundLane = candidate;
-                  break;
-                }
+    }
+  }
+  };
+  
+  // Start assignment
+  assignNode(startNode, 0);
+  
+  // Handle unvisited nodes
+  // Handle unvisited nodes (e.g. the other legs of a merge)
+  // "Smart Start": Place them symmetrically relative to their already-assigned successors
+  family.forEach(nodeId => {
+    if (!visited.has(nodeId)) {
+      let startLane = nextAvailableLane + 1;
+  
+      // Check if this node merges into an already-assigned node
+      const nodeSuccs = successors.get(nodeId) || [];
+      const assignedSuccessor = nodeSuccs.find(s => visited.has(s.nodeId));
+  
+      if (assignedSuccessor) {
+        const successorLane = assignments[assignedSuccessor.nodeId];
+        const isStandardMerge = predecessors.get(assignedSuccessor.nodeId).length > 1 &&
+          assignedSuccessor.type !== 'LEGAL_TRANSFER';
+  
+        if (isStandardMerge) {
+          // Find a symmetric lane relative to the successor
+          // We search in a radiating pattern: target-1, target+1, target-2, target+2...
+          // skipping lanes that result in overlap.
+  
+          let foundLane = null;
+          for (let offset = 1; offset <= 5; offset++) {
+            // Try "above" (relative to target) first, then "below"
+            // Because the first predecessor usually pushed target to +1, 
+            // we expect target-1 to be taken by that first predecessor.
+            // So we check: target+1 (Lane 2), target-1 (Lane 0 - likely taken), target+2...
+  
+            const candidates = [successorLane + offset, successorLane - offset];
+  
+            for (const candidate of candidates) {
+              // Check if this lane is free for this node's duration
+              const hasOverlap = this.hasTemporalOverlapInLane(nodeId, candidate, assignments, nodeMap, family);
+              if (!hasOverlap) {
+                foundLane = candidate;
+                break;
               }
-              if (foundLane !== null) break;
             }
-
-            if (foundLane !== null) {
-              startLane = foundLane;
-              // If use nextAvailableLane, don't increment it unnecessarily
-              // But usually we want to reserve it? 
-              // Actually if we pick a specific lane, we don't touch nextAvailableLane yet
-              // unless startLane >= nextAvailableLane.
-              if (startLane > nextAvailableLane) nextAvailableLane = startLane;
-            } else {
-              nextAvailableLane++;
-              startLane = nextAvailableLane;
-            }
+            if (foundLane !== null) break;
+          }
+  
+          if (foundLane !== null) {
+            startLane = foundLane;
+            // If use nextAvailableLane, don't increment it unnecessarily
+            // But usually we want to reserve it? 
+            // Actually if we pick a specific lane, we don't touch nextAvailableLane yet
+            // unless startLane >= nextAvailableLane.
+            if (startLane > nextAvailableLane) nextAvailableLane = startLane;
           } else {
             nextAvailableLane++;
             startLane = nextAvailableLane;
@@ -857,22 +728,26 @@ export class LayoutCalculator {
           nextAvailableLane++;
           startLane = nextAvailableLane;
         }
-
-        assignNode(nodeId, startLane);
+      } else {
+        nextAvailableLane++;
+        startLane = nextAvailableLane;
       }
-    });
-
-    // Normalize lanes
-    const usedLanes = Object.values(assignments);
-    const minLane = Math.min(...usedLanes);
-    const normalized = {};
-    Object.entries(assignments).forEach(([nodeId, lane]) => {
-      normalized[nodeId] = lane - minLane;
-    });
-
-    return normalized;
+  
+      assignNode(nodeId, startLane);
+    }
+  });
+  
+  // Normalize lanes
+  const usedLanes = Object.values(assignments);
+  const minLane = Math.min(...usedLanes);
+  const normalized = {};
+  Object.entries(assignments).forEach(([nodeId, lane]) => {
+    normalized[nodeId] = lane - minLane;
+  });
+  
+  return normalized;
   }
-
+  
   /**
    * Estimate how many links would cross if a node is placed in a given lane
    * Returns a heuristic value (lower is better)
@@ -1920,10 +1795,3 @@ export class LayoutCalculator {
     );
   }
 }
-
-
-
-
-
-
-

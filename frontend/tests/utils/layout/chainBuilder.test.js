@@ -1,7 +1,74 @@
 import { describe, it, expect } from 'vitest';
-import { buildFamilies } from '../../../src/utils/layout/utils/chainBuilder';
+import { buildFamilies, buildChains } from '../../../src/utils/layout/utils/chainBuilder';
 
 describe('chainBuilder', () => {
+    describe('buildChains', () => {
+        // Helper to create nodes
+        const createNode = (id, founding = 2000, dissolution = null) => ({
+            id,
+            founding_year: founding,
+            dissolution_year: dissolution,
+            eras: [{ year: founding }]
+        });
+
+        it('should create individual chains for isolated nodes', () => {
+            const nodes = [createNode('A'), createNode('B')];
+            const links = [];
+            const chains = buildChains(nodes, links);
+
+            expect(chains).toHaveLength(2);
+            expect(chains[0].nodes).toHaveLength(1);
+            expect(chains[0].nodes[0].id).toBe('A');
+            expect(chains[1].nodes).toHaveLength(1);
+        });
+
+        it('should chain nodes with 1:1 relationship', () => {
+            const nodes = [createNode('A', 2000), createNode('B', 2010)];
+            const links = [{ source: 'A', target: 'B' }];
+            const chains = buildChains(nodes, links);
+
+            expect(chains).toHaveLength(1);
+            expect(chains[0].nodes).toHaveLength(2);
+            expect(chains[0].nodes[0].id).toBe('A');
+            expect(chains[0].nodes[1].id).toBe('B');
+        });
+
+        it('should break chains on visual overlap (Dirty Data)', () => {
+            // A ends 2015, B starts 2010. Overlap!
+            const nodes = [createNode('A', 2000, 2015), createNode('B', 2010)];
+            const links = [{ source: 'A', target: 'B' }];
+            const chains = buildChains(nodes, links);
+
+            expect(chains).toHaveLength(2); // Should be broken
+            expect(chains[0].nodes[0].id).toBe('A');
+            expect(chains[1].nodes[0].id).toBe('B');
+        });
+
+        it('should break chains on splits (1 parent, 2 children)', () => {
+            const nodes = [createNode('A'), createNode('B1'), createNode('B2')];
+            const links = [
+                { source: 'A', target: 'B1' },
+                { source: 'A', target: 'B2' }
+            ];
+            const chains = buildChains(nodes, links);
+
+            // A (1), B1 (1), B2 (1) = 3 chains
+            expect(chains).toHaveLength(3);
+        });
+
+        it('should break chains on merges (2 parents, 1 child)', () => {
+            const nodes = [createNode('A1'), createNode('A2'), createNode('B')];
+            const links = [
+                { source: 'A1', target: 'B' },
+                { source: 'A2', target: 'B' }
+            ];
+            const chains = buildChains(nodes, links);
+
+            // A1, A2, B = 3 chains
+            expect(chains).toHaveLength(3);
+        });
+    });
+
     describe('buildFamilies', () => {
         // Helper to create chains
         const createChain = (id, startTime = 2000, nodes = []) => ({
