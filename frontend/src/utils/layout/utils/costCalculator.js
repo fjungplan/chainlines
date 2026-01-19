@@ -116,3 +116,94 @@ export function calculateSingleChainCost(
 
     return attractionCost + cutThroughCost + blockerCost + yShapeCost;
 }
+
+/**
+ * Identifies chains whose cost might change when a specific chain moves.
+ * Affected chains include:
+ * 1. Direct parents and children of the moved chain.
+ * 2. Chains that might now be blocked or have new cut-throughs in oldY or newY.
+ */
+export function getAffectedChains(movedChain, oldY, newY, chains, chainParents, chainChildren, verticalSegments) {
+    const affected = new Set();
+
+    // 1. Direct connections
+    const parents = chainParents.get(movedChain.id) || [];
+    const children = chainChildren.get(movedChain.id) || [];
+    parents.forEach(p => affected.add(p.id));
+    children.forEach(c => affected.add(c.id));
+
+    // 2. Chains affected by vertical visibility changes
+    // Any chain whose time overlaps with movedChain and sits in or near the lanes involved
+    chains.forEach(other => {
+        if (other.id === movedChain.id) return;
+        if (affected.has(other.id)) return;
+
+        const timeOverlap = (movedChain.startTime <= other.endTime + 1) && (other.startTime <= movedChain.endTime + 1);
+        if (timeOverlap) {
+            // If they share lanes or intermediate lanes
+            // This is a broad heuristic; we can refine it if needed
+            affected.add(other.id);
+        }
+    });
+
+    return affected;
+}
+
+/**
+ * Calculates the net change in global cost if a chain moves from oldY to newY.
+ */
+export function calculateCostDelta(chain, oldY, newY, affectedChains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    // Current total cost of the subset
+    let oldSubtotal = calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
+    affectedChains.forEach(id => {
+        const other = chains.find(c => c.id === id);
+        if (other) {
+            oldSubtotal += calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+        }
+    });
+
+    // New total cost of the subset
+    // Temporarily update yIndex AND ySlots for the subtotal calculation
+    // This is crucial because checkCollision depends on ySlots
+    const originalY = chain.yIndex;
+    chain.yIndex = newY; // Update object
+
+    let movedSlot = null;
+    if (ySlots) {
+        const oldSlots = ySlots.get(oldY);
+        if (oldSlots) {
+            const idx = oldSlots.findIndex(s => s.chainId === chain.id);
+            if (idx !== -1) {
+                movedSlot = oldSlots.splice(idx, 1)[0];
+            }
+        }
+        if (!ySlots.has(newY)) ySlots.set(newY, []);
+        // If movedSlot not found (sanity check), create new
+        const slotToAdd = movedSlot || { start: chain.startTime, end: chain.endTime, chainId: chain.id };
+        ySlots.get(newY).push(slotToAdd);
+    }
+
+    let newSubtotal = calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
+    affectedChains.forEach(id => {
+        const other = chains.find(c => c.id === id);
+        if (other) {
+            newSubtotal += calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
+        }
+    });
+
+    // Revert State
+    chain.yIndex = originalY;
+    if (ySlots && movedSlot) {
+        // Remove from newY
+        const newSlots = ySlots.get(newY);
+        if (newSlots) {
+            const idx = newSlots.findIndex(s => s.chainId === chain.id);
+            if (idx !== -1) newSlots.splice(idx, 1);
+        }
+        // Add back to oldY
+        if (!ySlots.has(oldY)) ySlots.set(oldY, []);
+        ySlots.get(oldY).push(movedSlot);
+    }
+
+    return newSubtotal - oldSubtotal;
+}

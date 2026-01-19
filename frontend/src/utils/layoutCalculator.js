@@ -3,8 +3,9 @@ import { LAYOUT_CONFIG } from './layout/config.js';
 import { calculateYearRange, createXScale } from './layout/utils/scales.js';
 import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
 import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
-import { calculateSingleChainCost } from './layout/utils/costCalculator.js';
+import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from './layout/utils/costCalculator.js';
 import { buildFamilies } from './layout/utils/chainBuilder.js';
+import { runGreedyPass } from './layout/simplifiers/greedyOptimizer.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -298,107 +299,17 @@ export class LayoutCalculator {
     return buildFamilies(chains, this.links);
   }
 
-  /**
-   * Identifies chains whose cost might change when a specific chain moves.
-   * Affected chains include:
-   * 1. Direct parents and children of the moved chain.
-   * 2. Chains that might now be blocked or have new cut-throughs in oldY or newY.
-   */
-  getAffectedChains(movedChain, oldY, newY, chains, chainParents, chainChildren, verticalSegments) {
-    const affected = new Set();
-
-    // 1. Direct connections
-    const parents = chainParents.get(movedChain.id) || [];
-    const children = chainChildren.get(movedChain.id) || [];
-    parents.forEach(p => affected.add(p.id));
-    children.forEach(c => affected.add(c.id));
-
-    // 2. Chains affected by vertical visibility changes
-    // Any chain whose time overlaps with movedChain and sits in or near the lanes involved
-    chains.forEach(other => {
-      if (other.id === movedChain.id) return;
-      if (affected.has(other.id)) return;
-
-      const timeOverlap = (movedChain.startTime <= other.endTime + 1) && (other.startTime <= movedChain.endTime + 1);
-      if (timeOverlap) {
-        // If they share lanes or intermediate lanes
-        // This is a broad heuristic; we can refine it if needed
-        affected.add(other.id);
-      }
-    });
-
-    return affected;
-  }
+  // getAffectedChains removed - moved to costCalculator.js
 
   /**
    * Calculates the total cost of all chains in a family.
    */
-  calculateGlobalCost(chains, chainParents, chainChildren, verticalSegments, checkCollision) {
-    let total = 0;
-    chains.forEach(chain => {
-      total += this._calculateSingleChainCost(chain, chain.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
-    });
-    return total;
-  }
+  // calculateGlobalCost removed - logic moved/refactored
 
   /**
    * Calculates the net change in global cost if a chain moves from oldY to newY.
    */
-  calculateCostDelta(chain, oldY, newY, affectedChains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
-    // Current total cost of the subset
-    let oldSubtotal = this._calculateSingleChainCost(chain, oldY, chainParents, chainChildren, verticalSegments, checkCollision);
-    affectedChains.forEach(id => {
-      const other = chains.find(c => c.id === id);
-      if (other) {
-        oldSubtotal += this._calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
-      }
-    });
-
-    // New total cost of the subset
-    // Temporarily update yIndex AND ySlots for the subtotal calculation
-    // This is crucial because checkCollision depends on ySlots
-    const originalY = chain.yIndex;
-    chain.yIndex = newY; // Update object
-
-    let movedSlot = null;
-    if (ySlots) {
-      const oldSlots = ySlots.get(oldY);
-      if (oldSlots) {
-        const idx = oldSlots.findIndex(s => s.chainId === chain.id);
-        if (idx !== -1) {
-          movedSlot = oldSlots.splice(idx, 1)[0];
-        }
-      }
-      if (!ySlots.has(newY)) ySlots.set(newY, []);
-      // If movedSlot not found (sanity check), create new
-      const slotToAdd = movedSlot || { start: chain.startTime, end: chain.endTime, chainId: chain.id };
-      ySlots.get(newY).push(slotToAdd);
-    }
-
-    let newSubtotal = this._calculateSingleChainCost(chain, newY, chainParents, chainChildren, verticalSegments, checkCollision);
-    affectedChains.forEach(id => {
-      const other = chains.find(c => c.id === id);
-      if (other) {
-        newSubtotal += this._calculateSingleChainCost(other, other.yIndex, chainParents, chainChildren, verticalSegments, checkCollision);
-      }
-    });
-
-    // Revert State
-    chain.yIndex = originalY;
-    if (ySlots && movedSlot) {
-      // Remove from newY
-      const newSlots = ySlots.get(newY);
-      if (newSlots) {
-        const idx = newSlots.findIndex(s => s.chainId === chain.id);
-        if (idx !== -1) newSlots.splice(idx, 1);
-      }
-      // Add back to oldY
-      if (!ySlots.has(oldY)) ySlots.set(oldY, []);
-      ySlots.get(oldY).push(movedSlot);
-    }
-
-    return newSubtotal - oldSubtotal;
-  }
+  // calculateCostDelta removed - moved to costCalculator.js
 
   /**
    * Internal helper for Slice 1 & 2 to calculate cost of a single chain.
@@ -2107,10 +2018,9 @@ export class LayoutCalculator {
         ySlots.get(originalAY).push(slotB);
       }
     }
-
     // Get all affected chains (both swapped chains and their neighbors)
-    const affectedA = this.getAffectedChains(chainA, originalBY, originalAY, chains, chainParents, chainChildren, verticalSegments);
-    const affectedB = this.getAffectedChains(chainB, originalAY, originalBY, chains, chainParents, chainChildren, verticalSegments);
+    const affectedA = getAffectedChains(chainA, originalBY, originalAY, chains, chainParents, chainChildren, verticalSegments);
+    const affectedB = getAffectedChains(chainB, originalAY, originalBY, chains, chainParents, chainChildren, verticalSegments);
     const allAffected = new Set([...affectedA, ...affectedB, chainA.id, chainB.id]);
 
     // Calculate cost delta for all affected chains
@@ -2639,7 +2549,7 @@ export class LayoutCalculator {
           if (strategy === 'HYBRID') {
             this._runGroupwiseOptimization(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
           } else {
-            this._runOptimizationPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy);
+            runGreedyPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy);
           }
 
           // Slice 8B: Log metrics
@@ -2657,109 +2567,7 @@ export class LayoutCalculator {
 
 
 
-  _runOptimizationPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy) {
-    const sortedChains = Array.from(family);
 
-    // 1. Sort
-    if (strategy === 'PARENTS') {
-      sortedChains.sort((a, b) => a.startTime - b.startTime);
-    } else if (strategy === 'CHILDREN') {
-      sortedChains.sort((a, b) => b.startTime - a.startTime);
-    } else if (strategy === 'HUBS') {
-      const getDegree = (c) => (chainParents.get(c.id)?.length || 0) + (chainChildren.get(c.id)?.length || 0);
-      sortedChains.sort((a, b) => getDegree(b) - getDegree(a));
-    }
-
-    // 2. Optimize each chain (Greedy Layout Move)
-    for (const chain of sortedChains) {
-      const currentY = chain.yIndex;
-
-      // A. Identify Candidates
-      // ----------------------
-      // Search Radius: Global exploration
-      // Target Radius: Local exploitation (near parents/children)
-      let candidates = new Set();
-
-      // 1. Local Neighborhood
-      for (let dy = -LAYOUT_CONFIG.SEARCH_RADIUS; dy <= LAYOUT_CONFIG.SEARCH_RADIUS; dy++) {
-        candidates.add(currentY + dy);
-      }
-
-      // 2. Parent Vicinity
-      const parents = chainParents.get(chain.id) || [];
-      for (const p of parents) {
-        const parentChain = chains.find(c => c.id === p.id);
-        if (parentChain) {
-          const py = parentChain.yIndex;
-          for (let dy = -LAYOUT_CONFIG.TARGET_RADIUS; dy <= LAYOUT_CONFIG.TARGET_RADIUS; dy++) {
-            candidates.add(py + dy);
-          }
-        }
-      }
-
-      // 3. Child Vicinity
-      const children = chainChildren.get(chain.id) || [];
-      for (const c of children) {
-        const childChain = chains.find(ch => ch.id === c.id);
-        if (childChain) {
-          const cy = childChain.yIndex;
-          for (let dy = -LAYOUT_CONFIG.TARGET_RADIUS; dy <= LAYOUT_CONFIG.TARGET_RADIUS; dy++) {
-            candidates.add(cy + dy);
-          }
-        }
-      }
-
-      // B. Evaluate Candidates
-      // ----------------------
-      let bestY = currentY;
-
-      // Calculate current cost (baseline)
-      const currentCost = this._calculateSingleChainCost(chain, currentY, chainParents, chainChildren, verticalSegments, checkCollision);
-      let minCost = currentCost;
-
-      const candidateArray = Array.from(candidates).sort((a, b) => a - b);
-
-      for (const y of candidateArray) {
-        if (y === currentY) continue;
-
-        // 1. Collision Check
-        if (checkCollision(y, chain.startTime, chain.endTime, chain.id, chain)) continue;
-
-        // 2. Cost Calculation
-        const cost = this._calculateSingleChainCost(chain, y, chainParents, chainChildren, verticalSegments, checkCollision);
-
-        // 3. Selection
-        // STRICTLY BETTER acceptance for main loop
-        if (cost < minCost) {
-          minCost = cost;
-          bestY = y;
-        }
-      }
-
-      // C. Apply Move (Global Acceptance Check)
-      // ---------------------------------------
-      // We only move if it passes the Net Global Cost improvement check (Slice 2 logic)
-      if (bestY !== currentY) {
-        if (this._verifyTotalCostImprovement(chain, currentY, bestY, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots)) {
-          // Apply Move
-          const oldSlots = ySlots.get(currentY);
-          if (oldSlots) {
-            const idx = oldSlots.findIndex(s => s.chainId === chain.id);
-            if (idx !== -1) oldSlots.splice(idx, 1);
-          }
-
-          chain.yIndex = bestY;
-
-          if (!ySlots.has(bestY)) ySlots.set(bestY, []);
-          ySlots.get(bestY).push({
-            start: chain.startTime,
-            end: chain.endTime,
-            chainId: chain.id
-          });
-        }
-      }
-    }
-  }
 
 
   // Slice 8B: Layout Scoreboard

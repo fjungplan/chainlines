@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateSingleChainCost } from '../../../src/utils/layout/utils/costCalculator';
+import { calculateSingleChainCost, getAffectedChains, calculateCostDelta } from '../../../src/utils/layout/utils/costCalculator';
 import { LAYOUT_CONFIG } from '../../../src/utils/layout/config';
 
 describe('costCalculator', () => {
@@ -201,6 +201,98 @@ describe('costCalculator', () => {
             );
 
             expect(cost).toBe(LAYOUT_CONFIG.WEIGHTS.Y_SHAPE);
+        });
+    });
+
+    describe('getAffectedChains', () => {
+        // Helper to generic chain objects
+        const createChain = (id, startTime = 2000, endTime = 2010) => ({
+            id, startTime, endTime
+        });
+
+        it('should include direct parents and children', () => {
+            const moved = createChain('moved');
+            const parent = createChain('parent');
+            const child = createChain('child');
+            // Unrelated needs to be temporally distinct to result in false
+            const unrelated = createChain('unrelated', 3000, 3010);
+
+            const chains = [moved, parent, child, unrelated];
+            const chainParents = new Map([['moved', [parent]]]);
+            const chainChildren = new Map([['moved', [child]]]);
+
+            const affected = getAffectedChains(moved, 0, 1, chains, chainParents, chainChildren, []);
+
+            expect(affected.has('parent')).toBe(true);
+            expect(affected.has('child')).toBe(true);
+            expect(affected.has('unrelated')).toBe(false);
+        });
+
+        it('should include temporally overlapping chains (potential blockers)', () => {
+            const moved = createChain('moved', 2000, 2010);
+            const overlapping = createChain('overlap', 2005, 2015);
+            const nonOverlapping = createChain('clean', 2020, 2030);
+
+            const chains = [moved, overlapping, nonOverlapping];
+            const chainParents = new Map();
+            const chainChildren = new Map();
+
+            const affected = getAffectedChains(moved, 0, 1, chains, chainParents, chainChildren, []);
+
+            expect(affected.has('overlap')).toBe(true);
+            expect(affected.has('clean')).toBe(false);
+        });
+    });
+
+    describe('calculateCostDelta', () => {
+        const createChain = (id, yIndex, startTime = 2000, endTime = 2010) => ({
+            id, yIndex, startTime, endTime
+        });
+
+        it('should calculate cost difference and revert state', () => {
+            // Setup simple scenario:
+            // Chain at y=0. Want to move to y=10.
+            // Parent at y=10.
+            // Old Cost: dist(0, 10)^2 = 100 * Weight
+            // New Cost: dist(10, 10)^2 = 0
+            // Delta should be negative (improvement).
+
+            const chain = createChain('c1', 0);
+            const parent = createChain('p1', 10);
+
+            const chains = [chain, parent];
+            const chainParents = new Map([['c1', [parent]]]);
+            const chainChildren = new Map();
+            const verticalSegments = [];
+            const checkCollision = () => false;
+
+            const ySlots = new Map();
+            ySlots.set(0, [{ start: 2000, end: 2010, chainId: 'c1' }]);
+
+            // Mock affected chains (parent is affected)
+            const affected = new Set(['p1']);
+
+            const delta = calculateCostDelta(
+                chain,
+                0, // oldY
+                10, // newY
+                affected,
+                chains,
+                chainParents,
+                chainChildren,
+                verticalSegments,
+                checkCollision,
+                ySlots
+            );
+
+            // Expect negative delta (cost reduction)
+            expect(delta).toBeLessThan(0);
+
+            // Verify state reversion
+            expect(chain.yIndex).toBe(0); // Should be back at 0
+            const newSlotContent = ySlots.get(10) || [];
+            expect(newSlotContent).toHaveLength(0); // New slot should be clean (or empty)
+            expect(ySlots.get(0)).toHaveLength(1); // Old slot restored
         });
     });
 });
