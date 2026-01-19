@@ -360,13 +360,7 @@ export class LayoutCalculator {
       }
     }
 
-    // 2. Iterative Relaxation (Force-Directed with Cost Function)
-    const ITERATIONS = Math.min(
-      LAYOUT_CONFIG.ITERATIONS.MAX,
-      Math.max(
-        LAYOUT_CONFIG.ITERATIONS.MIN,
-        family.chains.length * LAYOUT_CONFIG.ITERATIONS.MULTIPLIER
-      ));
+
 
     // Calculate Degree (Connectivity) for Gravity Sort
     const chainDegrees = new Map();

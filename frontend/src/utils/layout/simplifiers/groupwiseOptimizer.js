@@ -17,7 +17,6 @@ import { LAYOUT_CONFIG } from '../config.js';
  * Identifies connected groups and applies optimization strategies.
  */
 export function runGroupwiseOptimization(familyChains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
-    if (!LAYOUT_CONFIG.HYBRID_MODE) return;
 
     // 1. Calculate degrees for sorting
     const chainDegrees = new Map();

@@ -13,15 +13,15 @@ describe('LayoutCalculator - Slice 7: Hybrid Integration', () => {
         layoutCalc = new LayoutCalculator({ nodes: [], links: [] });
 
         // Reset config defaults
-        LAYOUT_CONFIG.HYBRID_MODE = true;
         LAYOUT_CONFIG.PASS_SCHEDULE = [{ iterations: 1, strategies: ['HYBRID'] }];
 
         // Spy on the imported module function
         runGroupwiseSpy = vi.spyOn(GroupwiseOptimizer, 'runGroupwiseOptimization');
     });
 
-    it('should have HYBRID_MODE enabled in default config', () => {
-        expect(LAYOUT_CONFIG.HYBRID_MODE).toBe(true);
+    it('should have HYBRID strategy in default pass schedule', () => {
+        const hasHybrid = LAYOUT_CONFIG.PASS_SCHEDULE.some(p => p.strategies.includes('HYBRID'));
+        expect(hasHybrid).toBe(true);
     });
 
     it('should run groupwise optimization method', () => {

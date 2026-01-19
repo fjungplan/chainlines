@@ -3,14 +3,7 @@
  * Tuned for global convergence of large blocks and tight local clustering.
  */
 export const LAYOUT_CONFIG = {
-    HYBRID_MODE: true,           // Enable new hybrid approach
 
-    // Iteration Control
-    ITERATIONS: {
-        MIN: 20,                   // Reduced for hybrid (was 50)
-        MAX: 100,                  // Reduced for hybrid (was 500)
-        MULTIPLIER: 5              // Reduced (was 10)
-    },
 
     GROUPWISE: {
         MAX_RIGID_DELTA: 20,       // Max lanes to try for rigid move
