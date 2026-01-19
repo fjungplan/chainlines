@@ -5,8 +5,7 @@ import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDe
 import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
 import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from './layout/utils/costCalculator.js';
 import { buildFamilies } from './layout/utils/chainBuilder.js';
-import { runGreedyPass } from './layout/simplifiers/greedyOptimizer.js';
-import { runGroupwiseOptimization } from './layout/simplifiers/groupwiseOptimizer.js';
+import { executePassSchedule } from './layout/orchestrator/layoutOrchestrator.js';
 
 /**
  * Calculate positions for all nodes using Sankey-like layout
@@ -1905,44 +1904,17 @@ export class LayoutCalculator {
   // Slice 8A: Configurable Pass Orchestrator Helpers
 
   _executePassSchedule(family, chains, chainParents, chainChildren, unusedVs, checkCollision, ySlots, scheduleOverride = null) {
-    const schedule = scheduleOverride || LAYOUT_CONFIG.PASS_SCHEDULE;
-
-    // Calculate family metrics
-    const familySize = chains.length || 0;
-    let linkCount = 0;
-    chains.forEach(c => {
-      linkCount += (chainParents.get(c.id)?.length || 0);
-      linkCount += (chainChildren.get(c.id)?.length || 0);
-    });
-    linkCount = linkCount / 2; // undirected edges
-
-    let globalPassIndex = 0;
-
-    for (const pass of schedule) {
-      if (!this._shouldApplyPass(familySize, linkCount, pass)) continue;
-
-      for (let i = 0; i < pass.iterations; i++) {
-        for (const strategy of pass.strategies) {
-          // Rebuild vertical segments for accurate blocker calculation
-          const verticalSegments = generateVerticalSegments(chains, chainParents);
-
-          if (strategy === 'HYBRID') {
-            runGroupwiseOptimization(chains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
-          } else {
-            runGreedyPass(family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, strategy);
-          }
-
-          // Slice 8B: Log metrics
-          this._logScore(globalPassIndex++, family, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
-        }
-      }
-    }
-  }
-
-  _shouldApplyPass(familySize, linkCount, passConfig) {
-    if (familySize < (passConfig.minFamilySize || 0)) return false;
-    if (linkCount < (passConfig.minLinks || 0)) return false;
-    return true;
+    executePassSchedule(
+      family,
+      chains,
+      chainParents,
+      chainChildren,
+      unusedVs,
+      checkCollision,
+      ySlots,
+      this._logScore.bind(this),
+      scheduleOverride
+    );
   }
 
 
