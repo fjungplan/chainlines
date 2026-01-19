@@ -239,9 +239,10 @@ graph TD
     H --> I[Move to lane with lowest cost]
     I --> J{Energy changed?}
     J -->|Yes| D
-    J -->|No| K[Normalize lanes<br/>Shift min lane to 0]
-    K --> L[Compact empty lanes]
-    L --> M[Output: Final positions]
+    J -->|No| K[Phase 4: Hybrid Optimization<br/>Rigid Moves & Annealing]
+    K --> L[Normalize lanes<br/>Shift min lane to 0]
+    L --> M[Compact empty lanes]
+    M --> N[Output: Final positions]
 ```
 
 ---
@@ -324,6 +325,59 @@ For each chain at current lane Y, the algorithm searches:
 2. **Parent Vicinity**: If chain has parents at lane P, search P ± 10 lanes
 3. **Child Vicinity**: If chain has children at lane C, search C ± 10 lanes
 
+---
+
+## Phase 4: Hybrid Groupwise Optimization
+
+**Goal**: Fine-tune the layout by optimizing entire family branches together.
+
+After the main optimization loop (Phase 3) converges, an additional pass runs to fix local minima that individual chain moves couldn't resolve, such as "knots" or family blocks trapped in suboptimal global positions.
+
+### Strategy Diagram
+
+```mermaid
+graph TD
+    A[Output from Phase 3] --> B{Build Groups}
+    B --> C[Bottom-Up Clustering]
+    C --> D[For Each Group]
+    D --> E{Try Rigid Move}
+    E -->|Improved| I[Apply Move]
+    E -->|No Improvement| F{Try Pairwise Swaps}
+    F -->|Improved| I
+    F -->|No Improvement| G{Try Simulated Annealing}
+    G -->|Improved| I
+    G -->|No Improvement| H[Keep Original Position]
+```
+
+### 1. Build Groups (Bottom-Up)
+Chains are grouped into tightly coupled "blocks" based on connectivity.
+- **Start**: Leaf nodes or roots (low degree).
+- **Grow**: Add connected parents/children using BFS.
+- **Stop**: When the group reaches a natural boundary (e.g., a hub connecting multiple distinct branches).
+
+### 2. Strategy A: Rigid Group Move
+**Concept**: Move the entire group ($G$) up or down by $\delta$ lanes without changing relative internal positions.
+- **Search Space**: $\pm 20$ lanes.
+- **Constraint**: No chain in $G$ can collide with a chain outside $G$.
+- **Objective**: Find $\delta$ that minimizes total global cost.
+- **Why**: Fixes cases where a whole family branch is stuck "too high" or "too low" relative to its neighbors, but individual chains can't move because they are blocked by their own family members.
+
+### 3. Strategy B: Pairwise Swaps
+**Concept**: Swap the lanes of any two chains ($A, B$) within the group.
+- **Search Space**: All distinct pairs $(A, B)$ in $G$.
+- **Constraint**: Swap is valid only if neither chain collides in its new position.
+- **Objective**: Fix internal ordering issues (e.g., "crossing links") inside a family block.
+
+### 4. Strategy C: Simulated Annealing (Fallback)
+**Concept**: If deterministic methods fail, use stochastic optimization to "shake" the group out of a local minimum.
+- **Mechanism**:
+    - Propose random move for a random chain in $G$.
+    - **Accept** if cost decreases ($\Delta J < 0$).
+    - **Probabilistically Accept** if cost increases, based on Temperature ($T$): $P = e^{-\Delta J / T}$.
+- **Cooling**: Temperature decays geometrically ($T_{k+1} = T_k \times 0.95$).
+- **Why**: Resolves complex "tangles" where multiple simultaneous moves are needed to escape a bad configuration.
+
+---
 **Collision Check**: Skip candidates where temporal overlap exists with another chain.
 
 **Cost Calculation**: For each valid candidate, calculate total cost.
@@ -530,15 +584,15 @@ For lane Y from 0 to maxLane:
 
 ```javascript
 export const LAYOUT_CONFIG = {
-  ITERATIONS: {
-    MIN: 50,                // Minimum iterations for small graphs
-    MAX: 500,               // Maximum iterations for large graphs
-    MULTIPLIER: 10          // Iterations = numChains × 10 (clamped to MIN/MAX)
+  HYBRID_MODE: true,
+  ITERATIONS: { MIN: 20, MAX: 100, MULTIPLIER: 5 },
+  SEARCH_RADIUS: 50,
+  TARGET_RADIUS: 10,
+  GROUPWISE: {
+    MAX_RIGID_DELTA: 20,
+    SA_MAX_ITER: 50,
+    SA_INITIAL_TEMP: 100
   },
-  
-  SEARCH_RADIUS: 50,        // How far to search around current position
-  TARGET_RADIUS: 10,        // How far to search around parent/child positions
-  
   WEIGHTS: {
     ATTRACTION: 100.0,
     CUT_THROUGH: 10000.0,

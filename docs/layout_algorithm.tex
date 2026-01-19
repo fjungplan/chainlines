@@ -261,7 +261,8 @@ To clarify the formulas used in the optimization phases, here is a reference of 
         \node [block, below of=cost] (move) {Move to lowest cost lane};
         \node [decision, right=2cm of opt] (energy) {Energy changed?};
         
-        \node [block, above of=energy, node distance=2.5cm] (norm) {Normalization \& Compaction};
+        \node [block, above of=energy, node distance=2.5cm] (hybrid) {Phase 4: Hybrid Optimization};
+        \node [block, above of=hybrid, node distance=2cm] (norm) {Normalization \& Compaction};
         \node [block, above of=norm] (output) {Final positions};
 
         \path [line] (input) -- (phase1);
@@ -274,8 +275,9 @@ To clarify the formulas used in the optimization phases, here is a reference of 
         \path [line] (cycle2) -- (cost);
         \path [line] (cost) -- (move);
         \path [line] (move) -| (energy);
-        \path [line] (energy) -- node {No} (norm);
         \path [line] (energy) -- node {Yes} (opt);
+        \path [line] (energy) -- node {No} (hybrid);
+        \path [line] (hybrid) -- (norm);
         \path [line] (norm) -- (output);
     \end{tikzpicture}
     \caption{Layout Algorithm Pipeline}
@@ -321,6 +323,69 @@ For each chain at current lane $Y$, the algorithm searches:
     \item \textbf{Child Vicinity}: $C \pm 10$ lanes.
 \end{enumerate}
 
+\section{Phase 4: Hybrid Groupwise Optimization}
+\textbf{Goal}: Fine-tune the layout by optimizing entire family branches together.
+
+After the main optimization loop (Phase 3) converges, an additional pass runs to fix local minima that individual chain moves couldn't resolve, such as ``knots'' or family blocks trapped in suboptimal global positions.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=1.5cm, auto]
+        \tikzstyle{block} = [rectangle, draw, fill=blue!10, text width=10em, text centered, rounded corners, minimum height=2.5em]
+        \tikzstyle{decision} = [diamond, draw, fill=green!10, text width=6em, text centered, inner sep=0pt]
+        \tikzstyle{line} = [draw, -latex']
+        
+        \node [block] (input) {Output from Phase 3};
+        \node [block, below of=input] (group) {Build Groups (Bottom-Up)};
+        \node [decision, below of=group, node distance=2.5cm] (rigid) {Try Rigid Move};
+        \node [decision, below of=rigid, node distance=2.5cm] (swap) {Try Pairwise Swaps};
+        \node [decision, below of=swap, node distance=2.5cm] (anneal) {Try Annealing};
+        \node [block, right=2cm of rigid] (apply) {Apply Move};
+        
+        \path [line] (input) -- (group);
+        \path [line] (group) -- (rigid);
+        \path [line] (rigid) -- node {No Improved} (swap);
+        \path [line] (rigid) -- node {Improved} (apply);
+        \path [line] (swap) -- node {No Improved} (anneal);
+        \path [line] (swap) -- node {Improved} (apply);
+        \path [line] (anneal) -- node {Improved} (apply);
+    \end{tikzpicture}
+    \caption{Hybrid Optimization Strategy}
+\end{figure}
+
+\subsection{1. Build Groups (Bottom-Up)}
+Chains are grouped into tightly coupled ``blocks'' based on connectivity.
+\begin{itemize}
+    \item \textbf{Start}: Leaf nodes or roots (low degree).
+    \item \textbf{Grow}: Add connected parents/children using BFS.
+    \item \textbf{Stop}: When the group reaches a natural boundary.
+\end{itemize}
+
+\subsection{2. Strategy A: Rigid Group Move}
+\textbf{Concept}: Move the entire group ($G$) up or down by $\delta$ lanes without changing relative internal positions.
+\begin{itemize}
+    \item \textbf{Search Space}: $\pm 20$ lanes.
+    \item \textbf{Constraint}: No chain in $G$ can collide with a chain outside $G$.
+    \item \textbf{Objective}: Find $\delta$ that minimizes total global cost.
+    \item \textbf{Why}: Fixes cases where a whole family branch is stuck ``too high'' or ``too low'' relative to its neighbors.
+\end{itemize}
+
+\subsection{3. Strategy B: Pairwise Swaps}
+\textbf{Concept}: Swap the lanes of any two chains ($A, B$) within the group.
+\begin{itemize}
+    \item \textbf{Search Space}: All distinct pairs $(A, B)$ in $G$.
+    \item \textbf{Constraint}: Swap is valid only if neither chain collides in its new position.
+    \item \textbf{Objective}: Fix internal ordering issues (e.g., ``crossing links'').
+\end{itemize}
+
+\subsection{4. Strategy C: Simulated Annealing (Fallback)}
+\textbf{Concept}: If deterministic methods fail, use stochastic optimization to ``shake'' the group out of a local minimum.
+\begin{itemize}
+    \item \textbf{Mechanism}: Propose random move, accept if better or probabilistically if worse ($P = e^{-\Delta J / T}$).
+    \item \textbf{Cooling}: Temperature decays geometrically ($T_{k+1} = T_k \times 0.95$).
+    \item \textbf{Why}: Resolves complex ``tangles'' needing multiple moves to escape.
+\end{itemize}
+
 \section{Cost Function Details}
 
 The total cost $J$ for a chain considering lane $Y$ is:
@@ -364,14 +429,20 @@ $C_{CUT} = 10,000 \times 1 = 10,000$.
 \section{Configuration Parameters}
 \begin{lstlisting}[language=JavaScript]
 export const LAYOUT_CONFIG = {
-  ITERATIONS: { MIN: 50, MAX: 500, MULTIPLIER: 10 },
+  HYBRID_MODE: true,
+  ITERATIONS: { MIN: 20, MAX: 100, MULTIPLIER: 5 },
   SEARCH_RADIUS: 50,
   TARGET_RADIUS: 10,
+  GROUPWISE: {
+    MAX_RIGID_DELTA: 20,
+    SA_MAX_ITER: 50,
+    SA_INITIAL_TEMP: 100
+  },
   WEIGHTS: {
     ATTRACTION: 100.0,
     CUT_THROUGH: 10000.0,
     BLOCKER: 5000.0,
-    LANE_SHARING: 0.0,      // Disabled (strict collision handles strangers)
+    LANE_SHARING: 0.0,      // Disabled
     Y_SHAPE: 150.0
   }
 };
