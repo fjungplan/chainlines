@@ -1,6 +1,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { LayoutCalculator, LAYOUT_CONFIG } from '../../src/utils/layoutCalculator';
+import { LayoutCalculator } from '../../src/utils/layoutCalculator';
+import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
 
 describe('Layout Scoreboard (Slice 8B)', () => {
     let layoutCalculator;

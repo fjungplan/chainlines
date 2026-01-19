@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LayoutCalculator, LAYOUT_CONFIG } from '../../src/utils/layoutCalculator';
+import { LayoutCalculator } from '../../src/utils/layoutCalculator';
+import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
 
 describe('LayoutCalculator - Slice 7: Hybrid Integration', () => {
     let layoutCalc;
