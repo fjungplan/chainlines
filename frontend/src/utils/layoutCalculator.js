@@ -2782,4 +2782,150 @@ export class LayoutCalculator {
       ySlots.get(newY).push(slot);
     });
   }
+
+  // Slice 6: Simulated Annealing Fallback
+
+  /**
+   * Calculate bounded search region for simulated annealing.
+   * Returns a region centered on the group's current position
+   * with specified radius, clamped to prevent negative yIndex.
+   */
+  _calculateSearchRegion(group, radius) {
+    const chains = Array.from(group);
+    const minChainY = Math.min(...chains.map(c => c.yIndex));
+    const maxChainY = Math.max(...chains.map(c => c.yIndex));
+
+    // Calculate region bounds
+    let minY = minChainY - radius;
+    let maxY = maxChainY + radius;
+
+    // Clamp to prevent negative positions
+    if (minY < 0) minY = 0;
+
+    return { minY, maxY };
+  }
+
+  /**
+   * Metropolis acceptance criterion for simulated annealing.
+   * Always accepts improvements (deltaCost < 0).
+   * Accepts worse solutions with probability exp(-deltaCost / temperature).
+   */
+  _acceptMove(deltaCost, temperature) {
+    // Always accept improvements
+    if (deltaCost < 0) return true;
+
+    // Accept worse solutions with probability exp(-deltaCost / T)
+    const probability = Math.exp(-deltaCost / temperature);
+    return Math.random() < probability;
+  }
+
+  /**
+   * Simulated annealing repositioning for flexible group optimization.
+   * When rigid moves fail, this allows individual chains in the group
+   * to move independently within a bounded region.
+   * 
+   * Uses geometric cooling schedule: T(i) = T0 * (coolingRate)^i
+   */
+  _simulatedAnnealingReposition(group, region, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, options) {
+    const {
+      maxIterations = 50,
+      initialTemp = 100,
+      coolingRate = 0.95
+    } = options;
+
+    const groupChains = Array.from(group);
+
+    // Calculate initial cost
+    let currentCost = 0;
+    groupChains.forEach(chain => {
+      currentCost += this._calculateSingleChainCost(
+        chain,
+        chain.yIndex,
+        chainParents,
+        chainChildren,
+        verticalSegments,
+        checkCollision
+      );
+    });
+
+    const initialCost = currentCost;
+    let bestCost = currentCost;
+    let bestPositions = new Map(groupChains.map(c => [c.id, c.yIndex]));
+
+    // Simulated annealing loop
+    for (let iter = 0; iter < maxIterations; iter++) {
+      // Current temperature
+      const temperature = initialTemp * Math.pow(coolingRate, iter);
+
+      // Select random chain from group
+      const randomChain = groupChains[Math.floor(Math.random() * groupChains.length)];
+      const oldY = randomChain.yIndex;
+
+      // Propose random move within region
+      const newY = Math.floor(Math.random() * (region.maxY - region.minY + 1)) + region.minY;
+
+      // Check if move is valid (no collision)
+      if (newY === oldY || checkCollision(newY, randomChain.startTime, randomChain.endTime, randomChain.id, randomChain)) {
+        continue;
+      }
+
+      // Calculate cost delta for this move
+      const affected = this.getAffectedChains(randomChain, oldY, newY, chains, chainParents, chainChildren, verticalSegments);
+      const deltaCost = this.calculateCostDelta(randomChain, oldY, newY, affected, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+
+      // Metropolis acceptance
+      if (this._acceptMove(deltaCost, temperature)) {
+        // Apply move
+        // Update ySlots
+        const slots = ySlots.get(oldY);
+        if (slots) {
+          const idx = slots.findIndex(s => s.chainId === randomChain.id);
+          if (idx !== -1) {
+            const slot = slots.splice(idx, 1)[0];
+            if (!ySlots.has(newY)) ySlots.set(newY, []);
+            ySlots.get(newY).push(slot);
+          }
+        }
+
+        // Update yIndex
+        randomChain.yIndex = newY;
+        currentCost += deltaCost;
+
+        // Track best solution
+        if (currentCost < bestCost) {
+          bestCost = currentCost;
+          bestPositions = new Map(groupChains.map(c => [c.id, c.yIndex]));
+        }
+      }
+    }
+
+    // Restore best solution if current is worse
+    if (currentCost > bestCost) {
+      groupChains.forEach(chain => {
+        const oldY = chain.yIndex;
+        const newY = bestPositions.get(chain.id);
+
+        if (oldY !== newY) {
+          // Update ySlots
+          const slots = ySlots.get(oldY);
+          if (slots) {
+            const idx = slots.findIndex(s => s.chainId === chain.id);
+            if (idx !== -1) {
+              const slot = slots.splice(idx, 1)[0];
+              if (!ySlots.has(newY)) ySlots.set(newY, []);
+              ySlots.get(newY).push(slot);
+            }
+          }
+
+          chain.yIndex = newY;
+        }
+      });
+      currentCost = bestCost;
+    }
+
+    return {
+      improved: bestCost < initialCost,
+      finalCost: bestCost
+    };
+  }
 }
