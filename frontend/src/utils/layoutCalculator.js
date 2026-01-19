@@ -5,11 +5,20 @@ import { VISUALIZATION } from '../constants/visualization';
  * Tuned for global convergence of large blocks and tight local clustering.
  */
 export const LAYOUT_CONFIG = {
+  HYBRID_MODE: true,           // Enable new hybrid approach
+
   // Iteration Control
   ITERATIONS: {
-    MIN: 50,              // Minimum for tiny families
-    MAX: 500,             // Cap for huge families
-    MULTIPLIER: 10        // Iterations per chain (N * 10)
+    MIN: 20,                   // Reduced for hybrid (was 50)
+    MAX: 100,                  // Reduced for hybrid (was 500)
+    MULTIPLIER: 5              // Reduced (was 10)
+  },
+
+  GROUPWISE: {
+    MAX_RIGID_DELTA: 20,       // Max lanes to try for rigid move
+    SA_MAX_ITER: 50,           // Simulated annealing iterations
+    SA_INITIAL_TEMP: 100,      // Starting temperature
+    SEARCH_RADIUS: 10          // Region around group for SA
   },
 
   // Search Space
@@ -1027,6 +1036,11 @@ export class LayoutCalculator {
       });
 
       if (!energyChanged) break;
+    }
+
+    // 2.5 Hybrid Groupwise Optimization
+    if (LAYOUT_CONFIG.HYBRID_MODE) {
+      this._runGroupwiseOptimization(family.chains, family.chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
     }
 
     // 3. Post-Processing: Normalization & Compaction
@@ -2927,5 +2941,96 @@ export class LayoutCalculator {
       improved: bestCost < initialCost,
       finalCost: bestCost
     };
+  }
+
+  // Slice 7: Hybrid Integration Orchestrator
+
+  /**
+   * Run groupwise optimization pass.
+   * Identifies connected groups (families within the family) and applies
+   * increasingly expensive optimization strategies:
+   * 1. Rigid Move (preserves local structure, fixes global position)
+   * 2. Pairwise Swaps (fixes local ordering errors)
+   * 3. Simulated Annealing (fallback for complex tangles)
+   */
+  _runGroupwiseOptimization(familyChains, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots) {
+    if (!LAYOUT_CONFIG.HYBRID_MODE) return;
+
+    // 1. Calculate degrees for sorting
+    const chainDegrees = new Map();
+    familyChains.forEach(c => {
+      let deg = 0;
+      const parents = chainParents.get(c.id) || [];
+      const children = chainChildren.get(c.id) || [];
+      deg += parents.length + children.length; // Simple max degree
+      chainDegrees.set(c.id, deg);
+    });
+
+    // 2. Sort chains (leaves first) to build groups bottom-up
+    const sortedChains = this._sortChainsByDegree(familyChains, chainDegrees);
+    const visited = new Set();
+    const groups = [];
+
+    // 3. Build Groups
+    for (const chain of sortedChains) {
+      if (!visited.has(chain)) {
+        const group = this._buildGroup(chain, chains, chainParents, chainChildren);
+        if (group.size > 0) {
+          groups.push(group);
+          group.forEach(c => visited.add(c));
+        }
+      }
+    }
+
+    // 4. Optimize Each Group
+    for (const group of groups) {
+      let groupImproved = false;
+
+      // Strategy A: Rigid Group Move
+      // Try to move the whole block to a better global slot
+      const maxRigidDelta = LAYOUT_CONFIG.GROUPWISE.MAX_RIGID_DELTA;
+      const rigidDeltas = this._calculateRigidMoveDeltas(group, ySlots, checkCollision, maxRigidDelta);
+
+      let bestRigidDelta = 0;
+      let bestRigidImprovement = 0;
+
+      for (const delta of rigidDeltas) {
+        const deltaCost = this._evaluateRigidMove(group, delta, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+        if (deltaCost < bestRigidImprovement) { // Negative cost is better
+          bestRigidImprovement = deltaCost;
+          bestRigidDelta = delta;
+        }
+      }
+
+      if (bestRigidImprovement < 0) {
+        this._applyRigidMove(group, bestRigidDelta, ySlots);
+        groupImproved = true;
+      }
+
+      // Strategy B: Pairwise Swaps
+      // Optimize internal structure if rigid move didn't solve everything (or even if it did)
+      // We run this unless rigid move made a huge change? No, run checks anyway.
+      // But only if group size > 1
+      if (group.size > 1) {
+        const bestSwap = this._findBestSwap(group, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots);
+        if (bestSwap && bestSwap.delta < 0) {
+          this._applySwap(bestSwap.chainA, bestSwap.chainB, ySlots);
+          groupImproved = true;
+        }
+      }
+
+      // Strategy C: Simulated Annealing Fallback
+      // If no deterministic improvement was found, and the group is "tense" (high cost?), try stochastic
+      // For now, simple logic: if NOT improved by A or B, try C.
+      if (!groupImproved && group.size > 1) {
+        const saRegion = this._calculateSearchRegion(group, LAYOUT_CONFIG.GROUPWISE.SEARCH_RADIUS);
+        const saOptions = {
+          maxIterations: LAYOUT_CONFIG.GROUPWISE.SA_MAX_ITER,
+          initialTemp: LAYOUT_CONFIG.GROUPWISE.SA_INITIAL_TEMP,
+          coolingRate: 0.95
+        };
+        this._simulatedAnnealingReposition(group, saRegion, chains, chainParents, chainChildren, verticalSegments, checkCollision, ySlots, saOptions);
+      }
+    }
   }
 }
