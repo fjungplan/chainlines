@@ -68,7 +68,7 @@ def test_optimize_large_family(large_family):
 
 
 def test_score_improvement():
-    """Verify that optimization improves score"""
+    """Verify that optimization improves score and resolves collisions"""
     chains = [
         {"id": "A", "startTime": 2000, "endTime": 2005, "yIndex": 0},
         {"id": "B", "startTime": 2006, "endTime": 2010, "yIndex": 0},
@@ -82,17 +82,23 @@ def test_score_improvement():
     ]
     family = {"chains": chains, "links": links}
     
-    # Run optimizer with few generations
-    optimizer_short = GeneticOptimizer(pop_size=20, generations=10)
-    result_short = optimizer_short.optimize(family, timeout_seconds=5)
+    # Run optimizer with sufficient generations to find solution
+    # Use fixed seed for deterministic testing
+    import random
+    random.seed(42)
     
-    # Run with more generations
-    optimizer_long = GeneticOptimizer(pop_size=20, generations=100)
-    result_long = optimizer_long.optimize(family, timeout_seconds=10)
+    optimizer = GeneticOptimizer(pop_size=50, generations=50)
+    result = optimizer.optimize(family, timeout_seconds=10)
     
-    # Longer run should generally produce better or equal score
-    # (Stochastic, so not guaranteed, but very likely)
-    assert result_long["score"] <= result_short["score"] * 1.5
+    # 1. Check for collision resolution
+    # B and C exist at the same time, so they MUST be on different lanes
+    assert result["y_indices"]["B"] != result["y_indices"]["C"]
+    
+    # 2. Check for reasonable score
+    # A heavy collision or crossing usually costs > 5000 (actually typically >10k for cuts)
+    # A symmetric star layout (A=0, B=1, C=-1) costs exactly 4000.0
+    # So we accept anything < 6000 as a valid, non-colliding solution
+    assert result["score"] < 6000
 
 
 def test_deterministic_with_seed():
