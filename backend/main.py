@@ -55,6 +55,26 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to seed system user: {e}")
         # We don't raise here to allow app to start, though scraper might fail later
     
+    # Run initial family discovery in background (non-blocking)
+    import asyncio
+    from app.services.family_discovery import FamilyDiscoveryService
+    
+    async def run_initial_discovery():
+        try:
+            logger.info("Starting background family discovery...")
+            async with async_session_maker() as session:
+                service = FamilyDiscoveryService(session, complexity_threshold=20)
+                results = await service.discover_all_families()
+                if results:
+                    logger.info(f"Background discovery complete. Registered {len(results)} new complex families.")
+                else:
+                    logger.info("Background discovery complete. No new complex families found.")
+        except Exception as e:
+            logger.error(f"Background family discovery failed: {e}")
+
+    # Launch task
+    asyncio.create_task(run_initial_discovery())
+
     logger.info("Application startup complete")
     
     yield
