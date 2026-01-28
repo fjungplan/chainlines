@@ -98,10 +98,28 @@ def invalidate_on_link_insert(mapper, connection, target):
     
     This handles the case where a new link connects to existing nodes,
     potentially merging families or creating new family structures.
+    
+    IMPORTANT: This is also the trigger for "Continuous Discovery".
+    When a new link is added, it may cause a small family to grow beyond
+    the complexity threshold, requiring registration for optimization.
+    
+    In production, this should enqueue a background task:
+        assess_family_complexity(target.predecessor_node_id)
+    
+    The task will:
+    1. Find the connected component containing this node
+    2. Check if size > threshold (e.g., 20 nodes)
+    3. If yes, ensure a PrecomputedLayout record exists
+    4. If record exists, mark it as stale (hash will differ)
     """
     _tracker.mark_node_invalidated(target.predecessor_node_id)
     _tracker.mark_node_invalidated(target.successor_node_id)
-    # In production: invalidate families containing either node
+    
+    # TODO: In production, enqueue background task:
+    # from app.tasks import assess_family_complexity
+    # assess_family_complexity.delay(target.predecessor_node_id)
+    #
+    # For now, this is handled by periodic discovery sweeps or manual triggers
 
 
 @event.listens_for(LineageEvent, 'after_update')
