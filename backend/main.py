@@ -151,6 +151,12 @@ app.include_router(my_edits_router)
 app.include_router(account_account_router, prefix="/api/v1", tags=["account"])
 app.include_router(scraper_router, prefix="/api/v1/admin/scraper")
 
+from app.api.admin import optimizer
+from app.api import precomputed_layouts
+
+app.include_router(optimizer.router, prefix="/api/v1/admin/optimizer", tags=["admin"])
+app.include_router(precomputed_layouts.router, prefix="/api/v1", tags=["public"])
+
 
 
 @app.get("/")
