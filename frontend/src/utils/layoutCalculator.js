@@ -63,6 +63,24 @@ export class LayoutCalculator {
     });
 
     this.scoreboard = new Scoreboard();
+
+    // Initialize precomputed layouts cache
+    this.precomputedLayouts = null;
+    this.loadPrecomputedLayouts(); // Async, non-blocking
+  }
+
+  async loadPrecomputedLayouts() {
+    try {
+      const response = await fetch('/api/v1/precomputed-layouts');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      this.precomputedLayouts = await response.json();
+      console.log('✅ Loaded', Object.keys(this.precomputedLayouts).length, 'precomputed layouts');
+    } catch (e) {
+      console.warn('⚠️ No precomputed layouts available:', e.message);
+      this.precomputedLayouts = {};
+    }
   }
 
 
@@ -191,6 +209,67 @@ export class LayoutCalculator {
   }
 
   layoutFamily(family) {
+    // Check if this is a complex family that might benefit from precomputed layouts
+    if (this.isComplexFamily(family)) {
+      const hash = this.computeFamilyHash(family);
+      const cached = this.precomputedLayouts?.[hash];
+
+      if (cached) {
+        console.log('🎯 Using precomputed layout for family hash:', hash.substring(0, 16) + '...');
+        return this.applyPrecomputedLayout(family, cached);
+      }
+    }
+
+    // Fallback to dynamic algorithm
+    return this.layoutFamilyDynamic(family);
+  }
+
+  isComplexFamily(family) {
+    const chainCount = family.chains.length;
+    const linkCount = this.countFamilyLinks(family);
+    return chainCount >= 20 && linkCount > chainCount;
+  }
+
+  computeFamilyHash(family) {
+    // Extract all node IDs from the family and sort them
+    const nodeIds = family.chains
+      .flatMap(c => c.nodes.map(n => n.id))
+      .sort();
+    return nodeIds.join(',');
+  }
+
+  applyPrecomputedLayout(family, cached) {
+    // Apply the cached yIndex values to each chain
+    family.chains.forEach(chain => {
+      // The layout_data maps chain IDs (which are node IDs) to yIndex values
+      const firstNodeId = chain.nodes[0]?.id;
+      if (firstNodeId && cached.layout_data[firstNodeId] !== undefined) {
+        chain.yIndex = cached.layout_data[firstNodeId];
+      } else {
+        // Fallback: try to find any node in this chain
+        for (const node of chain.nodes) {
+          if (cached.layout_data[node.id] !== undefined) {
+            chain.yIndex = cached.layout_data[node.id];
+            break;
+          }
+        }
+      }
+    });
+
+    const maxY = Math.max(...family.chains.map(c => c.yIndex || 0));
+    return (maxY + 1) * this.rowHeight;
+  }
+
+  countFamilyLinks(family) {
+    const nodeIds = new Set(
+      family.chains.flatMap(c => c.nodes.map(n => n.id))
+    );
+    return this.links.filter(l =>
+      nodeIds.has(l.source) && nodeIds.has(l.target)
+    ).length;
+  }
+
+  layoutFamilyDynamic(family) {
     if (family.chains.length === 0) return 0;
 
     // 1. Initial Placement (Topological / Barycenter guess)
