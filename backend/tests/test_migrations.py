@@ -138,3 +138,88 @@ async def test_team_node_query(isolated_session):
         result = await isolated_session.execute(select(TeamNode))
         teams = result.scalars().all()
         assert len(teams) >= 2
+
+
+@pytest.mark.asyncio
+async def test_precomputed_layouts_table_exists(isolated_engine):
+    """Table precomputed_layouts should exist."""
+    async with isolated_engine.connect() as conn:
+        def _has_table(sync_conn):
+            insp = sa.inspect(sync_conn)
+            return insp.has_table("precomputed_layouts")
+
+        exists = await conn.run_sync(_has_table)
+        assert exists is True
+
+
+@pytest.mark.asyncio
+async def test_precomputed_layouts_table_structure(isolated_engine):
+    """Column names and nullability should match expectations for precomputed_layouts."""
+    async with isolated_engine.connect() as conn:
+        def _get_columns(sync_conn):
+            insp = sa.inspect(sync_conn)
+            return insp.get_columns("precomputed_layouts")
+
+        cols = await conn.run_sync(_get_columns)
+        columns = {c["name"]: {"nullable": c.get("nullable", True)} for c in cols}
+
+        expected_columns = [
+            "id", "family_hash", "layout_data", "data_fingerprint", 
+            "score", "optimized_at", "created_at", "updated_at"
+        ]
+        for name in expected_columns:
+            assert name in columns
+
+        assert columns["id"]["nullable"] is False
+        assert columns["family_hash"]["nullable"] is False
+        assert columns["layout_data"]["nullable"] is False
+        assert columns["data_fingerprint"]["nullable"] is False
+        assert columns["score"]["nullable"] is False
+        assert columns["optimized_at"]["nullable"] is False
+        assert columns["created_at"]["nullable"] is False
+        assert columns["updated_at"]["nullable"] is False
+
+
+@pytest.mark.asyncio
+async def test_precomputed_layouts_indexes_exist(isolated_engine):
+    """Indexes on family_hash and optimized_at should exist."""
+    async with isolated_engine.connect() as conn:
+        def _get_index_names_and_dialect(sync_conn):
+            insp = sa.inspect(sync_conn)
+            return sync_conn.dialect.name, [idx["name"] for idx in insp.get_indexes("precomputed_layouts")]
+
+        dialect, names = await conn.run_sync(_get_index_names_and_dialect)
+        if dialect != "postgresql":
+            pytest.skip("Index name assertions are Postgres-specific.")
+        
+        indexes = set(names)
+        assert "idx_family_hash" in indexes
+        assert "idx_optimized_at" in indexes
+
+
+@pytest.mark.asyncio
+async def test_precomputed_layouts_unique_hash(isolated_session):
+    """family_hash should be unique."""
+    from app.models.precomputed_layout import PrecomputedLayout
+    from sqlalchemy.exc import IntegrityError
+    import uuid
+
+    async with isolated_session.begin():
+        layout1 = PrecomputedLayout(
+            family_hash="test_hash",
+            layout_data={"chain1": 1},
+            data_fingerprint={"node_ids": ["uuid1"]},
+            score=10.5
+        )
+        isolated_session.add(layout1)
+        await isolated_session.flush()
+
+        layout2 = PrecomputedLayout(
+            family_hash="test_hash",
+            layout_data={"chain2": 2},
+            data_fingerprint={"node_ids": ["uuid2"]},
+            score=15.0
+        )
+        isolated_session.add(layout2)
+        with pytest.raises(IntegrityError):
+            await isolated_session.flush()

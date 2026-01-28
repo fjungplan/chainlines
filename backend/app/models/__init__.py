@@ -12,7 +12,7 @@ from app.models.sponsor import (  # noqa: F401
 )
 from app.models.lineage import LineageEvent  # noqa: F401
 from app.models.run_log import ScraperRun  # noqa: F401
-from app.models.run_log import ScraperRun  # noqa: F401
+from app.models.precomputed_layout import PrecomputedLayout  # noqa: F401
 
 __all__ = [
 	"TeamNode",
@@ -22,4 +22,5 @@ __all__ = [
 	"TeamSponsorLink",
 	"LineageEvent",
     "ScraperRun",
+    "PrecomputedLayout",
 ]
