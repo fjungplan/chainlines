@@ -227,7 +227,9 @@ To clarify the formulas used in the optimization phases, here is a reference of 
 
 ```mermaid
 graph TD
-    A[Input: Nodes & Links] --> B[Phase 1: Build Chains]
+    A[Input: Nodes & Links] --> Check{Check Cache?}
+    Check -->|Hit| Output[Output: Final positions]
+    Check -->|Miss| B[Phase 1: Build Chains]
     B --> C[Phase 2: Initial BFS Placement]
     C --> D{Optimization Loop<br/>200 iterations}
     
@@ -242,8 +244,30 @@ graph TD
     J -->|No| K[Phase 4: Hybrid Optimization<br/>Rigid Moves & Annealing]
     K --> L[Normalize lanes<br/>Shift min lane to 0]
     L --> M[Compact empty lanes]
-    M --> N[Output: Final positions]
+    M --> Output
 ```
+
+---
+
+## Phase 0: Precomputed Optimization
+
+**Goal**: Skip expensive calculation for complex families by using cached server-side layouts.
+
+**Algorithm**:
+```
+1. Compute "Family Hash" (SHA-256) based on structural topology
+   - Nodes (ids, years)
+   - Links (connections, years)
+   - Excludes superficial metadata (names, colors)
+2. Check backend API for PrecomputedLayout with this hash
+3. If Found:
+   - Apply cached Y-coordinates directly to chains
+   - Skip to Rendering
+4. If Missing:
+   - Proceed to Phase 1 (client-side calculation)
+```
+
+**Complexity Threshold**: Only families with $>20$ chains trigger the cache check. Simpler families are always calculated client-side as it is faster than the network round-trip.
 
 ---
 

@@ -249,7 +249,8 @@ To clarify the formulas used in the optimization phases, here is a reference of 
         \tikzstyle{line} = [draw, -latex']
         
         \node [block] (input) {Input: Nodes \& Links};
-        \node [block, below of=input] (phase1) {Phase 1: Build Chains};
+        \node [decision, below of=input] (check) {Check Cache?};
+        \node [block, below of=check] (phase1) {Phase 1: Build Chains};
         \node [block, below of=phase1] (phase2) {Phase 2: Initial BFS};
         \node [block, below of=phase2] (opt) {Optimization Loop (200x)};
         
@@ -265,7 +266,10 @@ To clarify the formulas used in the optimization phases, here is a reference of 
         \node [block, above of=hybrid, node distance=2cm] (norm) {Normalization \& Compaction};
         \node [block, above of=norm] (output) {Final positions};
 
-        \path [line] (input) -- (phase1);
+        \path [line] (input) -- (check);
+        \path [line] (check) -- node {Miss} (phase1);
+        \path [line] (check) -| node[near start] {Hit} (output);
+        
         \path [line] (phase1) -- (phase2);
         \path [line] (phase2) -- (opt);
         
@@ -282,6 +286,19 @@ To clarify the formulas used in the optimization phases, here is a reference of 
     \end{tikzpicture}
     \caption{Layout Algorithm Pipeline}
 \end{figure}
+
+\section{Phase 0: Precomputed Optimization}
+\textbf{Goal}: Skip expensive client-side calculation for complex families by using cached server-side layouts.
+
+\textbf{Algorithm}:
+\begin{enumerate}
+    \item Compute \textbf{Family Hash} (SHA-256) based on structural topology (Nodes + Links).
+    \item Check backend API for \texttt{PrecomputedLayout} record with this hash.
+    \item \textbf{If Found}: Apply cached Y-coordinates directly to chains (O(1) complexity).
+    \item \textbf{If Missing}: Proceed to Phase 1 (Standard Layout Algorithm).
+\end{enumerate}
+
+\textbf{Complexity Threshold}: Only families with $>20$ chains trigger the cache check. Simpler families are always calculated client-side to avoid network latency.
 
 \section{Phase 1: Chain Decomposition}
 \textbf{Goal}: Group nodes into rigid linear units that move together.
