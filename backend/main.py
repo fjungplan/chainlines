@@ -26,6 +26,9 @@ from app.core.exceptions import (
 from app.db.database import create_tables
 import logging
 
+# Register invalidation hooks (import activates SQLAlchemy event listeners)
+import app.optimizer.invalidation_hooks  # noqa: F401
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
