@@ -206,43 +206,110 @@ class FamilyDiscoveryService:
         Returns:
             List of registered family info dicts
         """
-        # Get all nodes
+        # 1. PRE-FETCH DATA ONCE
+        logger.info("Pre-fetching all nodes and links for discovery...")
         nodes_stmt = select(TeamNode)
         nodes_result = await self.session.execute(nodes_stmt)
-        all_nodes = list(nodes_result.scalars().all())
+        all_nodes = {node.node_id: node for node in nodes_result.scalars().all()}
+        
+        links_stmt = select(LineageEvent)
+        links_result = await self.session.execute(links_stmt)
+        all_links = links_result.scalars().all()
         
         if not all_nodes:
             logger.info("No nodes found in database")
             return []
-        
-        logger.info(f"Discovering families from {len(all_nodes)} nodes...")
+            
+        # Build adjacency list (undirected graph) once
+        adjacency: Dict[UUID, Set[UUID]] = {}
+        for link in all_links:
+            pred_id = link.predecessor_node_id
+            succ_id = link.successor_node_id
+            if pred_id not in adjacency: adjacency[pred_id] = set()
+            if succ_id not in adjacency: adjacency[succ_id] = set()
+            adjacency[pred_id].add(succ_id)
+            adjacency[succ_id].add(pred_id)
         
         # Track which nodes we've already processed
         processed_nodes: Set[UUID] = set()
         registered_families: List[Dict[str, Any]] = []
         
-        for node in all_nodes:
-            if node.node_id in processed_nodes:
+        logger.info(f"Scanning {len(all_nodes)} nodes for families...")
+        
+        for node_id, node in all_nodes.items():
+            if node_id in processed_nodes:
                 continue
             
-            # Find component for this node
-            component = await self.find_connected_component(node.node_id)
+            # 2. BFS IN MEMORY
+            visited = set()
+            queue = [node_id]
+            visited.add(node_id)
+            while queue:
+                curr_id = queue.pop(0)
+                if curr_id in adjacency:
+                    for neighbor_id in adjacency[curr_id]:
+                        if neighbor_id not in visited:
+                            visited.add(neighbor_id)
+                            queue.append(neighbor_id)
             
-            # Mark all nodes in this component as processed
-            for comp_node in component:
-                processed_nodes.add(comp_node.node_id)
+            component_nodes = [all_nodes[vid] for vid in visited if vid in all_nodes]
             
-            # Assess this family
-            result = await self.assess_family(node.node_id)
+            # Mark all as processed
+            processed_nodes.update(visited)
             
-            if result:
-                registered_families.append(result)
+            # 3. ASSESS COMPLEXITY
+            if len(component_nodes) < self.complexity_threshold:
+                continue
+            
+            # 4. REGISTER FAMILY
+            # Get links for this component
+            comp_node_ids = set(visited)
+            comp_links = [l for l in all_links if l.predecessor_node_id in comp_node_ids and l.successor_node_id in comp_node_ids]
+            
+            # Fingerprint
+            current_year = 2026
+            chains_data = []
+            for n in component_nodes:
+                end_time = n.dissolution_year if n.dissolution_year else current_year + 1
+                chains_data.append({
+                    "id": str(n.node_id),
+                    "startTime": n.founding_year,
+                    "endTime": end_time,
+                    "founding_year": n.founding_year,
+                    "dissolution_year": n.dissolution_year,
+                    "name": n.legal_name
+                })
+            
+            links_data = [{
+                "id": str(l.event_id),
+                "parentId": str(l.predecessor_node_id),
+                "childId": str(l.successor_node_id),
+                "time": l.event_year
+            } for l in comp_links]
+            
+            family_data = {"chains": chains_data, "links": links_data}
+            fingerprint = generate_family_fingerprint(family_data, links_data)
+            family_hash = compute_family_hash(fingerprint)
+            
+            # Check DB
+            existing_stmt = select(PrecomputedLayout).where(PrecomputedLayout.family_hash == family_hash)
+            existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
+            
+            if not existing:
+                layout = PrecomputedLayout(
+                    family_hash=family_hash,
+                    layout_data=family_data, # Use node IDs for initial greedy
+                    data_fingerprint=fingerprint,
+                    score=0.0
+                )
+                self.session.add(layout)
+                registered_families.append({
+                    "family_hash": family_hash,
+                    "node_count": len(component_nodes),
+                    "link_count": len(comp_links),
+                    "status": "registered"
+                })
         
         await self.session.commit()
-        
-        logger.info(
-            f"Discovery complete: {len(registered_families)} complex families registered "
-            f"(threshold: {self.complexity_threshold} nodes)"
-        )
-        
+        logger.info(f"Discovery complete: {len(registered_families)} complex families registered.")
         return registered_families

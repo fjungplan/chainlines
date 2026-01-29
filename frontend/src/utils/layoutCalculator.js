@@ -214,6 +214,7 @@ export class LayoutCalculator {
     const bestCache = this.findBestOverlappingLayout(family);
 
     if (bestCache) {
+      console.info(`🎯 Using precomputed layout: ${bestCache.matchCount} nodes matching.`);
       preplacedState = this.applyLayoutToState(family, bestCache.layout);
 
       // If we have 100% coverage, skip dynamic layout entirely (Resolves Freeze)
@@ -235,7 +236,8 @@ export class LayoutCalculator {
   findBestOverlappingLayout(family) {
     if (!this.precomputedLayouts) return null;
 
-    const currentIds = new Set(family.chains.map(c => c.id));
+    // Use ALL node IDs in the family for matching, as the keys are based on node IDs
+    const currentNodeIds = new Set(family.chains.flatMap(c => c.nodes.map(n => n.id)));
     let bestMatch = null;
     let maxOverlap = 0;
 
@@ -244,7 +246,7 @@ export class LayoutCalculator {
       const cachedIds = key.split(',');
       let overlap = 0;
       for (const id of cachedIds) {
-        if (currentIds.has(id)) overlap++;
+        if (currentNodeIds.has(id)) overlap++;
       }
 
       // Threshold: At least 2 nodes or 50% match to be useful?
@@ -269,8 +271,9 @@ export class LayoutCalculator {
     family.chains.forEach(chain => {
       let yIndex = undefined;
 
-      if (cachedLayout.layout_data[chain.id] !== undefined) {
-        yIndex = cachedLayout.layout_data[chain.id];
+      const firstNodeId = chain.nodes[0]?.id;
+      if (firstNodeId && cachedLayout.layout_data[firstNodeId] !== undefined) {
+        yIndex = cachedLayout.layout_data[firstNodeId];
       }
 
       if (yIndex !== undefined) {
