@@ -57,10 +57,7 @@ def test_optimize_large_family(large_family):
     
     # Should have assigned all chains
     assert len(result["y_indices"]) == 15
-    
-    # Should have unique Y-indices
-    y_values = list(result["y_indices"].values())
-    assert len(set(y_values)) == len(y_values)
+    # Note: Y-indices do NOT need to be unique - chains CAN share lanes
     
     # Score should be finite
     assert result["score"] >= 0

@@ -81,20 +81,19 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                     if p_id in valid_node_ids and s_id in valid_node_ids:
                         valid_links.append(link)
                 
-                # 3. Prepare data for optimizer
+                # 3. Prepare data for optimizer using chain builder (matches frontend logic)
+                from app.optimizer.chain_builder import build_chains
+                
                 current_year = datetime.now().year
                 
-                chains_data = []
+                # Convert ORM nodes to dict format for chain builder
+                nodes_data = []
                 for node in nodes:
-                    end_time = node.dissolution_year if node.dissolution_year else current_year + 1
-                    chains_data.append({
+                    nodes_data.append({
                         "id": str(node.node_id),
-                        "startTime": node.founding_year,
-                        "endTime": end_time,
-                        "founding_year": node.founding_year, # Kept for fingerprint
-                        "dissolution_year": node.dissolution_year, # Kept for fingerprint
-                        # Preserve existing name for UI
-                        "name": node.legal_name 
+                        "founding_year": node.founding_year,
+                        "dissolution_year": node.dissolution_year,
+                        "name": node.legal_name
                     })
                     
                 links_data = []
@@ -106,13 +105,23 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                         "time": link.event_year
                     })
                 
+                # Build chains using frontend-matching logic
+                chains_data = build_chains(nodes_data, links_data, current_year)
+                
+                logger.info(f"Built {len(chains_data)} chains from {len(nodes_data)} nodes")
+                
                 family_data = {
                     "chains": chains_data,
                     "links": links_data
                 }
                 
                 # 4. Run Optimizer
-                opt_result = optimizer.optimize(family_data, timeout_seconds=optimizer.timeout_seconds)
+                # Run in thread to allow API status updates (non-blocking)
+                opt_result = await asyncio.to_thread(
+                    optimizer.optimize, 
+                    family_data, 
+                    timeout_seconds=optimizer.timeout_seconds
+                )
                 
                 # 5. Update Layout
                 # Store only the Y-index mapping (chainId -> yIndex)

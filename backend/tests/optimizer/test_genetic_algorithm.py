@@ -59,9 +59,9 @@ def test_population_initialization():
         # Y-indices should be non-negative
         for y in individual.values():
             assert y >= 0
-        # Y-indices should be unique within individual
-        y_values = list(individual.values())
-        assert len(set(y_values)) == len(y_values)
+        # Note: Y-indices do NOT need to be unique - chains CAN share lanes
+        # if they don't overlap in time (that's the point of the optimization!)
+
 
 
 def test_crossover_produces_valid_offspring():
@@ -77,9 +77,7 @@ def test_crossover_produces_valid_offspring():
     # Y-indices should be non-negative
     for y in child.values():
         assert y >= 0
-    # Y-indices should be unique
-    y_values = list(child.values())
-    assert len(set(y_values)) == len(y_values)
+    # Note: Y-indices do NOT need to be unique - crossover can cause lane sharing
 
 
 def test_mutation_preserves_validity():
@@ -94,9 +92,7 @@ def test_mutation_preserves_validity():
     # Y-indices should be non-negative
     for y in mutated.values():
         assert y >= 0
-    # Y-indices should be unique
-    y_values = list(mutated.values())
-    assert len(set(y_values)) == len(y_values)
+    # Note: Y-indices do NOT need to be unique - mutation can cause lane sharing
 
 
 def test_tournament_selection():
@@ -138,8 +134,7 @@ def test_convergence_simple_family(simple_family):
     
     # Should have valid y_indices
     assert set(result["y_indices"].keys()) == {"A", "B", "C"}
-    y_values = list(result["y_indices"].values())
-    assert len(set(y_values)) == len(y_values)  # Unique
+    # Note: Y-indices do NOT need to be unique - chains CAN share lanes
 
 
 def test_timeout_mechanism(simple_family):
@@ -168,10 +163,7 @@ def test_optimize_medium_family(medium_family):
     
     # All chains should be assigned
     assert set(result["y_indices"].keys()) == {"A", "B", "C", "D", "E"}
-    
-    # All Y-indices should be unique
-    y_values = list(result["y_indices"].values())
-    assert len(set(y_values)) == len(y_values)
+    # Note: Y-indices do NOT need to be unique - chains CAN share lanes
 
 
 def test_empty_family():

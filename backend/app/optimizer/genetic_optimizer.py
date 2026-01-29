@@ -134,6 +134,10 @@ class GeneticOptimizer:
             
             # Evaluate fitness for all individuals
             scored_population = []
+            # Evaluate fitness for all individuals
+            scored_population = []
+            improved_this_gen = False
+            
             for individual in population:
                 score = self._evaluate_fitness(
                     individual, chains, chain_parents, chain_children, links
@@ -143,9 +147,12 @@ class GeneticOptimizer:
                 if score < best_score - self.min_improvement:
                     best_score = score
                     best_individual = individual.copy()
-                    generations_without_improvement = 0
-                else:
-                    generations_without_improvement += 1
+                    improved_this_gen = True
+            
+            if improved_this_gen:
+                generations_without_improvement = 0
+            else:
+                generations_without_improvement += 1
             
             # Create score lookup for selection
             score_map = {id(ind): score for ind, score in scored_population}

@@ -214,7 +214,6 @@ export class LayoutCalculator {
     const bestCache = this.findBestOverlappingLayout(family);
 
     if (bestCache) {
-      console.info(`🎯 Using precomputed layout: ${bestCache.matchCount} nodes matching.`);
       preplacedState = this.applyLayoutToState(family, bestCache.layout);
 
       // If we have 100% coverage, skip dynamic layout entirely (Resolves Freeze)

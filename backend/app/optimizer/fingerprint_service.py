@@ -34,19 +34,38 @@ def generate_family_fingerprint(
     """
     chains = family.get("chains", [])
     
-    # Extract and sort node IDs
-    node_ids = sorted([chain["id"] for chain in chains])
+    # Extract ALL node IDs from chains (chains may contain multiple nodes)
+    # The frontend's cache lookup matches on individual node IDs, not chain IDs
+    all_node_ids = []
+    for chain in chains:
+        if "nodes" in chain and isinstance(chain["nodes"], list):
+            # Chain built by build_chains - extract all node IDs
+            for node in chain["nodes"]:
+                all_node_ids.append(node["id"])
+        else:
+            # Old format - chain IS a node
+            all_node_ids.append(chain["id"])
+    node_ids = sorted(all_node_ids)
     
     # Extract and sort link IDs
     link_ids = sorted([link["id"] for link in links])
     
-    # Build node years map
+    # Build node years map (for all individual nodes)
     node_years = {}
     for chain in chains:
-        node_years[chain["id"]] = {
-            "founding": chain.get("founding_year"),
-            "dissolution": chain.get("dissolution_year")
-        }
+        if "nodes" in chain and isinstance(chain["nodes"], list):
+            # Chain built by build_chains - extract years from each node
+            for node in chain["nodes"]:
+                node_years[node["id"]] = {
+                    "founding": node.get("founding_year"),
+                    "dissolution": node.get("dissolution_year")
+                }
+        else:
+            # Old format - chain IS a node
+            node_years[chain["id"]] = {
+                "founding": chain.get("founding_year"),
+                "dissolution": chain.get("dissolution_year")
+            }
     
     # Build link years map
     link_years = {}

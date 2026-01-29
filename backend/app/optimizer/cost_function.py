@@ -142,23 +142,46 @@ def calculate_single_chain_cost(
                 chain["startTime"] - slot["end"]    # This chain starts after neighbor ends
             )
             
-            # For simplicity in GA, we treat ALL overlaps as bad unless proven otherwise.
-            # But wait, family members are allowed to touch/overlap?
-            # Implementation choice: Penalize ALL overlaps for now to ensure cleanliness.
-            # Refining later if family-overlap is desired.
+            # Check relationship to determine allowed gap
+            is_family = False
+            neighbor_id = slot.get("chainId")
             
-            if gap < 1:
-                # COLLISION DETECTED
-                # gap is 0 or negative.
-                # Overlap magnitude roughly = 1 - gap?
-                # e.g. Gap 0 (Touching) -> 1 year "violation" of stranger rule?
-                # e.g. Gap -5 (5 year overlap) -> 6 years violation?
-                overlap_magnitude = 1 - gap
-                lane_sharing_cost += overlap_base_weight + (overlap_magnitude * overlap_factor_weight)
+            # Check if neighbor is a parent
+            if neighbor_id in [p["id"] for p in parents]:
+                is_family = True
+            # Check if neighbor is a child (scan all children)
+            elif not is_family: # Optimization: check parents first
+                 for child_list in chain_children.values():
+                     if any(c["id"] == neighbor_id for c in child_list):
+                         is_family = True
+                         break
+            
+            # Penalty Application
+            overlap_penalty = 0.0
+            
+            if is_family:
+                # Family: Touching (gap >= 0) is allowed.
+                # Overlap (gap < 0) is penalized.
+                if gap < 0:
+                    overlap_magnitude = abs(gap)
+                    overlap_penalty = overlap_base_weight + (overlap_magnitude * overlap_factor_weight)
+            else:
+                # Stranger: Explicit gap (Gap >= 2) required!
+                # Touching (Gap=1) is penalized.
+                # Overlap (Gap <= 0) is heavily penalized.
+                if gap < 2:
+                    # Calculate deficiency from required gap of 2
+                    # If gap=1, magnitude = 1
+                    # If gap=0, magnitude = 2
+                    # If gap=-1, magnitude = 3
+                    overlap_magnitude = 2 - gap
+                    overlap_penalty = overlap_base_weight + (overlap_magnitude * overlap_factor_weight)
+            
+            lane_sharing_cost += overlap_penalty
                 
-            elif gap >= 1:
-                # Valid placement, apply spacing incentive
-                if lane_sharing_weight > 0:
-                     lane_sharing_cost += lane_sharing_weight / (10 ** (gap - 1))
+            
+            # Valid placement (no penalty), apply spacing incentive
+            if overlap_penalty == 0 and lane_sharing_weight > 0 and gap > 0:
+                    lane_sharing_cost += lane_sharing_weight / (10 ** (gap - 1))
 
     return attraction_cost + cut_through_cost + blocker_cost + y_shape_cost + lane_sharing_cost
