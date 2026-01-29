@@ -44,7 +44,9 @@
         "CUT_THROUGH": 10000.0,
         "BLOCKER": 5000.0,
         "Y_SHAPE": 500.0,
-        "LANE_SHARING": 1000.0
+        "LANE_SHARING": 1000.0,
+        "OVERLAP_BASE": 500000.0,
+        "OVERLAP_FACTOR": 10000.0
     },
     "GENETIC_ALGORITHM": {
         "POP_SIZE": 1000,

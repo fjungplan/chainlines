@@ -113,21 +113,52 @@ def calculate_single_chain_cost(
             if abs(sib["yIndex"] - y) < 2:
                 y_shape_cost += y_shape_weight
 
-    # Lane Sharing Penalty: Prefer larger gaps between unrelated chains in the same lane
+    # Lane Sharing & Collision Penalty
     lane_sharing_cost = 0.0
     lane_sharing_weight = weights.get("LANE_SHARING", 0.0)
-    if lane_sharing_weight > 0 and y_slots:
+    overlap_base_weight = weights.get("OVERLAP_BASE", 500000.0)
+    overlap_factor_weight = weights.get("OVERLAP_FACTOR", 10000.0)
+    
+    if y_slots:
         slots_at_y = y_slots.get(y, [])
         for slot in slots_at_y:
             if slot.get("chainId") == chain["id"]:
                 continue  # Skip self
-            # Calculate gap (distance in time between chains)
+            
+            # Distance logic:
+            # slot.start ... slot.end
+            #           chain.start ... chain.end
+            #
+            # Gap = max(start - end_other)
+            # If gap > 0: No overlap (Lane Sharing incentive: spread out)
+            # If gap <= 0: Overlap! (Collision penalty)
+            # Actually, "gap 0" might touch.
+            # Frontend Stranger Rule: Gap must be >= 1.
+            # Frontend Family Rule: Gap can be <= 0 as long as timelines don't overlap pixels.
+            
+            # Gap calculation (Time distance between segments)
             gap = max(
                 slot["start"] - chain["endTime"],   # Neighbor starts after this chain ends
                 chain["startTime"] - slot["end"]    # This chain starts after neighbor ends
             )
-            if gap >= 1:
-                # Exponential decay: gap=1 → full penalty, gap=2 → 1/10th, gap=3 → 1/100th
-                lane_sharing_cost += lane_sharing_weight / (10 ** (gap - 1))
+            
+            # For simplicity in GA, we treat ALL overlaps as bad unless proven otherwise.
+            # But wait, family members are allowed to touch/overlap?
+            # Implementation choice: Penalize ALL overlaps for now to ensure cleanliness.
+            # Refining later if family-overlap is desired.
+            
+            if gap < 1:
+                # COLLISION DETECTED
+                # gap is 0 or negative.
+                # Overlap magnitude roughly = 1 - gap?
+                # e.g. Gap 0 (Touching) -> 1 year "violation" of stranger rule?
+                # e.g. Gap -5 (5 year overlap) -> 6 years violation?
+                overlap_magnitude = 1 - gap
+                lane_sharing_cost += overlap_base_weight + (overlap_magnitude * overlap_factor_weight)
+                
+            elif gap >= 1:
+                # Valid placement, apply spacing incentive
+                if lane_sharing_weight > 0:
+                     lane_sharing_cost += lane_sharing_weight / (10 ** (gap - 1))
 
     return attraction_cost + cut_through_cost + blocker_cost + y_shape_cost + lane_sharing_cost
