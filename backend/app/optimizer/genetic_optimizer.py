@@ -26,7 +26,9 @@ class GeneticOptimizer:
         pop_size: int = 100,
         generations: int = 500,
         mutation_rate: float = 0.10,
-        tournament_size: int = 3
+        tournament_size: int = 3,
+        patience: int = 500,
+        min_improvement: float = 0.01
     ):
         """
         Initialize the genetic optimizer.
@@ -36,11 +38,16 @@ class GeneticOptimizer:
             generations: Maximum number of generations
             mutation_rate: Probability of mutation per individual
             tournament_size: Number of individuals in tournament selection
+            patience: Number of generations to wait for improvement before early exit
+            min_improvement: Minimum improvement required to reset patience
         """
         self.pop_size = pop_size
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.tournament_size = tournament_size
+        self.patience = patience
+        self.min_improvement = min_improvement
+        self.timeout_seconds = 3600 # Default
         
         # Cost function weights (matching frontend config)
         self.weights = {
@@ -83,7 +90,9 @@ class GeneticOptimizer:
                     self.generations = ga_config.get("GENERATIONS", self.generations)
                     self.mutation_rate = ga_config.get("MUTATION_RATE", self.mutation_rate)
                     self.tournament_size = ga_config.get("TOURNAMENT_SIZE", self.tournament_size)
-                    logger.info(f"Loaded config: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}")
+                    self.timeout_seconds = ga_config.get("TIMEOUT_SECONDS", self.timeout_seconds)
+                    self.patience = ga_config.get("PATIENCE", self.patience)
+                    logger.info(f"Loaded config: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}, timeout={self.timeout_seconds}, patience={self.patience}")
         except Exception as e:
             logger.error(f"Failed to load layout_config.json: {e}")
 
@@ -108,9 +117,17 @@ class GeneticOptimizer:
         best_score = float('inf')
         
         generations_run = 0
+        generations_without_improvement = 0
+        
         for gen in range(self.generations):
             # Check timeout
             if time.time() - start_time > timeout_seconds:
+                logger.warning(f"Optimization timed out after {timeout_seconds}s at generation {generations_run}")
+                break
+            
+            # Check stagnancy
+            if generations_without_improvement >= self.patience:
+                logger.info(f"Score stagnated for {self.patience} generations. Early exit at {generations_run}")
                 break
             
             generations_run += 1
@@ -123,9 +140,12 @@ class GeneticOptimizer:
                 )
                 scored_population.append((individual, score))
                 
-                if score < best_score:
+                if score < best_score - self.min_improvement:
                     best_score = score
                     best_individual = individual.copy()
+                    generations_without_improvement = 0
+                else:
+                    generations_without_improvement += 1
             
             # Create score lookup for selection
             score_map = {id(ind): score for ind, score in scored_population}

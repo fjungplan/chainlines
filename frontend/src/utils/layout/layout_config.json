@@ -50,6 +50,8 @@
         "POP_SIZE": 1000,
         "GENERATIONS": 5000,
         "MUTATION_RATE": 0.2,
-        "TOURNAMENT_SIZE": 10
+        "TOURNAMENT_SIZE": 10,
+        "TIMEOUT_SECONDS": 3600,
+        "PATIENCE": 500
     }
 }

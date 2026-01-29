@@ -112,7 +112,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 }
                 
                 # 4. Run Optimizer
-                opt_result = optimizer.optimize(family_data, timeout_seconds=600)
+                opt_result = optimizer.optimize(family_data, timeout_seconds=optimizer.timeout_seconds)
                 
                 # 5. Update Layout
                 # Store only the Y-index mapping (chainId -> yIndex)
