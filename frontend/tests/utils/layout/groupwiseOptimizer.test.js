@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runGroupwiseOptimization } from '../../../src/utils/layout/simplifiers/groupwiseOptimizer';
-import { LAYOUT_CONFIG } from '../../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../../src/utils/layout/layout_config.json';
 
 vi.mock('../../../src/utils/layout/utils/costCalculator', () => ({
     calculateSingleChainCost: vi.fn().mockReturnValue(10),

@@ -17,7 +17,8 @@ def calculate_single_chain_cost(
     chain_children: Dict[str, List[Dict[str, Any]]],
     vertical_segments: List[Dict[str, Any]],
     check_collision: Callable[[int, int, int, str, Dict[str, Any]], bool],
-    weights: Dict[str, float]
+    weights: Dict[str, float],
+    y_slots: Dict[int, List[Dict[str, Any]]] = None
 ) -> float:
     """
     Calculate the penalty score for placing a chain at a specific Y position.
@@ -30,6 +31,7 @@ def calculate_single_chain_cost(
         vertical_segments: Array of vertical segment blockers
         check_collision: Collision detection function
         weights: Weight configuration for penalties
+        y_slots: Map of lane index to list of slot occupancies
     
     Returns:
         Total cost (lower is better)
@@ -111,4 +113,21 @@ def calculate_single_chain_cost(
             if abs(sib["yIndex"] - y) < 2:
                 y_shape_cost += y_shape_weight
 
-    return attraction_cost + cut_through_cost + blocker_cost + y_shape_cost
+    # Lane Sharing Penalty: Prefer larger gaps between unrelated chains in the same lane
+    lane_sharing_cost = 0.0
+    lane_sharing_weight = weights.get("LANE_SHARING", 0.0)
+    if lane_sharing_weight > 0 and y_slots:
+        slots_at_y = y_slots.get(y, [])
+        for slot in slots_at_y:
+            if slot.get("chainId") == chain["id"]:
+                continue  # Skip self
+            # Calculate gap (distance in time between chains)
+            gap = max(
+                slot["start"] - chain["endTime"],   # Neighbor starts after this chain ends
+                chain["startTime"] - slot["end"]    # This chain starts after neighbor ends
+            )
+            if gap >= 1:
+                # Exponential decay: gap=1 → full penalty, gap=2 → 1/10th, gap=3 → 1/100th
+                lane_sharing_cost += lane_sharing_weight / (10 ** (gap - 1))
+
+    return attraction_cost + cut_through_cost + blocker_cost + y_shape_cost + lane_sharing_cost

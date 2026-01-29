@@ -1,7 +1,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { LayoutCalculator } from '../../src/utils/layoutCalculator';
-import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../src/utils/layout/layout_config.json';
 
 describe('LayoutCalculator Debug Scenarios', () => {
 

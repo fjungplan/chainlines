@@ -1,5 +1,5 @@
 
-import { LAYOUT_CONFIG } from '../config.js';
+import LAYOUT_CONFIG from '../layout_config.json';
 import { runGreedyPass } from '../simplifiers/greedyOptimizer.js';
 import { runGroupwiseOptimization } from '../simplifiers/groupwiseOptimizer.js';
 import { generateVerticalSegments } from '../utils/verticalSegments.js';

@@ -186,4 +186,43 @@ describe('Precomputed Layout Loading', () => {
         const height = calculator.layoutFamily(mockFamily);
         expect(height).toBeGreaterThan(0);
     });
+
+    it('should maintain pre-placed chains in Hybrid mode', () => {
+        const graphData = {
+            nodes: [
+                { id: 'n1', founding_year: 2000, eras: [{ year: 2000, name: 'A' }] },
+                { id: 'n2', founding_year: 2005, eras: [{ year: 2005, name: 'B' }] }
+            ],
+            links: [
+                { source: 'n1', target: 'n2', type: 'LEGAL_TRANSFER', year: 2005 }
+            ]
+        };
+
+        const calculator = new LayoutCalculator(graphData, 1000, 800);
+
+        // Mock a family with two chains
+        const chain1 = { id: 'chain1', nodes: [{ id: 'n1', founding_year: 2000 }], startTime: 2000, endTime: 2004, children: ['chain2'], parents: [] };
+        const chain2 = { id: 'chain2', nodes: [{ id: 'n2', founding_year: 2005 }], startTime: 2005, endTime: 2010, children: [], parents: ['chain1'] };
+        const mockFamily = {
+            chains: [chain1, chain2]
+        };
+
+        // Mock pre-placed state: chain1 is at Y=5
+        const preplacedState = {
+            ySlots: new Map([[5, [{ start: 2000, end: 2004 }]]]),
+            placedChains: new Map([['chain1', 5]]),
+            maxSeenY: 5
+        };
+
+        // Set up scales
+        calculator.xScale = (y) => y;
+
+        // We call layoutFamilyDynamic directly with the preplaced state
+        calculator.layoutFamilyDynamic(mockFamily, preplacedState);
+
+        // Chain 1 should STILL be at 5
+        expect(calculator.chainY.get('chain1')).toBe(5);
+        // Chain 2 should be placed
+        expect(calculator.chainY.get('chain2')).toBeDefined();
+    });
 });

@@ -1,5 +1,6 @@
+import { apiClient } from '../api/client';
 import { VISUALIZATION } from '../constants/visualization';
-import { LAYOUT_CONFIG } from './layout/config.js';
+import LAYOUT_CONFIG from './layout/layout_config.json';
 import { calculateYearRange, createXScale } from './layout/utils/scales.js';
 import { checkCollision as checkCollisionUtil } from './layout/utils/collisionDetection.js';
 import { generateVerticalSegments } from './layout/utils/verticalSegments.js';
@@ -7,6 +8,9 @@ import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from 
 import { buildFamilies, buildChains } from './layout/utils/chainBuilder.js';
 import { executePassSchedule } from './layout/orchestrator/layoutOrchestrator.js';
 import { Scoreboard } from './layout/analytics/layoutScoreboard.js';
+
+// Global cache to avoid race conditions and provide instant access across renders
+let _layoutCache = null;
 
 /**
  * Calculate positions for all nodes using Sankey-like layout.
@@ -24,17 +28,7 @@ export class LayoutCalculator {
     this.width = width;
     this.height = height;
     this.stretchFactor = stretchFactor;
-
-    console.log('LayoutCalculator constructor:');
-    console.log('  Total nodes:', this.nodes.length);
-    console.log('  First 3 nodes:', this.nodes.slice(0, 3).map(n => ({
-      id: n.id,
-      name: n.eras?.[0]?.name,
-      founding: n.founding_year,
-      dissolution: n.dissolution_year,
-      era_years: n.eras.map(e => e.year)
-    })));
-    console.log('  First node keys:', Object.keys(this.nodes[0] || {}));
+    this.yearRange = calculateYearRange(this.nodes);
 
     // Always calculate yearRange from actual node data to ensure xScale covers all nodes
     // The yearRange parameter (filterYearRange) is ignored; we use the real data
@@ -55,31 +49,35 @@ export class LayoutCalculator {
     // Effectively caps row height at 60px
     this.rowHeight = this.nodeHeight * 1.5;
 
-    console.log('LayoutCalculator Vertical Scaling:', {
-      pixelsPerYear: this.pixelsPerYear,
-      nodeHeight: this.nodeHeight,
-      rowHeight: this.rowHeight,
-      factor: VISUALIZATION.HEIGHT_FACTOR
-    });
+    this.nodeHeight = this.pixelsPerYear * VISUALIZATION.HEIGHT_FACTOR;
 
     this.scoreboard = new Scoreboard();
 
-    // Initialize precomputed layouts cache
-    this.precomputedLayouts = null;
-    this.loadPrecomputedLayouts(); // Async, non-blocking
+    // R19: Precomputed Layouts (Injected or Global Cache)
+    this.precomputedLayouts = graphData.precomputedLayouts || _layoutCache;
+
+    if (this.precomputedLayouts) {
+      // Precomputed layout initialization logic
+    }
   }
 
-  async loadPrecomputedLayouts() {
+  // Static helper to fetch layouts (to be called by component)
+  static async fetchPrecomputedLayouts() {
+    if (_layoutCache) return _layoutCache;
+
     try {
-      const response = await fetch('/api/v1/precomputed-layouts');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      this.precomputedLayouts = await response.json();
-      console.log('✅ Loaded', Object.keys(this.precomputedLayouts).length, 'precomputed layouts');
+      // Use absolute URL to bypass local proxy issues. SILENT to avoid DevTools crashes.
+      const url = 'http://127.0.0.1:8000/api/v1/precomputed-layouts';
+      const response = await fetch(url);
+
+      if (!response.ok) return {};
+
+      const data = await response.json();
+      _layoutCache = data;
+      console.log('[LayoutCalculator] Successfully primed precomputed layout cache.');
+      return data;
     } catch (e) {
-      console.warn('⚠️ No precomputed layouts available:', e.message);
-      this.precomputedLayouts = {};
+      return {};
     }
   }
 
@@ -108,7 +106,6 @@ export class LayoutCalculator {
 
   assignXPositions() {
     return this.nodes.map(node => {
-      console.log(`assignXPositions - ${node.eras?.[0]?.name}: dissolution_year=${node.dissolution_year}`);
       return {
         ...node,
         x: this.xScale(node.founding_year),
@@ -130,7 +127,6 @@ export class LayoutCalculator {
       // Dissolved: extend to start of next year after dissolution
       endX = this.xScale(node.dissolution_year + 1);
       const scaledWidth = endX - startX;
-      console.log(`${teamName}: [${node.founding_year}-${node.dissolution_year}] startX=${startX.toFixed(2)}, endX(${node.dissolution_year + 1})=${endX.toFixed(2)}, width=${scaledWidth.toFixed(2)}`);
       // DON'T apply MIN_NODE_WIDTH for dissolved teams - keep accurate year boundaries
       return scaledWidth;
     } else {
@@ -209,25 +205,90 @@ export class LayoutCalculator {
   }
 
   layoutFamily(family) {
-    // Check if this is a complex family that might benefit from precomputed layouts
-    if (this.isComplexFamily(family)) {
-      const hash = this.computeFamilyHash(family);
-      const cached = this.precomputedLayouts?.[hash];
+    // OPTIMIZATION: Hybrid Layout Strategy
+    // 1. Find the best cached layout that overlaps with our nodes
+    // 2. Apply cached positions for all matching nodes (Pre-fill state)
+    // 3. Run dynamic algorithm for any remaining (new/uncached) nodes
 
-      if (cached) {
-        console.log('🎯 Using precomputed layout for family hash:', hash.substring(0, 16) + '...');
-        return this.applyPrecomputedLayout(family, cached);
+    let preplacedState = null;
+    const bestCache = this.findBestOverlappingLayout(family);
+
+    if (bestCache) {
+      preplacedState = this.applyLayoutToState(family, bestCache.layout);
+
+      // If we have 100% coverage, skip dynamic layout entirely (Resolves Freeze)
+      if (preplacedState.placedChains.size === family.chains.length) {
+        return (preplacedState.maxSeenY + 1) * this.rowHeight;
       }
     }
 
-    // Fallback to dynamic algorithm
-    return this.layoutFamilyDynamic(family);
+    return this.layoutFamilyDynamic(family, preplacedState);
   }
 
   isComplexFamily(family) {
     const chainCount = family.chains.length;
     const linkCount = this.countFamilyLinks(family);
     return chainCount >= 20 && linkCount > chainCount;
+  }
+
+  // Find the cached layout with the most node intersections
+  findBestOverlappingLayout(family) {
+    if (!this.precomputedLayouts) return null;
+
+    const currentIds = new Set(family.chains.map(c => c.id));
+    let bestMatch = null;
+    let maxOverlap = 0;
+
+    for (const [key, layout] of Object.entries(this.precomputedLayouts)) {
+      // Key is CSV of IDs
+      const cachedIds = key.split(',');
+      let overlap = 0;
+      for (const id of cachedIds) {
+        if (currentIds.has(id)) overlap++;
+      }
+
+      // Threshold: At least 2 nodes or 50% match to be useful?
+      // Let's say if we have > 5 matching nodes, it's worth it.
+      // Or if it's a small family, > 50%.
+      if (overlap > 0 && overlap > maxOverlap) {
+        maxOverlap = overlap;
+        bestMatch = { layout, matchCount: overlap };
+      }
+    }
+
+    // If overlap is trivial (e.g. 1 node), maybe skip? 
+    // Capturing even 2 nodes helps structure.
+    return (maxOverlap >= 2) ? bestMatch : null;
+  }
+
+  applyLayoutToState(family, cachedLayout) {
+    const ySlots = new Map();
+    const placedChains = new Set();
+    let maxSeenY = 0;
+
+    family.chains.forEach(chain => {
+      let yIndex = undefined;
+
+      if (cachedLayout.layout_data[chain.id] !== undefined) {
+        yIndex = cachedLayout.layout_data[chain.id];
+      }
+
+      if (yIndex !== undefined) {
+        chain.yIndex = yIndex;
+        placedChains.add(chain.id);
+        maxSeenY = Math.max(maxSeenY, yIndex);
+
+        // Register in ySlots
+        if (!ySlots.has(yIndex)) ySlots.set(yIndex, []);
+        ySlots.get(yIndex).push({
+          start: chain.startTime,
+          end: chain.endTime,
+          chainId: chain.id
+        });
+      }
+    });
+
+    return { ySlots, placedChains, maxSeenY };
   }
 
   computeFamilyHash(family) {
@@ -269,15 +330,16 @@ export class LayoutCalculator {
     ).length;
   }
 
-  layoutFamilyDynamic(family) {
+  layoutFamilyDynamic(family, preplacedState = null) {
     if (family.chains.length === 0) return 0;
 
     // 1. Initial Placement (Topological / Barycenter guess)
     // Sort chains by start time to process legal parents first
-    family.chains.sort((a, b) => a.startTime - b.startTime);
+    const chainsToPlace = [...family.chains].sort((a, b) => a.startTime - b.startTime);
 
-    const ySlots = new Map(); // yIndex -> Array of {start, end, chainId}
-    let maxY = 0;
+    const ySlots = preplacedState?.ySlots || new Map(); // yIndex -> Array of {start, end, chainId}
+    const placedChains = preplacedState?.placedChains || new Set();
+    let maxY = preplacedState?.maxSeenY || 0;
 
     // Collision check wrapper using extracted utility
     // Moved definition down to where it is used or after dependencies are initialized
@@ -328,8 +390,7 @@ export class LayoutCalculator {
     // we use a BFS/Hierarchy traversal to place Children immediately after Parents.
     // This prioritizes Lineage Locality (child near parent) over global packing.
 
-    const placedChains = new Set();
-    const chainsToPlace = [...family.chains].sort((a, b) => a.startTime - b.startTime); // Default pool
+    // Variables are initialized at top of function to support preplaced state
 
     // Helper to pick next chain
     // 1. Pick a chain whose parents are already placed.
@@ -366,6 +427,19 @@ export class LayoutCalculator {
     let fallbackIndex = 0;
 
     const processChain = (chain) => {
+      // If already placed (e.g. from cache), simply queue children and skip logic
+      if (placedChains.has(chain.id)) {
+        const children = chainChildrenMap.get(chain.id) || [];
+        children.sort((a, b) => a.startTime - b.startTime);
+        children.forEach(child => {
+          if (!queuedIds.has(child.id)) {
+            queuedIds.add(child.id);
+            queue.push(child);
+          }
+        });
+        return;
+      }
+
       let targetY = 0;
       const parents = chainParents.get(chain.id) || [];
       const placedParents = parents.filter(p => placedChains.has(p.id));
@@ -464,11 +538,17 @@ export class LayoutCalculator {
     // List of { y1, y2, time, childId, parentId }
     // Slice 8A: Configurable Pass Orchestrator
     // Replaces fixed Tri-State loop
-    this._executePassSchedule(
-      family, family.chains, chainParents, chainChildren,
-      [], // verticalSegments are rebuilt internally per pass
-      checkCollision, ySlots
-    );
+
+    // OPTIMIZATION: If we have high confidence in the preplaced layout (Hybrid),
+    // skip the physics passes because they might "reset" the optimized structure to a local minimum.
+    const coverageRatio = placedChains.size / family.chains.length;
+    if (coverageRatio <= 0.8) {
+      this._executePassSchedule(
+        family, family.chains, chainParents, chainChildren,
+        [], // verticalSegments are rebuilt internally per pass
+        checkCollision, ySlots
+      );
+    }
 
 
     // 3. Post-Processing: Normalization & Compaction
@@ -494,30 +574,33 @@ export class LayoutCalculator {
     }
 
     // Remove empty lanes
-    let maxLane = 0;
-    ySlots.forEach((slots, y) => { if (slots.length > 0 && y > maxLane) maxLane = y; });
+    // SKIP if we have high coverage from cache, to preserve optimized spacing/gaps.
+    if (coverageRatio <= 0.8) {
+      let maxLane = 0;
+      ySlots.forEach((slots, y) => { if (slots.length > 0 && y > maxLane) maxLane = y; });
 
-    for (let y = 0; y <= maxLane; y++) {
-      // If lane y is empty (no slots or empty slots array)
-      if (!ySlots.has(y) || ySlots.get(y).length === 0) {
-        // Shift everything > y down by 1
-        let shifted = false;
-        for (let k = y + 1; k <= maxLane; k++) {
-          if (ySlots.has(k)) {
-            const slots = ySlots.get(k);
-            ySlots.delete(k);
-            ySlots.set(k - 1, slots);
-            slots.forEach(s => {
-              // Update chain object
-              const c = family.chains.find(ch => ch.id === s.chainId);
-              if (c) c.yIndex = k - 1;
-            });
-            shifted = true;
+      for (let y = 0; y <= maxLane; y++) {
+        // If lane y is empty (no slots or empty slots array)
+        if (!ySlots.has(y) || ySlots.get(y).length === 0) {
+          // Shift everything > y down by 1
+          let shifted = false;
+          for (let k = y + 1; k <= maxLane; k++) {
+            if (ySlots.has(k)) {
+              const slots = ySlots.get(k);
+              ySlots.delete(k);
+              ySlots.set(k - 1, slots);
+              slots.forEach(s => {
+                // Update chain object
+                const c = family.chains.find(ch => ch.id === s.chainId);
+                if (c) c.yIndex = k - 1;
+              });
+              shifted = true;
+            }
           }
-        }
-        if (shifted) {
-          maxLane--;
-          y--; // Re-check this index (now filled with k)
+          if (shifted) {
+            maxLane--;
+            y--; // Re-check this index
+          }
         }
       }
     }
@@ -565,17 +648,13 @@ export class LayoutCalculator {
         bezierDebugPoints: pathData.bezierDebugPoints
       };
 
-      // Debug log first few links
-      if (this.links.indexOf(link) < 3) {
-        const sourceName = source.eras?.[source.eras.length - 1]?.name || `Node ${link.source}`;
-        const targetName = target.eras?.[0]?.name || `Node ${link.target}`;
-        console.log(`Link ${link.source}->${link.target} (${sourceName}->${targetName}): sourceY=${source.y}, targetY=${target.y}, sameSwimlane=${sameSwimlane}`);
+      if (this.links.indexOf(link) === 0) {
+        console.info(`[Layout] Rendering in SILENT MODE to prevent DevTools crashes. (Links: ${this.links.length})`);
       }
 
       return result;
     }).filter(Boolean);
 
-    console.log('calculateLinkPaths: regenerated', links.length, 'links with updated positions');
     return links;
   }
 

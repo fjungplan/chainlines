@@ -1,7 +1,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Scoreboard } from '../../src/utils/layout/analytics/layoutScoreboard';
-import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../src/utils/layout/layout_config.json';
 import * as CostCalculator from '../../src/utils/layout/utils/costCalculator';
 
 // Mock CostCalculator

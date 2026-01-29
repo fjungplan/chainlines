@@ -71,22 +71,6 @@ export function calculateThresholds(minScale, maxScale, layoutPixelsPerYear = nu
     RULER_DETAIL: Math.max(percentageBased.RULER_DETAIL, ABSOLUTE_MINIMUMS.RULER_DETAIL)
   };
 
-  console.log('🎚️ DYNAMIC THRESHOLDS (Years+Physical):', {
-    zoomRange: `${minScale.toFixed(2)} → ${maxScale.toFixed(2)} (range: ${range.toFixed(2)})`,
-    percentageBased: {
-      DETAIL_VISIBLE: percentageBased.DETAIL_VISIBLE.toFixed(2),
-      HIGH_DETAIL: percentageBased.HIGH_DETAIL.toFixed(2),
-      GRID_DENSITY: percentageBased.GRID_DENSITY.toFixed(2),
-      RULER_DETAIL: `${percentageBased.RULER_DETAIL.toFixed(2)} (Physical)`
-    },
-    final: {
-      DETAIL_VISIBLE: `${thresholds.DETAIL_VISIBLE.toFixed(2)} ${thresholds.DETAIL_VISIBLE === ABSOLUTE_MINIMUMS.DETAIL_VISIBLE ? '(abs min)' : '(%)'}`,
-      HIGH_DETAIL: `${thresholds.HIGH_DETAIL.toFixed(2)} ${thresholds.HIGH_DETAIL === ABSOLUTE_MINIMUMS.HIGH_DETAIL ? '(abs min)' : '(%)'}`,
-      GRID_DENSITY: `${thresholds.GRID_DENSITY.toFixed(2)} ${thresholds.GRID_DENSITY === ABSOLUTE_MINIMUMS.GRID_DENSITY ? '(abs min)' : '(%)'}`,
-      RULER_DETAIL: `${thresholds.RULER_DETAIL.toFixed(2)} ${thresholds.RULER_DETAIL === ABSOLUTE_MINIMUMS.RULER_DETAIL ? '(abs min)' : '(%)'}`
-    }
-  });
-
   return thresholds;
 }
 

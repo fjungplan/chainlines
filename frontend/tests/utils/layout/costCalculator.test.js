@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSingleChainCost, getAffectedChains, calculateCostDelta } from '../../../src/utils/layout/utils/costCalculator';
-import { LAYOUT_CONFIG } from '../../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../../src/utils/layout/layout_config.json';
 
 describe('costCalculator', () => {
     describe('calculateSingleChainCost', () => {

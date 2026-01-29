@@ -1,7 +1,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { executePassSchedule } from '../../../src/utils/layout/orchestrator/layoutOrchestrator';
-import { LAYOUT_CONFIG } from '../../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../../src/utils/layout/layout_config.json';
 import * as GreedyOptimizer from '../../../src/utils/layout/simplifiers/greedyOptimizer';
 import * as GroupwiseOptimizer from '../../../src/utils/layout/simplifiers/groupwiseOptimizer';
 import * as VerticalSegments from '../../../src/utils/layout/utils/verticalSegments';

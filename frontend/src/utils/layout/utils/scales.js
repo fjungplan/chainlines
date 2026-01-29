@@ -37,13 +37,6 @@ export function calculateYearRange(nodes) {
     const minYear = Math.min(...allYears, 1900);
     const maxYear = Math.max(...allYears);
 
-    // Debug logging
-    console.log('calculateYearRange: eraYears min/max:', Math.min(...eraYears), '/', Math.max(...eraYears));
-    console.log('calculateYearRange: foundingYears min/max:', Math.min(...foundingYears), '/', Math.max(...foundingYears));
-    console.log('calculateYearRange: dissolutionYears min/max:', Math.min(...dissolutionYears), '/', Math.max(...dissolutionYears));
-    console.log('calculateYearRange: currentYear:', currentYear);
-    console.log('calculateYearRange: final min/max:', minYear, '/', maxYear, 'returned range:', minYear, '-', maxYear + 1);
-
     // Add +1 year to show the full span of the final year
     return {
         min: minYear,
@@ -66,19 +59,10 @@ export function createXScale(width, yearRange, stretchFactor) {
     const availableWidth = width - 2 * padding;
     const pixelsPerYear = (availableWidth / span) * stretchFactor;
 
-    console.log(`createXScale: this.width=${width}, padding=${padding}, availableWidth=${availableWidth}, stretchFactor=${stretchFactor}`);
-    console.log(`  yearRange=${min}-${max}, span=${span}`);
-    console.log(`  pixelsPerYear=${pixelsPerYear.toFixed(4)}`);
-    console.log(`  Example: year 2000 should map to ${padding + ((2000 - min) / span) * availableWidth}, year 2008 should map to ${padding + ((2008 - min) / span) * availableWidth}`);
-
     return (year) => {
         const range = max - min;
         const position = (year - min) / range;
         const result = padding + (position * (width - 2 * padding) * stretchFactor);
-        // Only log for key years to avoid spam
-        if ([1900, 2000, 2007, 2008, 2025, 2026, max - 1].includes(year)) {
-            console.log(`  xScale(${year}) = ${result.toFixed(2)} [position=${position.toFixed(4)}, effective_width=${width - 2 * padding}]`);
-        }
         return result;
     };
 }

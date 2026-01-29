@@ -36,11 +36,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
     _optimization_status["last_run"] = datetime.utcnow()
     
     try:
-        optimizer = GeneticOptimizer(
-            pop_size=100, 
-            generations=500,
-            mutation_rate=0.1
-        )
+        optimizer = GeneticOptimizer()
         
         # 1. Fetch layouts
         stmt = select(PrecomputedLayout).where(PrecomputedLayout.family_hash.in_(family_hashes))
@@ -119,30 +115,15 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 opt_result = optimizer.optimize(family_data, timeout_seconds=600)
                 
                 # 5. Update Layout
-                # Merge Y-indices back into chain objects for storage
+                # Store only the Y-index mapping (chainId -> yIndex)
+                # Frontend expects: { "chain-id-1": 0, "chain-id-2": 1, ... }
                 y_indices = opt_result["y_indices"]
-                final_chains = []
-                for chain in chains_data:
-                    chain_copy = chain.copy()
-                    chain_copy["yIndex"] = y_indices.get(chain["id"], 0)
-                    final_chains.append(chain_copy)
-                
-                final_layout_data = {
-                    "chains": final_chains,
-                    "links": links_data
-                }
                 
                 # Generate new fingerprint (might have changed if dates changed)
-                new_fingerprint = generate_family_fingerprint(final_layout_data, links_data)
+                new_fingerprint = generate_family_fingerprint(family_data, links_data)
                 new_hash = compute_family_hash(new_fingerprint)
                 
-                # If hash changed, we ideally create a NEW entry and delete the old one?
-                # Or update the existing one?
-                # Since 'family_hash' is unique and usually the ID, updating it changes identity.
-                # However, PrecomputedLayout has a separate primary key (UUID).
-                # So we can update 'family_hash', 'layout_data', 'score'.
-                
-                layout.layout_data = final_layout_data
+                layout.layout_data = y_indices  # Store ONLY the y-index mapping
                 layout.data_fingerprint = new_fingerprint
                 layout.family_hash = new_hash
                 layout.score = opt_result["score"]
@@ -154,7 +135,8 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 logger.error(f"Error optimizing family {layout.family_hash}: {e}")
                 _optimization_status["last_error"] = str(e)
         
-        await db.commit()
+        # Don't commit here - the wrapper's session.begin() context manager handles it
+        logger.info(f"Optimization complete. Updated {len(layouts)} families.")
         
     except Exception as e:
         logger.error(f"Optimization run failed: {e}")

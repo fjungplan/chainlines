@@ -5,7 +5,12 @@ Finds optimal Y-coordinate assignments for chains using evolutionary approach.
 import random
 import time
 from typing import List, Dict, Any, Callable, Set
+import logging
+import json
+import os
 from app.optimizer.cost_function import calculate_single_chain_cost
+
+logger = logging.getLogger(__name__)
 
 
 class GeneticOptimizer:
@@ -64,8 +69,28 @@ class GeneticOptimizer:
                 - generations_run: Number of generations completed
         """
         start_time = time.time()
+        
+        # Hot Reload Config (User Tweak Support)
+        try:
+            config_path = os.path.join(os.path.dirname(__file__), 'layout_config.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config_data = json.load(f)
+                    self.weights = config_data.get("WEIGHTS", self.weights)
+                    # Load GA settings
+                    ga_config = config_data.get("GENETIC_ALGORITHM", {})
+                    self.pop_size = ga_config.get("POP_SIZE", self.pop_size)
+                    self.generations = ga_config.get("GENERATIONS", self.generations)
+                    self.mutation_rate = ga_config.get("MUTATION_RATE", self.mutation_rate)
+                    self.tournament_size = ga_config.get("TOURNAMENT_SIZE", self.tournament_size)
+                    logger.info(f"Loaded config: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}")
+        except Exception as e:
+            logger.error(f"Failed to load layout_config.json: {e}")
+
         chains = family.get("chains", [])
         links = family.get("links", [])
+        
+        logger.info(f"Starting generic optimization for family with {len(chains)} chains, {len(links)} links")
         
         if not chains:
             return {
@@ -130,7 +155,12 @@ class GeneticOptimizer:
                 new_population.append(child)
             
             population = new_population
+            logger.info(f"Generation {generations_run}/{self.generations} completed. Best score so far: {best_score:.2f}")
         
+        elapsed = time.time() - start_time
+        logger.info(f"Optimization complete. Ran {generations_run} generations in {elapsed:.2f}s. Best score: {best_score}")
+        
+        # Return best solution
         return {
             "y_indices": best_individual,
             "score": best_score,
@@ -141,24 +171,23 @@ class GeneticOptimizer:
         """
         Create initial population with diverse Y-index assignments.
         
-        Args:
-            chains: List of chain objects
-        
-        Returns:
-            List of individuals (each is {chainId: yIndex})
+        Optimized for compactness:
+        - Allows multiple chains in same lane (if times don't overlap)
+        - Initializes in a compressed range to reduce attraction costs
         """
         population = []
         n_chains = len(chains)
         
+        # Heuristic: Try to fit in roughly sqrt(N) to N/2 lanes
+        initial_lanes = max(3, int(n_chains ** 0.6))
+        
         for _ in range(self.pop_size):
-            # Create unique Y-indices for this individual
-            y_indices = list(range(n_chains))
-            random.shuffle(y_indices)
+            individual = {}
+            for i in range(n_chains):
+                # Randomly assign to a compact set of lanes
+                # yielding a dense initial map
+                individual[chains[i]["id"]] = random.randint(0, initial_lanes)
             
-            individual = {
-                chains[i]["id"]: y_indices[i] 
-                for i in range(n_chains)
-            }
             population.append(individual)
         
         return population
@@ -261,16 +290,47 @@ class GeneticOptimizer:
                 if other_y == lane:
                     other_chain = chain_map.get(other_id)
                     if other_chain:
-                        # Check time overlap
-                        if (start <= other_chain["endTime"] + 1 and 
-                            other_chain["startTime"] <= end + 1):
-                            return True
+                        # Check relationship
+                        is_family = False
+                        # Check parents
+                        if other_id in [p["id"] for p in chain_parents.get(exclude_id, [])]:
+                            is_family = True
+                        # Check children
+                        elif other_id in [c["id"] for c in chain_children.get(exclude_id, [])]:
+                            is_family = True
+                            
+                        # Collision logic
+                        if is_family:
+                            # Family: Allow touching (no gap required)
+                            # Overlap only if actual years overlap
+                            if (start <= other_chain["endTime"] and 
+                                other_chain["startTime"] <= end):
+                                return True
+                        else:
+                            # Strangers: Require 1 year gap
+                            # Collision if gap < 1
+                            if (start <= other_chain["endTime"] + 1 and 
+                                other_chain["startTime"] <= end + 1):
+                                return True
             return False
         
         # Generate vertical segments for blocker penalty
         vertical_segments = self._generate_vertical_segments(
             chains, chain_parents, individual
         )
+
+        # Build y_slots for Lane Sharing calculation
+        y_slots = {}
+        for chain_id, y in individual.items():
+            if chain_id in chain_map:
+                if y not in y_slots:
+                    y_slots[y] = []
+                c = chain_map[chain_id]
+                y_slots[y].append({
+                    "start": c["startTime"],
+                    "end": c["endTime"],
+                    "chainId": chain_id
+                })
         
         # Calculate total cost
         total_cost = 0.0
@@ -278,7 +338,8 @@ class GeneticOptimizer:
             y = individual[chain["id"]]
             cost = calculate_single_chain_cost(
                 chain, y, chain_parents, chain_children, 
-                vertical_segments, check_collision, self.weights
+                vertical_segments, check_collision, self.weights,
+                y_slots=y_slots
             )
             total_cost += cost
         
@@ -326,61 +387,40 @@ class GeneticOptimizer:
         """
         child = {}
         for chain_id in parent1.keys():
-            # Uniform crossover: randomly pick from each parent
+        # Uniform crossover: randomly pick from each parent
             child[chain_id] = parent1[chain_id] if random.random() < 0.5 else parent2[chain_id]
         
-        # Repair to ensure uniqueness
-        self._repair_individual(child)
+        # No repair needed - valid to have duplicates
         return child
     
     def _mutate(self, individual: Dict[str, int]) -> Dict[str, int]:
         """
         Mutate an individual by randomly changing Y-indices.
-        
-        Args:
-            individual: Individual to mutate
-        
-        Returns:
-            Mutated individual
         """
         if random.random() > self.mutation_rate:
             return individual
         
-        # Randomly select a chain and reassign its Y
+        # Randomly select a chain
         chain_id = random.choice(list(individual.keys()))
-        n_chains = len(individual)
         
-        # Pick a new Y from expanded range
-        new_y = random.randint(0, n_chains + 5)
+        # Mutation strategy:
+        # 1. 50% chance: Move to an existing used lane (compaction)
+        # 2. 50% chance: Move to a random nearby empty lane (exploration)
+        
+        used_lanes = list(set(individual.values()))
+        max_y = max(used_lanes) if used_lanes else 0
+        
+        if random.random() < 0.5 and used_lanes:
+            new_y = random.choice(used_lanes)
+        else:
+            # Explore slightly outside current bounds
+            new_y = random.randint(0, max_y + 2)
+            
         individual[chain_id] = new_y
         
-        # Repair to ensure uniqueness
-        self._repair_individual(individual)
         return individual
     
+    
     def _repair_individual(self, individual: Dict[str, int]) -> None:
-        """
-        Repair individual to ensure Y-indices are unique.
-        
-        Modifies individual in-place.
-        """
-        seen_ys: Set[int] = set()
-        duplicates = []
-        
-        for chain_id, y in individual.items():
-            if y in seen_ys:
-                duplicates.append(chain_id)
-            else:
-                seen_ys.add(y)
-        
-        if duplicates:
-            # Find available Y-indices
-            max_y = max(seen_ys) if seen_ys else 0
-            available = [y for y in range(max_y + len(duplicates) + 10) if y not in seen_ys]
-            
-            for chain_id in duplicates:
-                if available:
-                    new_y = random.choice(available)
-                    individual[chain_id] = new_y
-                    available.remove(new_y)
-                    seen_ys.add(new_y)
+        """Deprecated/No-op. Uniqueness is not required."""
+        pass

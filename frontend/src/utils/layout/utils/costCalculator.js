@@ -1,4 +1,4 @@
-import { LAYOUT_CONFIG } from '../config.js';
+import LAYOUT_CONFIG from '../layout_config.json';
 
 /**
  * Cost calculation utilities for the layout engine
@@ -28,7 +28,8 @@ export function calculateSingleChainCost(
     chainParents,
     chainChildren,
     verticalSegments,
-    checkCollision
+    checkCollision,
+    ySlots = null
 ) {
     let attractionCost = 0;
     const ATTRACTION_WEIGHT = LAYOUT_CONFIG.WEIGHTS.ATTRACTION;
@@ -114,7 +115,26 @@ export function calculateSingleChainCost(
         });
     });
 
-    return attractionCost + cutThroughCost + blockerCost + yShapeCost;
+    // Lane Sharing Penalty: Prefer larger gaps between unrelated chains in the same lane
+    let laneSharingCost = 0;
+    const LANE_SHARING_WEIGHT = LAYOUT_CONFIG.WEIGHTS.LANE_SHARING || 0;
+    if (LANE_SHARING_WEIGHT > 0 && ySlots) {
+        const slotsAtY = ySlots.get(y) || [];
+        slotsAtY.forEach(slot => {
+            if (slot.chainId === chain.id) return; // Skip self
+            // Calculate gap (distance in time between chains)
+            const gap = Math.max(
+                slot.start - chain.endTime,   // Neighbor starts after this chain ends
+                chain.startTime - slot.end    // This chain starts after neighbor ends
+            );
+            if (gap >= 1) {
+                // Exponential decay: gap=1 → full penalty, gap=2 → 1/10th, gap=3 → 1/100th, etc.
+                laneSharingCost += LANE_SHARING_WEIGHT / Math.pow(10, gap - 1);
+            }
+        });
+    }
+
+    return attractionCost + cutThroughCost + blockerCost + yShapeCost + laneSharingCost;
 }
 
 /**

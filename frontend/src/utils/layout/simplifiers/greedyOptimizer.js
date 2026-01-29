@@ -1,6 +1,6 @@
 
 import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from '../utils/costCalculator.js';
-import { LAYOUT_CONFIG } from '../config.js';
+import LAYOUT_CONFIG from '../layout_config.json';
 
 /**
  * Greedy Optimization Module

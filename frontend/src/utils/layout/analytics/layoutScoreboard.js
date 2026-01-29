@@ -1,5 +1,5 @@
 
-import { LAYOUT_CONFIG } from '../config.js';
+import LAYOUT_CONFIG from '../layout_config.json';
 import { calculateSingleChainCost } from '../utils/costCalculator.js';
 
 /**

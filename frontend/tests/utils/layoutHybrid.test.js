@@ -1,7 +1,7 @@
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { LayoutCalculator } from '../../src/utils/layoutCalculator';
-import { LAYOUT_CONFIG } from '../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../src/utils/layout/layout_config.json';
 import * as GroupwiseOptimizer from '../../src/utils/layout/simplifiers/groupwiseOptimizer';
 
 describe('LayoutCalculator - Slice 7: Hybrid Integration', () => {

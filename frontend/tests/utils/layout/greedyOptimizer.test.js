@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runGreedyPass } from '../../../src/utils/layout/simplifiers/greedyOptimizer';
-import { LAYOUT_CONFIG } from '../../../src/utils/layout/config';
+import LAYOUT_CONFIG from '../../../src/utils/layout/layout_config.json';
 
 describe('greedyOptimizer', () => {
     describe('runGreedyPass', () => {

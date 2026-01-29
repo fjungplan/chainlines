@@ -1,7 +1,7 @@
 
 import { calculateSingleChainCost, calculateCostDelta, getAffectedChains } from '../utils/costCalculator.js';
 import { generateVerticalSegments } from '../utils/verticalSegments.js';
-import { LAYOUT_CONFIG } from '../config.js';
+import LAYOUT_CONFIG from '../layout_config.json';
 
 /**
  * Groupwise Optimization Module (Slice 8)
