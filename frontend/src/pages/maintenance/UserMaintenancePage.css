@@ -1,28 +1,6 @@
 /* User Maintenance Page Styles */
 /* Reuses patterns from TeamMaintenancePage.css */
 
-/* Header Styling */
-.user-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 3px solid var(--color-primary);
-    padding-bottom: 15px;
-}
-
-.user-header .header-left {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.user-header h1 {
-    margin: 0;
-    font-size: 32px;
-    color: var(--color-text-light);
-}
-
 /* Controls */
 .user-controls {
     display: flex;
