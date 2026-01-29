@@ -189,6 +189,48 @@ class GeneticOptimizer:
         
         return chain_parents, chain_children
     
+    def _generate_vertical_segments(
+        self,
+        chains: List[Dict],
+        chain_parents: Dict[str, List[Dict]],
+        individual: Dict[str, int]
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate vertical segments for blocker penalty calculation.
+        
+        A vertical segment is created when a parent and child are more than
+        1 lane apart (non-adjacent), representing the vertical connection line.
+        
+        Args:
+            chains: List of chain objects
+            chain_parents: Map of child chain ID to parent chain objects
+            individual: Current Y-index assignment {chainId: yIndex}
+        
+        Returns:
+            List of segment dicts with {y1, y2, time, childId, parentId}
+        """
+        vertical_segments = []
+        
+        for chain in chains:
+            chain_id = chain["id"]
+            chain_y = individual.get(chain_id, 0)
+            parents = chain_parents.get(chain_id, [])
+            
+            for parent in parents:
+                parent_y = individual.get(parent["id"], 0)
+                
+                # Only create segment if they are NOT adjacent (more than 1 lane apart)
+                if abs(parent_y - chain_y) > 1:
+                    vertical_segments.append({
+                        "y1": min(parent_y, chain_y),
+                        "y2": max(parent_y, chain_y),
+                        "time": chain["startTime"],
+                        "childId": chain_id,
+                        "parentId": parent["id"]
+                    })
+        
+        return vertical_segments
+    
     def _evaluate_fitness(
         self,
         individual: Dict[str, int],
@@ -225,13 +267,18 @@ class GeneticOptimizer:
                             return True
             return False
         
+        # Generate vertical segments for blocker penalty
+        vertical_segments = self._generate_vertical_segments(
+            chains, chain_parents, individual
+        )
+        
         # Calculate total cost
         total_cost = 0.0
         for chain in chains:
             y = individual[chain["id"]]
             cost = calculate_single_chain_cost(
                 chain, y, chain_parents, chain_children, 
-                links, check_collision, self.weights
+                vertical_segments, check_collision, self.weights
             )
             total_cost += cost
         
