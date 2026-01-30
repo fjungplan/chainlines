@@ -29,14 +29,18 @@ export default function SliderField({
         onChange(newValue);
     };
 
+    // Generate unique ID from label
+    const fieldId = `slider-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
     return (
         <div className="field-group slider-field">
-            <label>
+            <label htmlFor={fieldId}>
                 {label}
                 {tooltip && <InfoTooltip content={tooltip} />}
             </label>
             <div className="slider-container">
                 <input
+                    id={fieldId}
                     type="range"
                     value={value}
                     onChange={handleChange}

@@ -29,13 +29,17 @@ export default function NumberField({
         }
     };
 
+    // Generate unique ID from label
+    const fieldId = `number-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
     return (
         <div className="field-group">
-            <label>
+            <label htmlFor={fieldId}>
                 {label}
                 {tooltip && <InfoTooltip content={tooltip} />}
             </label>
             <input
+                id={fieldId}
                 type="number"
                 value={value}
                 onChange={handleChange}

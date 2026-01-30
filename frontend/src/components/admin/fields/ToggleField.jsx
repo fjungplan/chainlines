@@ -20,13 +20,17 @@ export default function ToggleField({
         onChange(e.target.checked);
     };
 
+    // Generate unique ID from label
+    const fieldId = `toggle-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
     return (
         <div className="field-group toggle-field">
-            <label>
+            <label htmlFor={fieldId}>
                 {label}
                 {tooltip && <InfoTooltip content={tooltip} />}
             </label>
             <input
+                id={fieldId}
                 type="checkbox"
                 checked={value}
                 onChange={handleChange}
