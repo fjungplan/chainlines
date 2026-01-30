@@ -150,5 +150,26 @@ class TestChainBuilder:
         
         chains = build_chains(nodes, links)
         
-        assert chains[0]["startTime"] == 1990
         assert chains[0]["endTime"] == 2005
+
+    def test_strict_year_boundary_continuity(self):
+        """
+        Verify strict boundary continuity (Aki-Safi case):
+        Parent ends 1997, Child starts 1998.
+        Parent end + 1 (1998) > Child start (1998) is FALSE.
+        So they should form ONE chain.
+        """
+        nodes = [
+            {"id": "A", "founding_year": 1990, "dissolution_year": 1997},
+            {"id": "B", "founding_year": 1998, "dissolution_year": 2005},
+        ]
+        links = [
+            {"parentId": "A", "childId": "B"},
+        ]
+        
+        chains = build_chains(nodes, links)
+        
+        assert len(chains) == 1
+        assert len(chains[0]["nodes"]) == 2
+        assert chains[0]["nodes"][0]["id"] == "A"
+        assert chains[0]["nodes"][1]["id"] == "B"

@@ -55,5 +55,11 @@
         "TOURNAMENT_SIZE": 10,
         "TIMEOUT_SECONDS": 3600,
         "PATIENCE": 500
+    },
+    "MUTATION_STRATEGIES": {
+        "SWAP": 0.2,
+        "HEURISTIC": 0.2,
+        "COMPACTION": 0.3,
+        "EXPLORATION": 0.3
     }
 }

@@ -28,7 +28,8 @@ class GeneticOptimizer:
         mutation_rate: float = 0.10,
         tournament_size: int = 3,
         patience: int = 500,
-        min_improvement: float = 0.01
+        min_improvement: float = 0.01,
+        mutation_strategies: Dict[str, float] = None
     ):
         """
         Initialize the genetic optimizer.
@@ -55,6 +56,14 @@ class GeneticOptimizer:
             "CUT_THROUGH": 10000.0,
             "BLOCKER": 5000.0,
             "Y_SHAPE": 150.0
+        }
+        
+        # Default mutation strategies
+        self.mutation_strategies = mutation_strategies or {
+            "SWAP": 0.2,
+            "HEURISTIC": 0.2,
+            "COMPACTION": 0.3,
+            "EXPLORATION": 0.3
         }
     
     def optimize(
@@ -92,6 +101,7 @@ class GeneticOptimizer:
                     self.tournament_size = ga_config.get("TOURNAMENT_SIZE", self.tournament_size)
                     self.timeout_seconds = ga_config.get("TIMEOUT_SECONDS", self.timeout_seconds)
                     self.patience = ga_config.get("PATIENCE", self.patience)
+                    self.mutation_strategies = config_data.get("MUTATION_STRATEGIES", self.mutation_strategies)
                     logger.info(f"Loaded config: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}, timeout={self.timeout_seconds}, patience={self.patience}")
         except Exception as e:
             logger.error(f"Failed to load layout_config.json: {e}")
@@ -177,7 +187,7 @@ class GeneticOptimizer:
                 child = self._crossover(parent1, parent2)
                 
                 # Mutation
-                child = self._mutate(child)
+                child = self._mutate(child, chain_parents, chain_children)
                 
                 new_population.append(child)
             
@@ -420,31 +430,102 @@ class GeneticOptimizer:
         # No repair needed - valid to have duplicates
         return child
     
-    def _mutate(self, individual: Dict[str, int]) -> Dict[str, int]:
+    def _mutate(
+        self, 
+        individual: Dict[str, int],
+        chain_parents: Dict[str, List[Dict]] = None,
+        chain_children: Dict[str, List[Dict]] = None
+    ) -> Dict[str, int]:
         """
-        Mutate an individual by randomly changing Y-indices.
+        Mutate an individual using multiple strategies.
+        
+        Strategies:
+        - 30% Compaction: Move to random used lane
+        - 30% Exploration: Move to random variable/empty lane
+        - 20% Swap: Switch positions of two chains (Topology fix)
+        - 20% Heuristic: Move to Parent/Child lane (Smart move)
         """
         if random.random() > self.mutation_rate:
             return individual
         
-        # Randomly select a chain
+        rand_val = random.random()
+        
+        # Strategy Selection via Config
+        s = self.mutation_strategies
+        swap_thresh = s.get("SWAP", 0.0)
+        heuristic_thresh = swap_thresh + s.get("HEURISTIC", 0.0)
+        compaction_thresh = heuristic_thresh + s.get("COMPACTION", 0.0)
+        
+        if rand_val < swap_thresh:
+            # Swap Strategy
+            return self._mutate_swap(individual)
+        elif rand_val < heuristic_thresh and chain_parents is not None:
+             # Heuristic Strategy (if context available)
+             return self._mutate_heuristic(individual, chain_parents, chain_children)
+        elif rand_val < compaction_thresh:
+             # Compaction Strategy
+             strategy = "compaction"
+        else:
+             # Exploration Strategy
+             strategy = "exploration"
+             
+        # Standard Move Logic (Compaction/Exploration)
         chain_id = random.choice(list(individual.keys()))
-        
-        # Mutation strategy:
-        # 1. 50% chance: Move to an existing used lane (compaction)
-        # 2. 50% chance: Move to a random nearby empty lane (exploration)
-        
         used_lanes = list(set(individual.values()))
         max_y = max(used_lanes) if used_lanes else 0
         
-        if random.random() < 0.5 and used_lanes:
+        if strategy == "compaction" and used_lanes:
             new_y = random.choice(used_lanes)
         else:
-            # Explore slightly outside current bounds
             new_y = random.randint(0, max_y + 2)
             
         individual[chain_id] = new_y
+        return individual
+
+    def _mutate_swap(self, individual: Dict[str, int]) -> Dict[str, int]:
+        """Swap Y-indices of two random chains."""
+        if len(individual) < 2:
+            return individual
+            
+        keys = list(individual.keys())
+        a, b = random.sample(keys, 2)
+        individual[a], individual[b] = individual[b], individual[a]
+        return individual
+
+    def _mutate_heuristic(
+        self,
+        individual: Dict[str, int],
+        chain_parents: Dict[str, List[Dict]],
+        chain_children: Dict[str, List[Dict]]
+    ) -> Dict[str, int]:
+        """
+        Smart move: Attempt to move a chain to the same lane as its parent or child.
+        """
+        chain_id = random.choice(list(individual.keys()))
+        target_y = None
         
+        # 1. Try moving to Parent's Y
+        parents = chain_parents.get(chain_id, [])
+        if parents:
+            # Pick valid parent (one that exists in individual)
+            valid_p = [p for p in parents if p["id"] in individual]
+            if valid_p:
+                target_p = random.choice(valid_p)
+                target_y = individual[target_p["id"]]
+        
+        # 2. If no parent target, try Child's Y
+        if target_y is None:
+            children = chain_children.get(chain_id, [])
+            if children:
+                valid_c = [c for c in children if c["id"] in individual]
+                if valid_c:
+                    target_c = random.choice(valid_c)
+                    target_y = individual[target_c["id"]]
+        
+        # Apply move if target found
+        if target_y is not None:
+            individual[chain_id] = target_y
+            
         return individual
     
     
