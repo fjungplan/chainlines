@@ -325,6 +325,14 @@ export default function AdminOptimizer() {
 
                 /* Action Column Parity */
                 .actions-col { text-align: right; width: 80px; }
+
+                /* Force no underline for button-styled links */
+                .btn {
+                    text-decoration: none !important;
+                }
+                .btn:hover {
+                    text-decoration: none !important;
+                }
             `}</style>
         </div>
     );
