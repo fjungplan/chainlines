@@ -43,7 +43,9 @@ export function buildChains(nodes, links) {
 
         let parentEnd = parentNode.dissolution_year;
         if (!parentEnd) {
-            const lastEra = parentNode.eras?.[parentNode.eras.length - 1];
+            const lastEra = parentNode.eras && parentNode.eras.length > 0
+                ? parentNode.eras.reduce((max, era) => (!max || era.year > max.year ? era : max), null)
+                : null;
             parentEnd = lastEra ? lastEra.year : parentNode.founding_year;
         }
 
@@ -82,7 +84,9 @@ export function buildChains(nodes, links) {
 
                 let currEnd = currNode.dissolution_year;
                 if (!currEnd) {
-                    const lastEra = currNode.eras?.[currNode.eras.length - 1];
+                    const lastEra = currNode.eras && currNode.eras.length > 0
+                        ? currNode.eras.reduce((max, era) => (!max || era.year > max.year ? era : max), null)
+                        : null;
                     currEnd = lastEra ? lastEra.year : currNode.founding_year;
                 }
 

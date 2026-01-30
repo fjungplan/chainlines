@@ -222,6 +222,13 @@ class GeneticOptimizer:
             "OVERLAP": {"multiplier": 0.0, "sum": 0.0},
             "SPACING": {"multiplier": 0, "sum": 0.0}
         }
+        
+        # Apply best_individual y-indices to chain objects for accurate cost calculation
+        # (Otherwise parents are at original yIndex usually 0, causing huge attraction costs)
+        chain_map = {c["id"]: c for c in chains}
+        for chain_id, y in best_individual.items():
+            if chain_id in chain_map:
+                chain_map[chain_id]["yIndex"] = y
 
         for chain in chains:
             res = calculate_single_chain_cost(

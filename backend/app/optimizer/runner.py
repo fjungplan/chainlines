@@ -42,11 +42,12 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
     breakdown = results.get("cost_breakdown", {})
     
     # Extract config for logging
-    pop = config.get("pop_size", "N/A")
-    mut = config.get("mutation_rate", "N/A")
-    pat = config.get("patience", "N/A")
-    timeout = config.get("timeout_seconds", "N/A")
-    strategies = config.get("mutation_strategies", {})
+    ga_config = config.get("GENETIC_ALGORITHM", {})
+    pop = ga_config.get("POP_SIZE", "N/A")
+    mut = ga_config.get("MUTATION_RATE", "N/A")
+    pat = ga_config.get("PATIENCE", "N/A")
+    timeout = ga_config.get("TIMEOUT_SECONDS", "N/A")
+    strategies = config.get("MUTATION_STRATEGIES", {})
     strat_str = ", ".join([f"{k}: {v}" for k, v in strategies.items()])
     
     # Weights for breakdown display
@@ -75,7 +76,14 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
     
     for key, (label, unit) in penalty_meta.items():
         data = breakdown.get(key, {"multiplier": 0, "sum": 0.0})
-        weight = weights.get(key, "N/A")
+        
+        if key == "OVERLAP":
+            w_base = weights.get("OVERLAP_BASE", "N/A")
+            w_factor = weights.get("OVERLAP_FACTOR", "N/A")
+            weight = f"Base {w_base} / Factor {w_factor}"
+        else:
+            weight = weights.get(key, "N/A")
+            
         m = data["multiplier"]
         s = data["sum"]
         log_entry.append(f"  * {label} (Weight {weight}): Multiplier ({unit}) {m:.2f} -> Sum {s:.2f}")

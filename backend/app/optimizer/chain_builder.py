@@ -55,9 +55,25 @@ def build_chains(
     visited: Set[str] = set()
     
     def get_end_year(node: Dict) -> int:
-        """Get the visual end year of a node (dissolution_year or current_year)."""
+        """
+        Get the visual end year of a node (dissolution_year, last era, or current_year).
+        Matches frontend logic: if no dissolution, try to use last era.
+        """
         if node.get("dissolution_year"):
             return node["dissolution_year"]
+            
+        # Zombie Node Check: If no dissolution but has eras, use the last era
+        eras = node.get("eras") or []
+        if eras:
+            # Safely find max year to avoid sorting assumption
+            try:
+                # Handle both dict objects and potentially other formats if data varies
+                max_era_year = max(e.get("year", 0) for e in eras)
+                if max_era_year > 0:
+                    return max_era_year
+            except Exception:
+                pass
+                
         return current_year
     
     def is_chain_start(node_id: str) -> bool:
