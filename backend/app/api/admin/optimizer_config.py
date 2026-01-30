@@ -10,26 +10,29 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Paths
-BACKEND_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "optimizer", "layout_config.json")
-# Assuming standard structure: backend/app/api/admin/optimizer_config.py -> backend/app/optimizer/layout_config.json
-# Wait: __file__ = app/api/admin/optimizer_config.py
-# parent 1 = admin
-# parent 2 = api
-# parent 3 = app
-# path = app/optimizer/layout_config.json
-# Yes, dirname(dirname(dirname(file))) gives 'app', then join 'optimizer'.
+from pathlib import Path
 
-# Frontend Path: We need to traverse up to project root
-# backend/app/api/admin/ -> backend/ -> root/
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-# file: backend/app/api/admin/opt_conf.py
-# 1: admin
-# 2: api
-# 3: app
-# 4: backend
-# 5: chainlines (root)
-FRONTEND_CONFIG_PATH = os.path.join(PROJECT_ROOT, "frontend", "src", "utils", "layout", "layout_config.json")
+# Paths
+FILE_PATH = Path(__file__).resolve()
+BACKEND_APP_ROOT = FILE_PATH.parents[2]  # backend/app/
+BACKEND_CONFIG_PATH = BACKEND_APP_ROOT / "optimizer" / "layout_config.json"
+
+# Frontend Path: Try to find project root by looking for .git or frontend folder
+def get_project_root(start_path: Path) -> Path:
+    curr = start_path
+    for _ in range(10):  # Maximum depth search
+        if (curr / "frontend").exists() and (curr / "backend").exists():
+            return curr
+        if curr.parent == curr:
+            break
+        curr = curr.parent
+    # Fallback to 5 levels up if not found
+    return FILE_PATH.parents[4]
+
+PROJECT_ROOT = get_project_root(FILE_PATH)
+FRONTEND_CONFIG_PATH = PROJECT_ROOT / "frontend" / "src" / "utils" / "layout" / "layout_config.json"
+
+logger.info(f"Optimizer Config Paths: Backend={BACKEND_CONFIG_PATH}, Frontend={FRONTEND_CONFIG_PATH}")
 
 # --- Pydantic Models ---
 
@@ -92,7 +95,7 @@ def save_config(config: dict):
     
     try:
         # Write to temporary file first
-        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(BACKEND_CONFIG_PATH), suffix='.json')
+        temp_fd, temp_path = tempfile.mkstemp(dir=str(BACKEND_CONFIG_PATH.parent), suffix='.json')
         try:
             with os.fdopen(temp_fd, 'w') as f:
                 json.dump(config, f, indent=4)
@@ -117,8 +120,8 @@ def save_config(config: dict):
             logger.info(f"Configuration saved successfully to {BACKEND_CONFIG_PATH}")
             
             # 2. Sync to Frontend (if path exists)
-            if success and os.path.exists(os.path.dirname(FRONTEND_CONFIG_PATH)):
-                shutil.copy2(BACKEND_CONFIG_PATH, FRONTEND_CONFIG_PATH)
+            if success and FRONTEND_CONFIG_PATH.parent.exists():
+                shutil.copy2(str(BACKEND_CONFIG_PATH), str(FRONTEND_CONFIG_PATH))
                 logger.info(f"Configuration synced to {FRONTEND_CONFIG_PATH}")
                 
         finally:

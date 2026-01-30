@@ -102,7 +102,7 @@ class GeneticOptimizer:
                     self.timeout_seconds = ga_config.get("TIMEOUT_SECONDS", self.timeout_seconds)
                     self.patience = ga_config.get("PATIENCE", self.patience)
                     self.mutation_strategies = config_data.get("MUTATION_STRATEGIES", self.mutation_strategies)
-                    logger.info(f"Loaded config: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}, timeout={self.timeout_seconds}, patience={self.patience}")
+                    logger.info(f"Loaded config from {os.path.abspath(config_path)}: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}, timeout={self.timeout_seconds}, patience={self.patience}")
         except Exception as e:
             logger.error(f"Failed to load layout_config.json: {e}")
 

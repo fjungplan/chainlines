@@ -72,6 +72,7 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
         "CUT_THROUGH": ("Cut Through", "count"),
         "Y_SHAPE": ("Y-Shape", "count"),
         "OVERLAP": ("Overlap", "deficiency"),
+        "SPACING": ("Lane Sharing", "spacing bonus"),
     }
     
     for key, (label, unit) in penalty_meta.items():
@@ -81,6 +82,8 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
             w_base = weights.get("OVERLAP_BASE", "N/A")
             w_factor = weights.get("OVERLAP_FACTOR", "N/A")
             weight = f"Base {w_base} / Factor {w_factor}"
+        elif key == "SPACING":
+            weight = weights.get("LANE_SHARING", "N/A")
         else:
             weight = weights.get(key, "N/A")
             
