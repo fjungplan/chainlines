@@ -115,16 +115,21 @@ class GeneticOptimizer:
             return {
                 "y_indices": {},
                 "score": 0.0,
-                "generations_run": 0
+                "generations_run": 0,
+                "best_generation": 0,
+                "total_generations": 0,
+                "lane_count": 0,
+                "cost_breakdown": {}
             }
         
         # Build parent/child maps for cost calculation
         chain_parents, chain_children = self._build_relationship_maps(chains, links)
         
-        # Initialize population
+        # Initialize population at first generation
         population = self._initialize_population(chains)
         best_individual = None
         best_score = float('inf')
+        best_generation = 0
         
         generations_run = 0
         generations_without_improvement = 0
@@ -144,8 +149,6 @@ class GeneticOptimizer:
             
             # Evaluate fitness for all individuals
             scored_population = []
-            # Evaluate fitness for all individuals
-            scored_population = []
             improved_this_gen = False
             
             for individual in population:
@@ -158,6 +161,7 @@ class GeneticOptimizer:
                     best_score = score
                     best_individual = individual.copy()
                     improved_this_gen = True
+                    best_generation = generations_run
             
             if improved_this_gen:
                 generations_without_improvement = 0
@@ -192,16 +196,51 @@ class GeneticOptimizer:
                 new_population.append(child)
             
             population = new_population
-            logger.info(f"Generation {generations_run}/{self.generations} completed. Best score so far: {best_score:.2f}")
-        
-        elapsed = time.time() - start_time
-        logger.info(f"Optimization complete. Ran {generations_run} generations in {elapsed:.2f}s. Best score: {best_score}")
-        
-        # Return best solution
+            if generations_run % 10 == 0:
+                logger.info(f"Generation {generations_run}/{self.generations} completed. Best score so far: {best_score:.2f}")
+
+        # Calculate final cost breakdown for best solution
+        vertical_segments = self._generate_vertical_segments(chains, chain_parents, best_individual)
+        y_slots = {}
+        for chain_id, y in best_individual.items():
+            if y not in y_slots: y_slots[y] = []
+            c_orig = next(c for c in chains if c["id"] == chain_id)
+            y_slots[y].append({"start": c_orig["startTime"], "end": c_orig["endTime"], "chainId": chain_id})
+
+        def final_check_collision(lane, start, end, exclude_id, chain_obj):
+            slots = y_slots.get(lane, [])
+            for s in slots:
+                if s["chainId"] == exclude_id: continue
+                if not (end < s["start"] or start > s["end"]): return True
+            return False
+
+        final_breakdown = {
+            "ATTRACTION": {"multiplier": 0.0, "sum": 0.0},
+            "CUT_THROUGH": {"multiplier": 0, "sum": 0.0},
+            "BLOCKER": {"multiplier": 0, "sum": 0.0},
+            "Y_SHAPE": {"multiplier": 0, "sum": 0.0},
+            "OVERLAP": {"multiplier": 0.0, "sum": 0.0},
+            "SPACING": {"multiplier": 0, "sum": 0.0}
+        }
+
+        for chain in chains:
+            res = calculate_single_chain_cost(
+                chain, best_individual[chain["id"]], chain_parents, chain_children,
+                vertical_segments, final_check_collision, self.weights, y_slots,
+                return_breakdown=True
+            )
+            for key, val in res["breakdown"].items():
+                final_breakdown[key]["multiplier"] += val["multiplier"]
+                final_breakdown[key]["sum"] += val["sum"]
+
         return {
             "y_indices": best_individual,
             "score": best_score,
-            "generations_run": generations_run
+            "generations_run": generations_run,
+            "best_generation": best_generation,
+            "total_generations": generations_run,
+            "lane_count": len(set(best_individual.values())),
+            "cost_breakdown": final_breakdown
         }
     
     def _initialize_population(self, chains: List[Dict]) -> List[Dict[str, int]]:
