@@ -116,6 +116,26 @@ export default function GeneticAlgorithmSection({ config, onChange, onError }) {
                         tooltip="Size of tournament for selection (typical: 10)"
                     />
                 </div>
+                <div className="grid-2">
+                    <NumberField
+                        label="Timeout (seconds)"
+                        value={gaConfig.TIMEOUT_SECONDS}
+                        onChange={(val) => handleGaChange('TIMEOUT_SECONDS', val)}
+                        min={10}
+                        max={36000}
+                        step={10}
+                        tooltip="Maximum time to run optimization before forced exit"
+                    />
+                    <NumberField
+                        label="Patience (generations)"
+                        value={gaConfig.PATIENCE}
+                        onChange={(val) => handleGaChange('PATIENCE', val)}
+                        min={10}
+                        max={5000}
+                        step={10}
+                        tooltip="Stop if no improvement for this many generations"
+                    />
+                </div>
             </div>
 
             <div className="settings-subsection mutation-group">

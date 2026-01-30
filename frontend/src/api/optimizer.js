@@ -26,5 +26,14 @@ export const optimizerApi = {
     getStatus: async () => {
         const response = await apiClient.get('/api/v1/admin/optimizer/status');
         return response.data;
+    },
+
+    /**
+     * Get logs for a specific family.
+     * @param {string} familyHash
+     */
+    getFamilyLogs: async (familyHash) => {
+        const response = await apiClient.get(`/api/v1/admin/optimizer/families/${familyHash}/logs`);
+        return response.data;
     }
 };

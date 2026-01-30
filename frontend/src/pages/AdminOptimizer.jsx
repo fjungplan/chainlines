@@ -112,6 +112,37 @@ export default function AdminOptimizer() {
         }
     };
 
+    // Modal State for Logs
+    const [showLogModal, setShowLogModal] = useState(false);
+    const [selectedFamilyHash, setSelectedFamilyHash] = useState(null);
+    const [logContent, setLogContent] = useState("");
+    const [loadingLog, setLoadingLog] = useState(false);
+    const logContainerRef = useRef(null);
+
+    // Fetch Logs
+    const handleViewLogs = async (hash) => {
+        setSelectedFamilyHash(hash);
+        setLogContent("");
+        setShowLogModal(true);
+        setLoadingLog(true);
+        try {
+            const lines = await optimizerApi.getFamilyLogs(hash);
+            setLogContent(lines.join(''));
+        } catch (error) {
+            console.error('Failed to fetch logs:', error);
+            setLogContent("Failed to load log file. It may not have been created yet.");
+        } finally {
+            setLoadingLog(false);
+        }
+    };
+
+    // Auto-scroll logs
+    useEffect(() => {
+        if (showLogModal && logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [logContent, showLogModal]);
+
     return (
         <div className="maintenance-page-container">
             <div className="maintenance-content-card">
@@ -127,22 +158,22 @@ export default function AdminOptimizer() {
                     </div>
                 </div>
 
-                <div className="optimizer-dashboard" style={{ flex: 1, overflowY: 'auto' }}>
+                <div className="optimizer-dashboard scraper-scroll-content">
                     {isOptimizing && (
-                        <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#e3f2fd', borderLeft: '4px solid #2196f3', color: '#0d47a1' }}>
+                        <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderLeft: '4px solid #3b82f6', color: '#93c5fd' }}>
                             <i className="bi bi-gear-fill spin" style={{ marginRight: '0.5rem' }}></i>
                             Optimization in progress... {status.active_tasks} tasks active.
                         </div>
                     )}
 
                     {message && (
-                        <div className="alert alert-success" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#e8f5e9', borderLeft: '4px solid #4caf50', color: '#1b5e20' }}>
+                        <div className="alert alert-success" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderLeft: '4px solid #22c55e', color: '#86efac' }}>
                             {message}
                         </div>
                     )}
 
                     {status.last_error && (
-                        <div className="alert alert-error" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#ffebee', borderLeft: '4px solid #f44336', color: '#b71c1c' }}>
+                        <div className="alert alert-error" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid #ef4444', color: '#fca5a5' }}>
                             <strong>Last Error:</strong> {status.last_error}
                         </div>
                     )}
@@ -163,64 +194,112 @@ export default function AdminOptimizer() {
                         </Link>
                     </div>
 
-                    <div className="table-responsive" style={{ overflowX: 'auto' }}>
-                        <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead>
-                                <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                                    <th style={{ padding: '0.5rem' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={families.length > 0 && selectedFamilies.size === families.length}
-                                            onChange={toggleAll}
-                                        />
-                                    </th>
-                                    <th style={{ padding: '0.5rem' }}>Family Hash</th>
-                                    <th style={{ padding: '0.5rem' }}>Nodes</th>
-                                    <th style={{ padding: '0.5rem' }}>Links</th>
-                                    <th style={{ padding: '1rem', textAlign: 'center' }}>Status</th>
-                                    <th style={{ padding: '1rem', textAlign: 'center' }}>Score</th>
-                                    <th style={{ padding: '1rem' }}>Last Optimized</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>Loading families...</td></tr>
-                                ) : families.length === 0 ? (
-                                    <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>No cached families found.</td></tr>
-                                ) : (
-                                    families.map(f => (
-                                        <tr key={f.family_hash} style={{ borderBottom: '1px solid #333' }}>
-                                            <td style={{ padding: '0.5rem' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedFamilies.has(f.family_hash)}
-                                                    onChange={() => toggleSelection(f.family_hash)}
-                                                />
-                                            </td>
-                                            <td style={{ padding: '0.5rem' }} title={f.family_hash}>
-                                                <code>{f.family_hash.substring(0, 8)}...</code>
-                                            </td>
-                                            <td style={{ padding: '0.5rem' }}>{f.node_count}</td>
-                                            <td style={{ padding: '0.5rem' }}>{f.link_count}</td>
-                                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                                                <span className={`badge badge-${f.status}`}>
-                                                    {f.status}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                                                {f.score?.toFixed(2) || 'N/A'}
-                                            </td>
-                                            <td style={{ padding: '0.5rem' }}>
-                                                {f.optimized_at ? new Date(f.optimized_at).toLocaleString() : 'Never'}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="run-history-section" style={{ padding: 0, border: 'none' }}>
+                        <div className="history-table-container">
+                            <table className="history-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '40px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={families.length > 0 && selectedFamilies.size === families.length}
+                                                onChange={toggleAll}
+                                            />
+                                        </th>
+                                        <th>Family Hash</th>
+                                        <th className="text-center">Nodes</th>
+                                        <th className="text-center">Links</th>
+                                        <th className="text-center">Score</th>
+                                        <th>Last Optimized</th>
+                                        <th>Status</th>
+                                        <th className="actions-col">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        <tr><td colSpan="8" className="text-center p-8">Loading families...</td></tr>
+                                    ) : families.length === 0 ? (
+                                        <tr><td colSpan="8" className="text-center p-8">No cached families found.</td></tr>
+                                    ) : (
+                                        families.map(f => (
+                                            <tr key={f.family_hash}>
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedFamilies.has(f.family_hash)}
+                                                        onChange={() => toggleSelection(f.family_hash)}
+                                                    />
+                                                </td>
+                                                <td title={f.family_hash}>
+                                                    <code>{f.family_hash.substring(0, 12)}</code>
+                                                </td>
+                                                <td className="text-center">{f.node_count}</td>
+                                                <td className="text-center">{f.link_count}</td>
+                                                <td className="text-center">
+                                                    {f.score?.toFixed(2) || '-'}
+                                                </td>
+                                                <td>
+                                                    {f.optimized_at ? new Date(f.optimized_at).toLocaleString() : 'Never'}
+                                                </td>
+                                                <td>
+                                                    <span className={`status-badge status-${f.status || 'pending'}`}>
+                                                        {f.status || 'UNKNOWN'}
+                                                    </span>
+                                                </td>
+                                                <td className="actions-col">
+                                                    <button
+                                                        className="btn btn-secondary btn-sm"
+                                                        onClick={() => handleViewLogs(f.family_hash)}
+                                                        style={{ padding: '0.25rem 0.5rem', minWidth: 'auto' }}
+                                                    >
+                                                        Logs
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Log Modal */}
+            {showLogModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content log-viewer-modal">
+                        <div className="modal-header">
+                            <h2>Optimizer Execution Log - Family {selectedFamilyHash?.substring(0, 8)}</h2>
+                            <button
+                                onClick={() => {
+                                    setShowLogModal(false);
+                                    setSelectedFamilyHash(null);
+                                }}
+                                className="close-btn"
+                                title="Close"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="log-modal-body">
+                            <div className="log-container" ref={logContainerRef}>
+                                <pre>{loadingLog ? "Loading logs..." : (logContent || "No logs found for this run.")}</pre>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => {
+                                setShowLogModal(false);
+                                setSelectedFamilyHash(null);
+                            }}>Close Viewer</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style jsx="true">{`
                 .spin {
                     animation: spin 2s linear infinite;
@@ -229,30 +308,23 @@ export default function AdminOptimizer() {
                 @keyframes spin {
                     100% { transform: rotate(360deg); }
                 }
-                .badge {
-                    padding: 0.2rem 0.5rem;
-                    border-radius: 4px;
-                    font-size: 0.8rem;
-                }
-                .badge-cached { background-color: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.4); }
-                .badge-stale { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
-                .badge-optimizing { background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
-                .badge-no_cache { background-color: rgba(107, 114, 128, 0.2); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.4); }
                 
-                .optimizer-dashboard::-webkit-scrollbar {
-                    width: 8px;
+                /* Import Scraper parity styles if not globally available */
+                .status-badge {
+                    display: inline-block;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: var(--radius-sm);
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
                 }
-                .optimizer-dashboard::-webkit-scrollbar-track {
-                    background: var(--color-bg-primary);
-                }
-                .optimizer-dashboard::-webkit-scrollbar-thumb {
-                    background: #555;
-                    border-radius: 4px;
-                }
-                
-                .table tr:hover {
-                    background-color: var(--color-bg-tertiary);
-                }
+                .status-cached { background-color: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.4); }
+                .status-stale { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+                .status-optimizing { background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+                .status-pending { background-color: rgba(107, 114, 128, 0.2); color: #d1d5db; border: 1px solid rgba(107, 114, 128, 0.4); }
+
+                /* Action Column Parity */
+                .actions-col { text-align: right; width: 80px; }
             `}</style>
         </div>
     );
