@@ -14,29 +14,84 @@ from app.models.lineage import LineageEvent
 from app.optimizer.genetic_optimizer import GeneticOptimizer
 from app.optimizer.fingerprint_service import generate_family_fingerprint, compute_family_hash
 
-logger = logging.getLogger(__name__)
+import os
 
-# Global status tracking (simple in-memory for now)
-_optimization_status = {
-    "active_tasks": 0,
-    "last_run": None,
-    "last_error": None
-}
+# Define log directory relative to backend
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OPTIMIZER_LOGS_DIR = os.path.join(BACKEND_DIR, "logs", "optimizer")
+
+def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict[str, Any]):
+    """Append a formatted optimization result to the family-specific log file."""
+    os.makedirs(OPTIMIZER_LOGS_DIR, exist_ok=True)
+    log_path = os.path.join(OPTIMIZER_LOGS_DIR, f"family_{family_hash}.log")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    score = results.get("score", 0.0)
+    best_gen = results.get("best_generation", 0)
+    total_gens = results.get("total_generations", 0)
+    lane_count = results.get("lane_count", 0)
+    breakdown = results.get("cost_breakdown", {})
+    
+    # Extract config for logging
+    pop = config.get("pop_size", "N/A")
+    mut = config.get("mutation_rate", "N/A")
+    pat = config.get("patience", "N/A")
+    timeout = config.get("timeout_seconds", "N/A")
+    strategies = config.get("mutation_strategies", {})
+    strat_str = ", ".join([f"{k}: {v}" for k, v in strategies.items()])
+    
+    # Weights for breakdown display
+    weights = config.get("WEIGHTS", {}) # Might be passed in results if we refactor more
+    # If weights not in config, they are in optimizer.weights. 
+    # For now assume they are available or use defaults
+    
+    log_entry = [
+        f"[{timestamp}] OPTIMIZATION COMPLETE",
+        f"- Outcome: Score {score:.2f} (Achieved at Gen {best_gen} / {total_gens})",
+        f"- Configuration: Pop {pop}, Mut {mut}, Pat {pat}, Timeout {timeout}s",
+        f"- Mutation Strategies: {strat_str}",
+        f"- Layout: {len(results.get('y_indices', {}))} chains in {lane_count} lanes",
+        "- Penalties:"
+    ]
+    
+    # Format penalties breakdown
+    # Mapping of breakdown keys to user-friendly names and internal units
+    penalty_meta = {
+        "ATTRACTION": ("Attraction", "avg dist^2"),
+        "BLOCKER": ("Blocker", "count"),
+        "CUT_THROUGH": ("Cut Through", "count"),
+        "Y_SHAPE": ("Y-Shape", "count"),
+        "OVERLAP": ("Overlap", "deficiency"),
+    }
+    
+    for key, (label, unit) in penalty_meta.items():
+        data = breakdown.get(key, {"multiplier": 0, "sum": 0.0})
+        weight = weights.get(key, "N/A")
+        m = data["multiplier"]
+        s = data["sum"]
+        log_entry.append(f"  * {label} (Weight {weight}): Multiplier ({unit}) {m:.2f} -> Sum {s:.2f}")
+
+    log_entry.append("-" * 50 + "\n")
+    
+    try:
+        with open(log_path, "a") as f:
+            f.write("\n".join(log_entry))
+    except Exception as e:
+        logger.error(f"Failed to write optimizer log for {family_hash}: {e}")
 
 async def run_optimization(family_hashes: List[str], db: AsyncSession):
     """
     Run optimization for specified families in background.
-    
-    1. Fetch existing layouts to identify nodes.
-    2. Re-fetch current data for those nodes.
-    3. Run genetic optimizer.
-    4. Save updated layout and fingerprint.
     """
     _optimization_status["active_tasks"] += 1
     _optimization_status["last_run"] = datetime.utcnow()
     
     try:
         optimizer = GeneticOptimizer()
+        
+        # Load full config for logging purposes
+        from app.api.admin.optimizer_config import load_config
+        full_config = load_config()
         
         # 1. Fetch layouts
         stmt = select(PrecomputedLayout).where(PrecomputedLayout.family_hash.in_(family_hashes))
@@ -45,7 +100,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
         
         for layout in layouts:
             try:
-                # Get node IDs from fingerprint
+                # ... (node/link fetching logic remains same) ...
                 fingerprint = layout.data_fingerprint
                 node_ids = fingerprint.get("node_ids", [])
                 
@@ -53,14 +108,10 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                     logger.warning(f"Empty node_ids for layout {layout.family_hash}")
                     continue
                 
-                # 2. Fetch fresh data
                 nodes_stmt = select(TeamNode).where(TeamNode.node_id.in_(node_ids))
                 nodes_res = await db.execute(nodes_stmt)
                 nodes = nodes_res.scalars().all()
                 
-                # Fetch links between these nodes
-                # We assume CLOSED world (only optimizing existing set)
-                # In full implementation, we'd check for new external connections
                 links_stmt = select(LineageEvent).where(
                     or_(
                         LineageEvent.predecessor_node_id.in_(node_ids),
@@ -70,69 +121,36 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 links_res = await db.execute(links_stmt)
                 links = links_res.scalars().all()
                 
-                # Filter links to only those where both ends are in our set
-                # (or should we include all? If we include external links, we miss the external nodes)
-                # For safety, keep closed world:
                 valid_node_ids = set(str(n.node_id) for n in nodes)
                 valid_links = []
                 for link in links:
-                    p_id = str(link.predecessor_node_id)
-                    s_id = str(link.successor_node_id)
-                    if p_id in valid_node_ids and s_id in valid_node_ids:
+                    if str(link.predecessor_node_id) in valid_node_ids and str(link.successor_node_id) in valid_node_ids:
                         valid_links.append(link)
                 
-                # 3. Prepare data for optimizer using chain builder (matches frontend logic)
                 from app.optimizer.chain_builder import build_chains
-                
                 current_year = datetime.now().year
-                
-                # Convert ORM nodes to dict format for chain builder
-                nodes_data = []
-                for node in nodes:
-                    nodes_data.append({
-                        "id": str(node.node_id),
-                        "founding_year": node.founding_year,
-                        "dissolution_year": node.dissolution_year,
-                        "name": node.legal_name
-                    })
-                    
-                links_data = []
-                for link in valid_links:
-                    links_data.append({
-                        "id": str(link.event_id),
-                        "parentId": str(link.predecessor_node_id),
-                        "childId": str(link.successor_node_id),
-                        "time": link.event_year
-                    })
-                
-                # Build chains using frontend-matching logic
+                nodes_data = [{"id": str(node.node_id), "founding_year": node.founding_year, "dissolution_year": node.dissolution_year, "name": node.legal_name} for node in nodes]
+                links_data = [{"id": str(link.event_id), "parentId": str(link.predecessor_node_id), "childId": str(link.successor_node_id), "time": link.event_year} for link in valid_links]
                 chains_data = build_chains(nodes_data, links_data, current_year)
                 
-                logger.info(f"Built {len(chains_data)} chains from {len(nodes_data)} nodes")
+                family_data = {"chains": chains_data, "links": links_data}
                 
-                family_data = {
-                    "chains": chains_data,
-                    "links": links_data
-                }
-                
-                # 4. Run Optimizer
-                # Run in thread to allow API status updates (non-blocking)
+                # 3. Run Optimizer
                 opt_result = await asyncio.to_thread(
                     optimizer.optimize, 
                     family_data, 
                     timeout_seconds=optimizer.timeout_seconds
                 )
                 
-                # 5. Update Layout
-                # Store only the Y-index mapping (chainId -> yIndex)
-                # Frontend expects: { "chain-id-1": 0, "chain-id-2": 1, ... }
-                y_indices = opt_result["y_indices"]
+                # 4. Persistence & Logging
+                append_optimizer_log(layout.family_hash, opt_result, full_config)
                 
-                # Generate new fingerprint (might have changed if dates changed)
+                # 5. Update Layout
+                y_indices = opt_result["y_indices"]
                 new_fingerprint = generate_family_fingerprint(family_data, links_data)
                 new_hash = compute_family_hash(new_fingerprint)
                 
-                layout.layout_data = y_indices  # Store ONLY the y-index mapping
+                layout.layout_data = y_indices
                 layout.data_fingerprint = new_fingerprint
                 layout.family_hash = new_hash
                 layout.score = opt_result["score"]
@@ -144,7 +162,6 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 logger.error(f"Error optimizing family {layout.family_hash}: {e}")
                 _optimization_status["last_error"] = str(e)
         
-        # Don't commit here - the wrapper's session.begin() context manager handles it
         logger.info(f"Optimization complete. Updated {len(layouts)} families.")
         
     except Exception as e:

@@ -103,6 +103,32 @@ async def get_status(
     """Get optimizer status."""
     return get_optimization_status()
 
+@router.get("/families/{family_hash}/logs")
+async def get_family_logs(
+    family_hash: str,
+    user = Depends(require_admin)
+):
+    """
+    Retrieve the log file for a specific family.
+    """
+    from app.optimizer.runner import OPTIMIZER_LOGS_DIR
+    import os
+    
+    log_path = os.path.join(OPTIMIZER_LOGS_DIR, f"family_{family_hash}.log")
+    
+    if not os.path.exists(log_path):
+        # Return empty list or 404? 
+        # Scraper logs usually return empty if not found or a placeholder.
+        # Let's return a 404 if the file doesn't exist to be explicit.
+        raise HTTPException(status_code=404, detail="Log file not found for this family")
+    
+    try:
+        with open(log_path, "r") as f:
+            lines = f.readlines()
+        return lines
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
+
 
 # Helper for background task session management
 async def run_optimization_wrapper(hashes: List[str]):
