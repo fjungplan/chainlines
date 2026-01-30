@@ -33,7 +33,9 @@ describe('GeneticAlgorithmSection', () => {
         );
 
         expect(screen.getByLabelText(/Population Size/i)).toHaveValue(1000);
-        expect(screen.getByLabelText(/Generations/i)).toHaveValue(5000);
+        expect(screen.getAllByLabelText(/Generations/i)[0]).toHaveValue(5000);
+        expect(screen.getByLabelText(/Patience \(generations\)/i)).toHaveValue(500);
+        expect(screen.getByLabelText(/Timeout \(seconds\)/i)).toHaveValue(3600);
         expect(screen.getByLabelText(/Mutation Rate/i)).toHaveValue('0.2');
         expect(screen.getByLabelText(/Tournament Size/i)).toHaveValue('10');
     });
