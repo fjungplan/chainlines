@@ -46,6 +46,7 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
     pop = ga_config.get("POP_SIZE", "N/A")
     mut = ga_config.get("MUTATION_RATE", "N/A")
     pat = ga_config.get("PATIENCE", "N/A")
+    tourney = ga_config.get("TOURNAMENT_SIZE", "N/A")
     timeout = ga_config.get("TIMEOUT_SECONDS", "N/A")
     strategies = config.get("MUTATION_STRATEGIES", {})
     strat_str = ", ".join([f"{k}: {v}" for k, v in strategies.items()])
@@ -58,7 +59,7 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
     log_entry = [
         f"[{timestamp}] OPTIMIZATION COMPLETE",
         f"- Outcome: Score {score:.2f} (Achieved at Gen {best_gen} / {total_gens})",
-        f"- Configuration: Pop {pop}, Mut {mut}, Pat {pat}, Timeout {timeout}s",
+        f"- Configuration: Pop {pop}, Mut {mut}, Tourney {tourney}, Pat {pat}, Timeout {timeout}s",
         f"- Mutation Strategies: {strat_str}",
         f"- Layout: {len(results.get('y_indices', {}))} chains in {lane_count} lanes",
         "- Penalties:"
