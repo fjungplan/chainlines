@@ -1,5 +1,7 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Union, Any
+import json
 
 
 class Settings(BaseSettings):
@@ -19,7 +21,21 @@ class Settings(BaseSettings):
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
-    ],
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, str) and v.startswith("["):
+            return json.loads(v)
+        elif isinstance(v, list):
+            # If it's already a list, ensure it's not a nested list like [['a', 'b']]
+            if len(v) == 1 and isinstance(v[0], list):
+                return v[0]
+            return v
+        return v
 
     # Timeline cache
     TIMELINE_CACHE_ENABLED: bool = False
