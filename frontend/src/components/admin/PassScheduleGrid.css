@@ -1,0 +1,100 @@
+/* PassScheduleGrid Styling */
+
+.pass-schedule-grid {
+    margin: 1.5rem 0;
+}
+
+.pass-schedule-grid table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.pass-schedule-grid th,
+.pass-schedule-grid td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pass-schedule-grid th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pass-schedule-grid tbody tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.pass-schedule-grid input[type="number"] {
+    width: 80px;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.pass-schedule-grid input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.strategy-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.strategy-option {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.85rem;
+}
+
+.strategy-option:hover:not(.disabled) {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.strategy-option.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.strategy-option input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.strategy-option.disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+.strategy-option span {
+    user-select: none;
+}
+
+.pass-schedule-grid .btn-danger {
+    background: #e74c3c;
+    color: white;
+    border: none;
+}
+
+.pass-schedule-grid .btn-danger:hover:not(:disabled) {
+    background: #c0392b;
+}
+
+.pass-schedule-grid .btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
