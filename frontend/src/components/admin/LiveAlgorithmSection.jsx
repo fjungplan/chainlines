@@ -28,39 +28,48 @@ export default function LiveAlgorithmSection({ config, onChange }) {
     };
 
     return (
-        <div className="live-algorithm-section">
+        <div className="settings-section live-algorithm-section">
             <h2>Live Algorithm</h2>
 
-            <div className="section-group">
-                <h3>Groupwise Parameters</h3>
-                <div className="field-grid">
+            <div className="settings-subsection">
+                <h3>Groupwise Parameters (Simulated Annealing)</h3>
+                <div className="grid-4">
                     <NumberField
-                        label="Min Family Size"
-                        value={config.GROUPWISE.MIN_FAMILY_SIZE}
-                        onChange={(val) => handleGroupwiseChange('MIN_FAMILY_SIZE', val)}
+                        label="Max Rigid Delta"
+                        value={config.GROUPWISE.MAX_RIGID_DELTA}
+                        onChange={(val) => handleGroupwiseChange('MAX_RIGID_DELTA', val)}
                         min={1}
                         max={100}
-                        tooltip="Minimum number of teams in a family to apply groupwise optimization"
+                        tooltip="Maximum allowed movement for rigid group moves"
                     />
                     <NumberField
-                        label="Min Links"
-                        value={config.GROUPWISE.MIN_LINKS}
-                        onChange={(val) => handleGroupwiseChange('MIN_LINKS', val)}
+                        label="SA Max Iterations"
+                        value={config.GROUPWISE.SA_MAX_ITER}
+                        onChange={(val) => handleGroupwiseChange('SA_MAX_ITER', val)}
+                        min={1}
+                        max={1000}
+                        tooltip="Maximum iterations for Simulated Annealing"
+                    />
+                    <NumberField
+                        label="SA Initial Temp"
+                        value={config.GROUPWISE.SA_INITIAL_TEMP}
+                        onChange={(val) => handleGroupwiseChange('SA_INITIAL_TEMP', val)}
+                        min={1}
+                        max={1000}
+                        tooltip="Initial temperature for Simulated Annealing"
+                    />
+                    <NumberField
+                        label="Search Radius"
+                        value={config.GROUPWISE.SEARCH_RADIUS}
+                        onChange={(val) => handleGroupwiseChange('SEARCH_RADIUS', val)}
                         min={1}
                         max={100}
-                        tooltip="Minimum number of links required for groupwise optimization"
+                        tooltip="Radius for local search in groupwise optimization"
                     />
                 </div>
-
-                <ToggleField
-                    label="Enable Scoreboard"
-                    checked={config.GROUPWISE.ENABLE_SCOREBOARD}
-                    onChange={(val) => handleGroupwiseChange('ENABLE_SCOREBOARD', val)}
-                    tooltip="Display live scoreboard during optimization"
-                />
             </div>
 
-            <div className="section-group">
+            <div className="settings-subsection">
                 <h3>Pass Schedule</h3>
                 <PassScheduleGrid
                     schedule={config.PASS_SCHEDULE}

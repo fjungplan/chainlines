@@ -44,7 +44,91 @@
     gap: 1rem;
     margin-top: 2rem;
     padding-top: 2rem;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--color-border);
+}
+
+/* Standardized Settings Containers */
+.settings-section {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    margin-bottom: var(--spacing-xl);
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+}
+
+.settings-subsection {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.settings-subsection:last-child {
+    margin-bottom: 0;
+}
+
+/* Standardized Typography for Settings */
+.settings-section h2 {
+    margin-top: 0;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-light);
+}
+
+.settings-subsection h3 {
+    margin-top: 0;
+    margin-bottom: var(--spacing-md);
+    color: var(--color-text-primary);
+    font-size: 1.2rem;
+}
+
+/* Specific Grid Layouts */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    column-gap: var(--spacing-2xl);
+    position: relative;
+}
+
+.grid-2::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--color-border);
+    opacity: 0.5;
+}
+
+.grid-2.no-divider::before {
+    display: none;
+}
+
+.grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-lg);
+}
+
+/* Top-level toggle in a section */
+.scoreboard-toggle-wrapper {
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: rgba(46, 144, 226, 0.1);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(46, 144, 226, 0.2);
+}
+
+.scoreboard-toggle-wrapper .toggle-field {
+    margin-bottom: 0;
 }
 
 .alert {

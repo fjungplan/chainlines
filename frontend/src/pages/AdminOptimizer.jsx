@@ -125,11 +125,6 @@ export default function AdminOptimizer() {
                         </Link>
                         <h1>Layout Optimizer</h1>
                     </div>
-                    <div className="header-right">
-                        <Link to="/admin/optimizer/settings" className="btn btn-secondary btn-sm">
-                            Settings
-                        </Link>
-                    </div>
                 </div>
 
                 <div className="optimizer-dashboard" style={{ flex: 1, overflowY: 'auto' }}>
@@ -163,6 +158,9 @@ export default function AdminOptimizer() {
                         <button className="btn btn-secondary" onClick={fetchFamilies} disabled={loading}>
                             Refresh List
                         </button>
+                        <Link to="/admin/optimizer/settings" className="btn btn-secondary" style={{ marginLeft: 'auto' }}>
+                            Settings
+                        </Link>
                     </div>
 
                     <div className="table-responsive" style={{ overflowX: 'auto' }}>

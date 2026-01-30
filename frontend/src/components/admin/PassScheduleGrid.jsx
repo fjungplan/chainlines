@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from '../common/Button';
 import './PassScheduleGrid.css';
 
 /**
@@ -15,8 +16,8 @@ export default function PassScheduleGrid({ schedule, onChange }) {
             {
                 strategies: [],
                 iterations: 100,
-                min_family_size: 3,
-                min_links: 2
+                minFamilySize: 3,
+                minLinks: 2
             }
         ]);
     };
@@ -76,7 +77,7 @@ export default function PassScheduleGrid({ schedule, onChange }) {
                         <th>Iterations</th>
                         <th>Min Family</th>
                         <th>Min Links</th>
-                        <th>Actions</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -117,8 +118,8 @@ export default function PassScheduleGrid({ schedule, onChange }) {
                             <td>
                                 <input
                                     type="number"
-                                    value={pass.min_family_size}
-                                    onChange={(e) => handleFieldChange(index, 'min_family_size', e.target.value)}
+                                    value={pass.minFamilySize}
+                                    onChange={(e) => handleFieldChange(index, 'minFamilySize', e.target.value)}
                                     min={1}
                                     max={100}
                                 />
@@ -126,32 +127,36 @@ export default function PassScheduleGrid({ schedule, onChange }) {
                             <td>
                                 <input
                                     type="number"
-                                    value={pass.min_links}
-                                    onChange={(e) => handleFieldChange(index, 'min_links', e.target.value)}
+                                    value={pass.minLinks}
+                                    onChange={(e) => handleFieldChange(index, 'minLinks', e.target.value)}
                                     min={1}
                                     max={100}
                                 />
                             </td>
-                            <td>
-                                <button
-                                    className="btn btn-sm btn-danger"
+                            <td style={{ textAlign: 'right' }}>
+                                <Button
+                                    variant="danger"
+                                    size="sm"
                                     onClick={() => handleRemoveRow(index)}
                                     disabled={schedule.length === 1}
                                     title="Remove this pass"
                                 >
                                     Remove
-                                </button>
+                                </Button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
-            <button
-                className="btn btn-primary btn-sm"
-                onClick={handleAddRow}
-            >
-                + Add Pass
-            </button>
+            <div className="grid-footer">
+                <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleAddRow}
+                >
+                    + Add Pass
+                </Button>
+            </div>
         </div>
     );
 }

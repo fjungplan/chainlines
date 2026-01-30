@@ -7,14 +7,14 @@ describe('PassScheduleGrid', () => {
         {
             strategies: ['PARENTS', 'CHILDREN'],
             iterations: 100,
-            min_family_size: 3,
-            min_links: 2
+            minFamilySize: 3,
+            minLinks: 2
         },
         {
             strategies: ['HYBRID'],
             iterations: 50,
-            min_family_size: 5,
-            min_links: 3
+            minFamilySize: 5,
+            minLinks: 3
         }
     ];
 
@@ -64,8 +64,8 @@ describe('PassScheduleGrid', () => {
             {
                 strategies: [],
                 iterations: 100,
-                min_family_size: 3,
-                min_links: 2
+                minFamilySize: 3,
+                minLinks: 2
             }
         ]);
     });
@@ -89,8 +89,8 @@ describe('PassScheduleGrid', () => {
         const singleRowSchedule = [{
             strategies: [],
             iterations: 100,
-            min_family_size: 3,
-            min_links: 2
+            minFamilySize: 3,
+            minLinks: 2
         }];
 
         const handleChange = vi.fn();
@@ -127,8 +127,8 @@ describe('PassScheduleGrid', () => {
         const singleRowSchedule = [{
             strategies: [],
             iterations: 100,
-            min_family_size: 3,
-            min_links: 2
+            minFamilySize: 3,
+            minLinks: 2
         }];
 
         const handleChange = vi.fn();

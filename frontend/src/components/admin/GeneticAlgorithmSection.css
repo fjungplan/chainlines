@@ -1,16 +1,10 @@
 /* GeneticAlgorithmSection Styling */
 
 .ga-section .grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
     margin-bottom: 1rem;
 }
 
 .mutation-group {
-    background: rgba(0, 0, 0, 0.1);
-    padding: 1rem;
-    border-radius: 8px;
     margin-top: 1rem;
 }
 

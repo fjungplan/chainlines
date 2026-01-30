@@ -17,6 +17,9 @@ describe('GeneticAlgorithmSection', () => {
             HEURISTIC: 0.2,
             COMPACTION: 0.3,
             EXPLORATION: 0.3
+        },
+        SCOREBOARD: {
+            ENABLED: true
         }
     };
 
@@ -48,6 +51,19 @@ describe('GeneticAlgorithmSection', () => {
         expect(screen.getByLabelText(/Heuristic probability/i)).toHaveValue('0.2');
         expect(screen.getByLabelText(/Compaction probability/i)).toHaveValue('0.3');
         expect(screen.getByLabelText(/Exploration probability/i)).toHaveValue('0.3');
+    });
+
+    it('renders scoreboard toggle', () => {
+        render(
+            <GeneticAlgorithmSection
+                config={mockConfig}
+                onChange={() => { }}
+                onError={() => { }}
+            />
+        );
+
+        const toggle = screen.getByRole('checkbox', { name: /Enable Scoreboard/i });
+        expect(toggle).toBeChecked();
     });
 
     it('displays total sum correctly', () => {
@@ -120,5 +136,23 @@ describe('GeneticAlgorithmSection', () => {
         );
 
         expect(handleError).toHaveBeenCalledWith(true); // Error present
+    });
+
+    it('calls onChange when scoreboard toggle changes', () => {
+        const handleChange = vi.fn();
+        render(
+            <GeneticAlgorithmSection
+                config={mockConfig}
+                onChange={handleChange}
+                onError={() => { }}
+            />
+        );
+
+        const toggle = screen.getByRole('checkbox', { name: /Enable Scoreboard/i });
+        fireEvent.click(toggle);
+
+        expect(handleChange).toHaveBeenCalled();
+        const updatedConfig = handleChange.mock.calls[0][0];
+        expect(updatedConfig.SCOREBOARD.ENABLED).toBe(false);
     });
 });

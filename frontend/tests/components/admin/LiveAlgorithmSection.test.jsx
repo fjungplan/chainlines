@@ -5,16 +5,20 @@ import LiveAlgorithmSection from '../../../src/components/admin/LiveAlgorithmSec
 describe('LiveAlgorithmSection', () => {
     const mockConfig = {
         GROUPWISE: {
-            MIN_FAMILY_SIZE: 3,
-            MIN_LINKS: 2,
-            ENABLE_SCOREBOARD: true
+            MAX_RIGID_DELTA: 20,
+            SA_MAX_ITER: 50,
+            SA_INITIAL_TEMP: 100,
+            SEARCH_RADIUS: 10
+        },
+        SCOREBOARD: {
+            ENABLED: true
         },
         PASS_SCHEDULE: [
             {
                 strategies: ['PARENTS', 'CHILDREN'],
                 iterations: 100,
-                min_family_size: 3,
-                min_links: 2
+                minFamilySize: 3,
+                minLinks: 2
             }
         ]
     };
@@ -27,21 +31,13 @@ describe('LiveAlgorithmSection', () => {
             />
         );
 
-        expect(screen.getByLabelText(/Min Family Size/i)).toHaveValue(3);
-        expect(screen.getByLabelText(/Min Links/i)).toHaveValue(2);
+        expect(screen.getByLabelText(/Max Rigid Delta/i)).toHaveValue(20);
+        expect(screen.getByLabelText(/SA Max Iterations/i)).toHaveValue(50);
+        expect(screen.getByLabelText(/SA Initial Temp/i)).toHaveValue(100);
+        expect(screen.getByLabelText(/Search Radius/i)).toHaveValue(10);
     });
 
-    it('renders scoreboard toggle', () => {
-        render(
-            <LiveAlgorithmSection
-                config={mockConfig}
-                onChange={() => { }}
-            />
-        );
 
-        const toggle = screen.getByRole('checkbox', { name: /Enable Scoreboard/i });
-        expect(toggle).toBeChecked();
-    });
 
     it('renders PassScheduleGrid', () => {
         render(
@@ -64,30 +60,15 @@ describe('LiveAlgorithmSection', () => {
             />
         );
 
-        const minFamilyInput = screen.getByLabelText(/Min Family Size/i);
-        fireEvent.change(minFamilyInput, { target: { value: '5' } });
+        const deltaInput = screen.getByLabelText(/Max Rigid Delta/i);
+        fireEvent.change(deltaInput, { target: { value: '25' } });
 
         expect(handleChange).toHaveBeenCalled();
         const updatedConfig = handleChange.mock.calls[0][0];
-        expect(updatedConfig.GROUPWISE.MIN_FAMILY_SIZE).toBe(5);
+        expect(updatedConfig.GROUPWISE.MAX_RIGID_DELTA).toBe(25);
     });
 
-    it('calls onChange when scoreboard toggle changes', () => {
-        const handleChange = vi.fn();
-        render(
-            <LiveAlgorithmSection
-                config={mockConfig}
-                onChange={handleChange}
-            />
-        );
 
-        const toggle = screen.getByRole('checkbox', { name: /Enable Scoreboard/i });
-        fireEvent.click(toggle);
-
-        expect(handleChange).toHaveBeenCalled();
-        const updatedConfig = handleChange.mock.calls[0][0];
-        expect(updatedConfig.GROUPWISE.ENABLE_SCOREBOARD).toBe(false);
-    });
 
     it('calls onChange when PassScheduleGrid changes', () => {
         const handleChange = vi.fn();

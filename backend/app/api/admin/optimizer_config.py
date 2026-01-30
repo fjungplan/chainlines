@@ -57,8 +57,11 @@ class GeneticAlgorithmConfig(BaseModel):
 class PassStrategy(BaseModel):
     strategies: List[str]
     iterations: int = Field(gt=0)
-    minFamilySize: int = Field(ge=0)
-    minLinks: int = Field(ge=0)
+    minFamilySize: int = Field(ge=0, alias="min_family_size")
+    minLinks: int = Field(ge=0, alias="min_links")
+    
+    class Config:
+        populate_by_name = True  # Allow both camelCase and snake_case
 
 class LayoutConfig(BaseModel):
     GROUPWISE: Dict[str, Any]
@@ -79,23 +82,29 @@ def load_config() -> dict:
         return json.load(f)
 
 def save_config(config: dict):
-    # Save to Backend
+    """Save config with atomic write to prevent corruption."""
+    import tempfile
+    
     try:
-        with open(BACKEND_CONFIG_PATH, "w") as f:
-            json.dump(config, f, indent=4)
-    except Exception as e:
-        logger.error(f"Failed to save backend config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save backend config: {str(e)}")
-
-    # Sync to Frontend (Best Effort)
-    try:
-        if os.path.exists(os.path.dirname(FRONTEND_CONFIG_PATH)):
-            with open(FRONTEND_CONFIG_PATH, "w") as f:
+        # Write to temporary file first
+        temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(BACKEND_CONFIG_PATH), suffix='.json')
+        try:
+            with os.fdopen(temp_fd, 'w') as f:
                 json.dump(config, f, indent=4)
-        else:
-            logger.warning(f"Frontend config path not found, skipping sync: {FRONTEND_CONFIG_PATH}")
+            
+            # Atomic rename (overwrites existing file)
+            os.replace(temp_path, BACKEND_CONFIG_PATH)
+            logger.info(f"Configuration saved successfully to {BACKEND_CONFIG_PATH}")
+        except Exception as e:
+            # Clean up temp file if something went wrong
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+            raise e
     except Exception as e:
-        logger.warning(f"Failed to sync frontend config: {e}")
+        logger.error(f"Failed to save config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
 
 # --- Endpoints ---
 

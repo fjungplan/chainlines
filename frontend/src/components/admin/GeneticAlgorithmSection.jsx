@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import SliderField from './fields/SliderField';
 import NumberField from './fields/NumberField';
+import ToggleField from './fields/ToggleField';
 import './GeneticAlgorithmSection.css';
 
 /**
@@ -12,6 +13,7 @@ import './GeneticAlgorithmSection.css';
 export default function GeneticAlgorithmSection({ config, onChange, onError }) {
     const gaConfig = config.GENETIC_ALGORITHM;
     const strategies = config.MUTATION_STRATEGIES;
+    const scoreboard = config.SCOREBOARD;
 
     // Calculate sum of mutation strategies
     const totalProbability = useMemo(() => {
@@ -48,13 +50,32 @@ export default function GeneticAlgorithmSection({ config, onChange, onError }) {
         });
     };
 
+    const handleScoreboardChange = (value) => {
+        onChange({
+            ...config,
+            SCOREBOARD: {
+                ...scoreboard,
+                ENABLED: value
+            }
+        });
+    };
+
     return (
         <div className="settings-section ga-section">
             <h2>Genetic Algorithm</h2>
 
-            <div className="section-group">
+            <div className="scoreboard-toggle-wrapper">
+                <ToggleField
+                    label="Enable Scoreboard"
+                    checked={scoreboard.ENABLED}
+                    onChange={handleScoreboardChange}
+                    tooltip="Display live scoreboard during optimization (saves scores to disk)"
+                />
+            </div>
+
+            <div className="settings-subsection">
                 <h3>Population Parameters</h3>
-                <div className="grid-2">
+                <div className="grid-2 no-divider">
                     <NumberField
                         label="Population Size"
                         value={gaConfig.POP_SIZE}
@@ -97,49 +118,51 @@ export default function GeneticAlgorithmSection({ config, onChange, onError }) {
                 </div>
             </div>
 
-            <div className="section-group mutation-group">
+            <div className="settings-subsection mutation-group">
                 <h3>Mutation Strategies</h3>
                 <div className={`validation-status ${isValid ? 'valid' : 'invalid'}`} data-testid="validation-status">
                     <span>Total Probability: {totalProbability.toFixed(2)}</span>
                     {!isValid && <span className="error-msg"> (Must sum to 1.0)</span>}
                 </div>
 
-                <SliderField
-                    label="Swap Probability"
-                    value={strategies.SWAP}
-                    onChange={(val) => handleStrategyChange('SWAP', val)}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    tooltip="Probability of swapping two nodes"
-                />
-                <SliderField
-                    label="Heuristic Probability"
-                    value={strategies.HEURISTIC}
-                    onChange={(val) => handleStrategyChange('HEURISTIC', val)}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    tooltip="Probability of heuristic improvement"
-                />
-                <SliderField
-                    label="Compaction Probability"
-                    value={strategies.COMPACTION}
-                    onChange={(val) => handleStrategyChange('COMPACTION', val)}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    tooltip="Probability of compacting layout"
-                />
-                <SliderField
-                    label="Exploration Probability"
-                    value={strategies.EXPLORATION}
-                    onChange={(val) => handleStrategyChange('EXPLORATION', val)}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    tooltip="Probability of varying layout randomly"
-                />
+                <div className="grid-2">
+                    <SliderField
+                        label="Swap Probability"
+                        value={strategies.SWAP}
+                        onChange={(val) => handleStrategyChange('SWAP', val)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        tooltip="Probability of swapping two nodes"
+                    />
+                    <SliderField
+                        label="Heuristic Probability"
+                        value={strategies.HEURISTIC}
+                        onChange={(val) => handleStrategyChange('HEURISTIC', val)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        tooltip="Probability of heuristic improvement"
+                    />
+                    <SliderField
+                        label="Compaction Probability"
+                        value={strategies.COMPACTION}
+                        onChange={(val) => handleStrategyChange('COMPACTION', val)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        tooltip="Probability of compacting layout"
+                    />
+                    <SliderField
+                        label="Exploration Probability"
+                        value={strategies.EXPLORATION}
+                        onChange={(val) => handleStrategyChange('EXPLORATION', val)}
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        tooltip="Probability of varying layout randomly"
+                    />
+                </div>
             </div>
         </div>
     );
