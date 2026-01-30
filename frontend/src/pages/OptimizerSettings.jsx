@@ -64,7 +64,7 @@ export default function OptimizerSettings() {
             ...config,
             SEARCH_RADIUS: updatedSharedConfig.SEARCH_RADIUS,
             TARGET_RADIUS: updatedSharedConfig.TARGET_RADIUS,
-            SCORES: updatedSharedConfig.SCORES
+            WEIGHTS: updatedSharedConfig.WEIGHTS
         });
     };
 

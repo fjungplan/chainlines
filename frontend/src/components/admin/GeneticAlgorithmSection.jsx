@@ -12,7 +12,12 @@ import './GeneticAlgorithmSection.css';
  */
 export default function GeneticAlgorithmSection({ config, onChange, onError }) {
     const gaConfig = config.GENETIC_ALGORITHM;
-    const strategies = config.MUTATION_STRATEGIES;
+    const strategies = config.MUTATION_STRATEGIES || {
+        SWAP: 0.2,
+        HEURISTIC: 0.2,
+        COMPACTION: 0.3,
+        EXPLORATION: 0.3
+    };
     const scoreboard = config.SCOREBOARD;
 
     // Calculate sum of mutation strategies

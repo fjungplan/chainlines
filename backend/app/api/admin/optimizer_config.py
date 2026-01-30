@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Optional
 import json
 import os
 import shutil
+import time
 import logging
 
 router = APIRouter()
@@ -82,8 +83,12 @@ def load_config() -> dict:
         return json.load(f)
 
 def save_config(config: dict):
-    """Save config with atomic write to prevent corruption."""
+    """Save config with atomic write and sync to frontend."""
     import tempfile
+    
+    # 1. Update Backend Config
+    success = False
+    last_error = None
     
     try:
         # Write to temporary file first
@@ -92,19 +97,40 @@ def save_config(config: dict):
             with os.fdopen(temp_fd, 'w') as f:
                 json.dump(config, f, indent=4)
             
-            # Atomic rename (overwrites existing file)
-            os.replace(temp_path, BACKEND_CONFIG_PATH)
+            # Use retry loop for atomic rename (Docker/Bind-mount resilience)
+            for i in range(5):
+                try:
+                    os.replace(temp_path, BACKEND_CONFIG_PATH)
+                    success = True
+                    break
+                except OSError as e:
+                    last_error = e
+                    time.sleep(0.1)
+            
+            if not success:
+                # Fallback to direct write if rename fails (e.g. Device busy)
+                logger.warning(f"Atomic rename failed, falling back to direct write: {last_error}")
+                with open(BACKEND_CONFIG_PATH, "w") as f:
+                    json.dump(config, f, indent=4)
+                success = True
+                
             logger.info(f"Configuration saved successfully to {BACKEND_CONFIG_PATH}")
-        except Exception as e:
-            # Clean up temp file if something went wrong
-            try:
-                os.unlink(temp_path)
-            except:
-                pass
-            raise e
+            
+            # 2. Sync to Frontend (if path exists)
+            if success and os.path.exists(os.path.dirname(FRONTEND_CONFIG_PATH)):
+                shutil.copy2(BACKEND_CONFIG_PATH, FRONTEND_CONFIG_PATH)
+                logger.info(f"Configuration synced to {FRONTEND_CONFIG_PATH}")
+                
+        finally:
+            # Clean up temp file if it still exists
+            if os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
     except Exception as e:
         logger.error(f"Failed to save config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save configuration: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Endpoints ---
 
