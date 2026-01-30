@@ -240,9 +240,8 @@ export class LayoutCalculator {
     let bestMatch = null;
     let maxOverlap = 0;
 
-    for (const [key, layout] of Object.entries(this.precomputedLayouts)) {
-      // Key is CSV of IDs
-      const cachedIds = key.split(',');
+    for (const layout of Object.values(this.precomputedLayouts)) {
+      const cachedIds = layout.data_fingerprint?.node_ids || [];
       let overlap = 0;
       for (const id of cachedIds) {
         if (currentNodeIds.has(id)) overlap++;

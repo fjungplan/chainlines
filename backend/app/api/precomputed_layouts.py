@@ -43,9 +43,7 @@ async def get_precomputed_layouts(
         
         # Convert to strings (in case they're UUIDs) and sort
         node_id_strings = [str(nid) for nid in node_ids]
-        simple_key = ",".join(sorted(node_id_strings))
-        
-        response[simple_key] = {
+        response[layout.family_hash] = {
             "layout_data": layout.layout_data,
             "score": layout.score,
             "optimized_at": layout.optimized_at.isoformat() if layout.optimized_at else None,

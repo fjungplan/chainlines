@@ -8,6 +8,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 
+logger = logging.getLogger(__name__)
+
 from app.models.precomputed_layout import PrecomputedLayout
 from app.models.team import TeamNode
 from app.models.lineage import LineageEvent
@@ -19,6 +21,13 @@ import os
 # Define log directory relative to backend
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OPTIMIZER_LOGS_DIR = os.path.join(BACKEND_DIR, "logs", "optimizer")
+
+# Global status tracking for background tasks
+_optimization_status = {
+    "active_tasks": 0,
+    "last_run": None,
+    "last_error": None
+}
 
 def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict[str, Any]):
     """Append a formatted optimization result to the family-specific log file."""
