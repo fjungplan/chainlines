@@ -1,43 +1,4 @@
 /* Scraper Maintenance Page Styles */
-/* Header Styling */
-.scraper-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 3px solid var(--color-primary);
-    padding-bottom: 15px;
-}
-
-.scraper-header .header-left {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.scraper-header h1 {
-    margin: 0;
-    font-size: 32px;
-    color: var(--color-text-light);
-}
-
-.back-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-light);
-    transition: background-color var(--transition-fast);
-}
-
-.back-link:hover {
-    background-color: var(--color-primary);
-    color: white;
-    text-decoration: none;
-}
 
 /* Main Control Layout - Split View */
 .scraper-controls-row {

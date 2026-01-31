@@ -1,5 +1,3 @@
-
-
 services:
   # --- The Gatekeeper (Caddy) ---
   # Handles HTTPS and routes traffic to Frontend vs Backend
@@ -54,6 +52,8 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+    volumes:
+      - ./frontend/src/utils/layout/layout_config.json:/app/app/optimizer/layout_config.json
     depends_on:
       postgres:
         condition: service_healthy

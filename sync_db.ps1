@@ -29,7 +29,8 @@ if ($Mode -eq "pull") {
     Write-Host "   Restoring to local DB (Dropping existing)..."
     docker exec -i $ContainerName psql -U $DbUser -d postgres -c "DROP DATABASE IF EXISTS $DbName WITH (FORCE);"
     docker exec -i $ContainerName psql -U $DbUser -d postgres -c "CREATE DATABASE $DbName;"
-    Get-Content "./$TempDump" | docker exec -i $ContainerName psql -U $DbUser $DbName
+    # Use cmd /c to avoid PowerShell encoding (UTF-16) issues with < redirection
+    cmd /c "docker exec -i $ContainerName psql -U $DbUser $DbName < $TempDump"
     
     # 5. Cleanup Local
     Remove-Item "./$TempDump"

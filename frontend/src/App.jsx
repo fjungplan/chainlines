@@ -15,6 +15,8 @@ import TeamMaintenancePage from './pages/maintenance/TeamMaintenancePage';
 import LineageMaintenancePage from './pages/maintenance/LineageMaintenancePage';
 import ScraperMaintenancePage from './pages/maintenance/ScraperMaintenancePage';
 import UserMaintenancePage from './pages/maintenance/UserMaintenancePage';
+import AdminOptimizer from './pages/AdminOptimizer';
+import OptimizerSettings from './pages/OptimizerSettings';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
@@ -41,6 +43,8 @@ function App() {
             <Route path="maintenance/lineage" element={<LineageMaintenancePage />} />
             <Route path="admin/scraper" element={<ScraperMaintenancePage />} />
             <Route path="admin/users" element={<UserMaintenancePage />} />
+            <Route path="admin/optimizer" element={<AdminOptimizer />} />
+            <Route path="admin/optimizer/settings" element={<OptimizerSettings />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>

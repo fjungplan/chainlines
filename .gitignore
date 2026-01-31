@@ -47,6 +47,13 @@ docker-compose.override.yml
 htmlcov/
 backups/
 repomix-output.xml
+
+# LaTeX
+*.synctex.gz
+*.aux
+*.log
+*.out
+
 # Scraper Cache
 cache/
 scraper_checkpoint.json

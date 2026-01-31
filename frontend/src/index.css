@@ -383,6 +383,46 @@ a:focus-visible {
   color: var(--color-text-light);
 }
 
+/* Header Utilities */
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 3px solid var(--color-primary);
+  padding-bottom: 15px;
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 32px;
+  color: var(--color-text-light);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.back-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-light);
+  transition: background-color var(--transition-fast);
+}
+
+.back-link:hover {
+  background-color: var(--color-primary);
+  color: white;
+  text-decoration: none;
+}
+
 /* ===== BUTTONS ===== */
 /* Moved to src/components/common/Button.css */
 
@@ -434,9 +474,6 @@ textarea:focus {
 
 /* Numerator / Number Input Styling */
 /* Ensure the controls are dark mode appropriate */
-input[type="number"] {
-  /* color-scheme: dark; is already set globally, which should handle the scroll styling on supported browsers */
-}
 
 /* Just in case, explicit styling for webkit spin buttons if needed (often OS dependent) */
 ::-webkit-inner-spin-button,

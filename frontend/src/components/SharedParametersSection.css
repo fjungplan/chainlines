@@ -1,0 +1,32 @@
+/* SharedParametersSection Styling */
+
+.settings-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.settings-section h2 {
+    margin: 0 0 1.5rem 0;
+    font-size: 1.25rem;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--accent-primary);
+    padding-bottom: 0.5rem;
+}
+
+.section-group {
+    margin-bottom: 1.5rem;
+}
+
+.section-group:last-child {
+    margin-bottom: 0;
+}
+
+.section-group h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}

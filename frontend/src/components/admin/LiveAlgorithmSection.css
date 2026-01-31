@@ -1,0 +1,10 @@
+/* LiveAlgorithmSection Styling */
+
+/* Most styling is now handled by standardized .settings-section and .settings-subsection in OptimizerSettings.css */
+
+.live-algorithm-section .field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
