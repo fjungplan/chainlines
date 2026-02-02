@@ -173,3 +173,39 @@ class TestChainBuilder:
         assert len(chains[0]["nodes"]) == 2
         assert chains[0]["nodes"][0]["id"] == "A"
         assert chains[0]["nodes"][1]["id"] == "B"
+
+    def test_primary_predecessor_continuation(self):
+        """
+        Verify that if one parent connects at the child's birth (primary),
+        it claims the chain, ignoring other mergers.
+        
+        GBC (ends 1977) -> Malvor (starts 1978) [Time 1978] => Chain
+        Cilo (ends 1987) -> Malvor (starts 1978) [Time 1987] => Separate
+        """
+        nodes = [
+            {"id": "GBC", "founding_year": 1963, "dissolution_year": 1977, "name": "GBC"},
+            {"id": "Malvor", "founding_year": 1978, "dissolution_year": 1990, "name": "Malvor"},
+            {"id": "Cilo", "founding_year": 1978, "dissolution_year": 1987, "name": "Cilo"}
+        ]
+        
+        links = [
+            {"id": "L1", "parentId": "GBC", "childId": "Malvor", "time": 1978},
+            {"id": "L2", "parentId": "Cilo", "childId": "Malvor", "time": 1987}
+        ]
+        
+        chains = build_chains(nodes, links)
+        
+        # Should be 2 chains: [GBC, Malvor] and [Cilo]
+        assert len(chains) == 2
+        
+        gbc_chain = next((c for c in chains if c["id"] == "GBC"), None)
+        cilo_chain = next((c for c in chains if c["id"] == "Cilo"), None)
+        
+        assert gbc_chain is not None
+        assert len(gbc_chain["nodes"]) == 2
+        assert gbc_chain["nodes"][1]["id"] == "Malvor"
+        
+        assert cilo_chain is not None
+        assert len(cilo_chain["nodes"]) == 1
+        assert cilo_chain["nodes"][0]["id"] == "Cilo"
+

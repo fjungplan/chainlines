@@ -70,7 +70,7 @@ def generate_family_fingerprint(
     # Build link years map
     link_years = {}
     for link in links:
-        link_years[link["id"]] = link.get("time")
+        link_years[link["id"]] = link.get("year") or link.get("time")
     
     return {
         "node_ids": node_ids,

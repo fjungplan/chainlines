@@ -1064,7 +1064,7 @@ export default function TimelineGraph({
             })
             .on('mousemove', (event) => {
               if (tooltip.visible) {
-                setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
+                setTooltip(prev => ({ ...prev, position: { x: event.clientX, y: event.clientY } }));
               }
             })
             .on('mouseleave', (event) => {
@@ -1238,7 +1238,7 @@ export default function TimelineGraph({
     const thresholds = getThresholds();
     if (currentScale < thresholds.HIGH_DETAIL) {
       const content = TooltipBuilder.buildNodeTooltip(node);
-      setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+      setTooltip({ visible: true, content, position: { x: event.clientX, y: event.clientY } });
     }
   };
 
@@ -1254,7 +1254,7 @@ export default function TimelineGraph({
     // Note: Event might need to be stopped from propagating if necessary, but SVG events are specific.
     event.stopPropagation();
     const content = TooltipBuilder.buildEraTooltip(era, node);
-    setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+    setTooltip({ visible: true, content, position: { x: event.clientX, y: event.clientY } });
   };
 
   const handleEraHoverEnd = (event) => {

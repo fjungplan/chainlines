@@ -9,8 +9,11 @@ class GraphBuilder:
         sponsors = []
         for link in sorted(getattr(era, "sponsor_links", []), key=lambda l: getattr(l, "rank_order", 0)):
             brand = getattr(link, "brand", None)
-            # Defensive: prefer default_hex_color, fallback to #4A90E2
-            color = getattr(brand, "default_hex_color", None)
+            # Priority: 1. Link override, 2. Brand default, 3. Fallback blue
+            color = getattr(link, "hex_color_override", None)
+            if not color:
+                color = getattr(brand, "default_hex_color", None)
+                
             if not color or not isinstance(color, str) or not color.startswith('#') or len(color) != 7:
                 color = '#4A90E2'
             sponsors.append({

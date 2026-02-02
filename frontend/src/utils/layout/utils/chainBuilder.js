@@ -29,25 +29,70 @@ export function buildChains(nodes, links) {
     const chains = [];
     const visited = new Set();
 
+    // Link Map for fast lookup of {source, target} -> link year
+    const linkMap = new Map();
+    links.forEach(l => linkMap.set(`${l.source}-${l.target}`, l.year || l.event_year));
+
+    // Helper: Is this a "Primary Continuation" based on time?
+    // Matches backend logic: abs(linkYear - childStart) <= 1
+    const isPrimaryContinuation = (parentId, childId) => {
+        const linkYear = linkMap.get(`${parentId}-${childId}`);
+        const childNode = nodeMap.get(childId);
+        if (linkYear === undefined || !childNode) return false;
+
+        // Tolerance: +/- 1 year
+        return Math.abs(linkYear - childNode.founding_year) <= 1;
+    };
+
+    const currentYear = new Date().getFullYear();
+
+    const getEndYear = (node) => {
+        if (node.dissolution_year) {
+            return node.dissolution_year;
+        }
+        // Zombie Node Check: If no dissolution but has eras, use the last era
+        const eras = node.eras || [];
+        if (eras.length > 0) {
+            const maxEraYear = Math.max(...eras.map(e => e.year || 0));
+            if (maxEraYear > 0) return maxEraYear;
+        }
+        return currentYear;
+    };
+
+    // Helper: Get all primary predecessors for a node
+    const getPrimaryPredecessors = (nodeId) => {
+        const p = preds.get(nodeId) || [];
+        return p.filter(parentId => isPrimaryContinuation(parentId, nodeId));
+    };
+
     // 1. Identification of "Chain Starter" nodes
     const isChainStart = (nodeId) => {
         const p = preds.get(nodeId) || [];
-        if (p.length !== 1) return true; // 0 or >1 preds
+
+        // Case 1: No Predecessors -> Start
+        if (p.length === 0) return true;
+
+        // Case 2: Multiple Predecessors (Merge)
+        if (p.length > 1) {
+            // CHECK PRIORITY: If there is EXACTLY ONE primary predecessor,
+            // we do NOT start a chain (we let the primary parent continue).
+            const primaryPreds = getPrimaryPredecessors(nodeId);
+            if (primaryPreds.length === 1) return false;
+            return true; // Ambiguous or None -> Start new chain
+        }
+
+        // Case 3: Single Predecessor
         const parentId = p[0];
         const parentSuccs = succs.get(parentId) || [];
-        if (parentSuccs.length > 1) return true; // Parent splits
+
+        // Parent has multiple successors (Split) -> Start new chain
+        if (parentSuccs.length > 1) return true;
 
         // ALSO: Check for VISUAL overlap with the single parent.
         const parentNode = nodeMap.get(parentId);
         const myNode = nodeMap.get(nodeId);
 
-        let parentEnd = parentNode.dissolution_year;
-        if (!parentEnd) {
-            const lastEra = parentNode.eras && parentNode.eras.length > 0
-                ? parentNode.eras.reduce((max, era) => (!max || era.year > max.year ? era : max), null)
-                : null;
-            parentEnd = lastEra ? lastEra.year : parentNode.founding_year;
-        }
+        const parentEnd = getEndYear(parentNode);
 
         // Visual overlap check: parent renders to (parentEnd + 1), so check if that > myStart
         if (parentEnd + 1 > myNode.founding_year) return true; // Visual overlap, break chain
@@ -67,28 +112,33 @@ export function buildChains(nodes, links) {
                 chainNodes.push(nodeMap.get(curr));
 
                 const s = succs.get(curr) || [];
-                // Stop if:
-                // - No successors
-                // - > 1 successors (Split) -> curr is LAST in this chain
-                // - Successor has > 1 predecessors (Merge) -> succ is START of NEW chain
-                if (s.length !== 1) break;
+                // Stop if No Successors
+                if (s.length === 0) break;
+
+                // Handling Splits (current node has >1 successor)
+                if (s.length > 1) break;
 
                 const nextId = s[0];
                 const nextPreds = preds.get(nextId) || [];
-                if (nextPreds.length > 1) break;
+
+                // Handling Merges (next node has >1 predecessors)
+                if (nextPreds.length > 1) {
+                    // Only continue if 'curr' is the Primary Predecessor
+                    if (!isPrimaryContinuation(curr, nextId)) break;
+
+                    // AND if it is the ONLY primary predecessor
+                    const primaryPreds = getPrimaryPredecessors(nextId);
+                    if (primaryPreds.length !== 1) break;
+
+                    // Also verify we are that predecessor (implicit by length==1 check above + we are primary)
+                }
 
                 // Continue
                 // CRITICAL: Check for VISUAL overlap (Dirty Data Protection)
                 const currNode = nodeMap.get(curr);
                 const nextNode = nodeMap.get(nextId);
 
-                let currEnd = currNode.dissolution_year;
-                if (!currEnd) {
-                    const lastEra = currNode.eras && currNode.eras.length > 0
-                        ? currNode.eras.reduce((max, era) => (!max || era.year > max.year ? era : max), null)
-                        : null;
-                    currEnd = lastEra ? lastEra.year : currNode.founding_year;
-                }
+                const currEnd = getEndYear(currNode);
 
                 if (currEnd + 1 > nextNode.founding_year) {
                     // Visual overlap detected - break chain
@@ -99,10 +149,10 @@ export function buildChains(nodes, links) {
             }
 
             chains.push({
-                id: `chain-${chains.length}`,
+                id: chainNodes[0].id,
                 nodes: chainNodes,
                 startTime: chainNodes[0].founding_year,
-                endTime: chainNodes[chainNodes.length - 1].dissolution_year || 9999,
+                endTime: getEndYear(chainNodes[chainNodes.length - 1]),
                 yIndex: 0 // to be assigned
             });
         }
@@ -113,10 +163,10 @@ export function buildChains(nodes, links) {
         if (!visited.has(node.id)) {
             visited.add(node.id);
             chains.push({
-                id: `chain-${chains.length}`,
+                id: node.id,
                 nodes: [node],
                 startTime: node.founding_year,
-                endTime: node.dissolution_year || 9999,
+                endTime: getEndYear(node),
                 yIndex: 0
             });
         }

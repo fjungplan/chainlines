@@ -115,7 +115,66 @@ export function calculateSingleChainCost(
         });
     });
 
+    // -------------------------------------------------------------------------
+    // NEW: "Hard Overlap" Penalty (Matches Backend Universal Logic)
+    // -------------------------------------------------------------------------
+    // Any two chains sharing a lane must have gap >= 2.
+    // gap < 2 => OVERLAP_BASE + (magnitude * OVERLAP_FACTOR)
+    let overlapCost = 0;
+    const OVERLAP_BASE = LAYOUT_CONFIG.WEIGHTS.OVERLAP_BASE;
+    const OVERLAP_FACTOR = LAYOUT_CONFIG.WEIGHTS.OVERLAP_FACTOR;
+
+    if (OVERLAP_BASE > 0 && ySlots) {
+        const slotsAtY = ySlots.get(y) || [];
+        slotsAtY.forEach(slot => {
+            if (slot.chainId === chain.id) return; // Skip self
+
+            // Calculate gap (distance in time between chains)
+            // gap = startB - endA (or startA - endB)
+            // gap=0 means touching (end year = start year)
+            // gap=1 means 1 year separation
+            const gap = Math.max(
+                slot.start - chain.endTime,   // Neighbor starts after this chain ends
+                chain.startTime - slot.end    // This chain starts after neighbor ends
+            );
+
+            // Universal overlap check: gap < 2 applies penalty
+            if (gap < 2) {
+                // EXCEPTION: Check for lineage connection
+                let isLinked = false;
+
+                // Check if slot chain is a parent
+                const parents = chainParents.get(chain.id) || [];
+                for (const p of parents) {
+                    if (p.id === slot.chainId) {
+                        isLinked = true;
+                        break;
+                    }
+                }
+
+                // Check if slot chain is a child
+                if (!isLinked) {
+                    const children = chainChildren.get(chain.id) || [];
+                    for (const c of children) {
+                        if (c.id === slot.chainId) {
+                            isLinked = true;
+                            break;
+                        }
+                    }
+                }
+
+                // EXCEPTION logic: 
+                // If they are linked, they can touch (gap=0, 1) but NOT overlap (gap < 0).
+                if (!(isLinked && gap >= 1)) {
+                    const magnitude = 2 - gap; // e.g. gap=0 -> mag=2; gap=1 -> mag=1; gap=-5 -> mag=7
+                    overlapCost += OVERLAP_BASE + (magnitude * OVERLAP_FACTOR);
+                }
+            }
+        });
+    }
+
     // Lane Sharing Penalty: Prefer larger gaps between unrelated chains in the same lane
+    // Existing logic handles gap >= 1 spacing bonuses
     let laneSharingCost = 0;
     const LANE_SHARING_WEIGHT = LAYOUT_CONFIG.WEIGHTS.LANE_SHARING || 0;
     if (LANE_SHARING_WEIGHT > 0 && ySlots) {
@@ -134,7 +193,7 @@ export function calculateSingleChainCost(
         });
     }
 
-    return attractionCost + cutThroughCost + blockerCost + yShapeCost + laneSharingCost;
+    return attractionCost + cutThroughCost + blockerCost + yShapeCost + laneSharingCost + overlapCost;
 }
 
 /**

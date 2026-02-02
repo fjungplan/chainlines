@@ -53,6 +53,11 @@ def build_chains(
     
     chains: List[Dict[str, Any]] = []
     visited: Set[str] = set()
+
+    # Link lookup map: (parent, child) -> link object
+    link_map: Dict[tuple, Dict] = {}
+    for link in links:
+        link_map[(link["parentId"], link["childId"])] = link
     
     def get_end_year(node: Dict) -> int:
         """
@@ -75,26 +80,61 @@ def build_chains(
                 pass
                 
         return current_year
+
+    def is_primary_continuation(parent_id: str, child_id: str) -> bool:
+        """
+        Determine if the link is a 'primary' temporal continuation.
+        Used to resolve merges: if one parent connects at the child's birth,
+        it claims the chain, while others are treated as secondary mergers.
+        """
+        link = link_map.get((parent_id, child_id))
+        child = node_map.get(child_id)
+        
+        if not link or not child:
+            return False
+            
+        link_year = link.get("year")
+        child_start = child.get("founding_year")
+        
+        if link_year is None or child_start is None:
+            return False
+            
+        # Tolerance: Link matches child start year (allowing for +/- 1 year fuzziness)
+        # e.g. GBC(End 1977) -> Link(1978) -> Malvor(Start 1978)
+        return abs(link_year - child_start) <= 1
     
+    def get_primary_predecessors(node_id: str) -> List[str]:
+        """Return list of predecessors that are primary continuations."""
+        return [p_id for p_id in preds.get(node_id, []) 
+                if is_primary_continuation(p_id, node_id)]
+
     def is_chain_start(node_id: str) -> bool:
         """
         Determine if a node should start a new chain.
-        
-        A node is a chain start if:
-        1. It has 0 or >1 predecessors (not exactly 1)
-        2. Its single predecessor has >1 successors (parent splits)
-        3. There's visual overlap with the single predecessor
         """
         p = preds.get(node_id, [])
+        num_preds = len(p)
         
-        # 0 or >1 predecessors -> start new chain
-        if len(p) != 1:
+        # Case 1: No predecessors -> Always start
+        if num_preds == 0:
+            return True
+            
+        # Case 2: Multiple Predecessors (Merge)
+        if num_preds > 1:
+            # CHECK PRIORITY: If there is EXACTLY ONE primary predecessor,
+            # we do NOT start a chain (we let the primary parent continue).
+            # If 0 or >1 primary predecessors, it's ambiguous -> Start new chain.
+            primary_preds = get_primary_predecessors(node_id)
+            if len(primary_preds) == 1:
+                return False
             return True
         
+        # Case 3: Single Predecessor
         parent_id = p[0]
         parent_succs = succs.get(parent_id, [])
         
         # Parent has multiple successors (split) -> start new chain
+        # (Splits always break chains in current logic to avoid forks)
         if len(parent_succs) > 1:
             return True
         
@@ -124,21 +164,36 @@ def build_chains(
             curr = node_id
             
             while curr:
+                # Cycle detection / Re-visit check
+                if curr in visited:
+                    break
+
                 visited.add(curr)
                 chain_nodes.append(node_map[curr])
                 
                 s = succs.get(curr, [])
                 
                 # Stop if no successors or >1 successors (split)
+                # Splits are hard breaks.
                 if len(s) != 1:
                     break
                 
                 next_id = s[0]
                 next_preds = preds.get(next_id, [])
                 
-                # Stop if next node has >1 predecessors (merge)
+                # Handling Merges (next node has >1 predecessors)
                 if len(next_preds) > 1:
-                    break
+                    # Only continue if 'curr' is the Primary Predecessor.
+                    # AND if it is the ONLY primary predecessor.
+                    
+                    if not is_primary_continuation(curr, next_id):
+                        break
+                        
+                    primary_preds = get_primary_predecessors(next_id)
+                    if len(primary_preds) != 1:
+                        break
+                        
+                    # If we are the one true parent, continue.
                 
                 # Check for visual overlap before continuing
                 curr_node = node_map.get(curr)

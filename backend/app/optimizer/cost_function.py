@@ -127,9 +127,9 @@ def calculate_single_chain_cost(
     # Let's return total overlap cost separately.
     overlap_total_cost = 0.0
     
-    # Spacing incentive (negative cost)
-    spacing_incentive = 0.0
-    lane_sharing_weight = weights.get("LANE_SHARING", 0.0)
+    # Spacing penalty (pushes chains apart)
+    spacing_multiplier = 0.0
+    lane_sharing_weight = weights.get("LANE_SHARING", 1000.0)
 
     if y_slots:
         slots_at_y = y_slots.get(y, [])
@@ -142,35 +142,44 @@ def calculate_single_chain_cost(
                 chain["startTime"] - slot["end"]
             )
             
-            is_family = False
-            neighbor_id = slot.get("chainId")
-            
-            if neighbor_id in [p["id"] for p in parents]:
-                is_family = True
-            elif not is_family:
-                 for child_list in chain_children.values():
-                     if any(c["id"] == neighbor_id for c in child_list):
-                         is_family = True
-                         break
-            
+            # Universal overlap check: gap < 2 applies penalty
+            # Chains in the same family/lane must be at least 2 years apart to avoid visual clutter
+            # EXCEPTION: If chains are directly linked (Parent/Child), they can touch (gap < 2 allowed).
             overlap_penalty = 0.0
-            if is_family:
-                if gap < 0:
-                    magnitude = abs(gap)
-                    overlap_deficiency += magnitude
-                    overlap_penalty = overlap_base_weight + (magnitude * overlap_factor_weight)
-            else:
-                if gap < 2:
+            if gap < 2:
+                # Check for lineage connection
+                is_linked = False
+                
+                # Check if slot chain is a parent of current chain
+                parents = chain_parents.get(chain["id"], [])
+                for p in parents:
+                    if p["id"] == slot["chainId"]:
+                        is_linked = True
+                        break
+                
+                # Check if slot chain is a child of current chain
+                if not is_linked:
+                    children = chain_children.get(chain["id"], [])
+                    for c in children:
+                        if c["id"] == slot["chainId"]:
+                            is_linked = True
+                            break
+                            
+                # EXCEPTION logic: 
+                # If they are linked, they can touch (gap=0, 1) but NOT overlap (gap < 0).
+                if not (is_linked and gap >= 1):
                     magnitude = 2 - gap
                     overlap_deficiency += magnitude
                     overlap_penalty = overlap_base_weight + (magnitude * overlap_factor_weight)
             
             overlap_total_cost += overlap_penalty
             
+            # If not overlapping, apply a small penalty to push them further apart
             if overlap_penalty == 0 and lane_sharing_weight > 0 and gap > 0:
-                spacing_incentive += (lane_sharing_weight / (10 ** (gap - 1)))
+                spacing_multiplier += (1.0 / (10 ** (gap - 1)))
 
-    total = attraction_cost + cut_through_cost + blocker_cost + y_shape_cost + overlap_total_cost + spacing_incentive
+    spacing_penalty = spacing_multiplier * lane_sharing_weight
+    total = attraction_cost + cut_through_cost + blocker_cost + y_shape_cost + overlap_total_cost + spacing_penalty
 
     if return_breakdown:
         return {
@@ -181,7 +190,7 @@ def calculate_single_chain_cost(
                 "BLOCKER": {"multiplier": blocker_count, "sum": blocker_cost},
                 "Y_SHAPE": {"multiplier": y_shape_count, "sum": y_shape_cost},
                 "OVERLAP": {"multiplier": overlap_deficiency, "sum": overlap_total_cost},
-                "SPACING": {"multiplier": 0, "sum": spacing_incentive} # Incentive is a bonus
+                "SPACING": {"multiplier": spacing_multiplier, "sum": spacing_penalty}
             }
         }
 

@@ -6,16 +6,27 @@ export class TooltipBuilder {
     const sponsors = latestEra.sponsors || [];
 
     return (
-      <div className="tooltip-content node-summary">
+      <div className="timeline-tooltip-metadata node-summary">
         <h4>{latestEra.name || 'Unknown Team'}</h4>
         <div className="tooltip-row">
-          <span className="label">Founded:</span>
-          <span className="value">{node.founding_year}</span>
+          <span className="label">Timeline:</span>
+          <span className="value">{node.founding_year} – {node.dissolution_year || 'Present'}</span>
         </div>
-        {node.dissolution_year && (
-          <div className="tooltip-row">
-            <span className="label">Dissolved:</span>
-            <span className="value">{node.dissolution_year}</span>
+
+        {sponsors.length > 0 && (
+          <div className="tooltip-section">
+            <div className="label">Current/Latest Sponsors:</div>
+            <ul className="sponsor-list">
+              {sponsors.map((s, i) => (
+                <li key={i}>
+                  <span
+                    className="sponsor-dot"
+                    style={{ backgroundColor: s.color || s.hex_color || '#888' }}
+                  />
+                  {s.brand || s.name} ({s.prominence}%)
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         <div className="tooltip-hint">Click for full history • Zoom in for details</div>
@@ -26,11 +37,11 @@ export class TooltipBuilder {
   static buildEraTooltip(era, node) {
     const sponsors = era.sponsors || [];
     return (
-      <div className="tooltip-content era-detail">
-        <h4>{era.name || 'Unknown Intent'}</h4>
+      <div className="timeline-tooltip-metadata era-detail">
+        <h4>{era.name || era.registered_name || 'Unknown Team'}</h4>
         <div className="tooltip-row">
           <span className="label">Year:</span>
-          <span className="value">{era.year}</span>
+          <span className="value">{era.year || era.season_year}</span>
           {/* If we knew end year here easily without looking at next era... 
                The DetailRenderer calculates it. We might just show start year or if passed in context.
                For now, showing Start Year is safe. 
@@ -45,9 +56,9 @@ export class TooltipBuilder {
                 <li key={i}>
                   <span
                     className="sponsor-dot"
-                    style={{ backgroundColor: s.color }}
+                    style={{ backgroundColor: s.color || s.hex_color || '#888' }}
                   />
-                  {s.brand} ({s.prominence}%)
+                  {s.brand || s.name} ({s.prominence}%)
                 </li>
               ))}
             </ul>
@@ -98,7 +109,7 @@ export class TooltipBuilder {
     const targetEraName = link.year ? getRelevantEraName(targetNode, parseInt(link.year), false) : 'Unknown Era';
 
     return (
-      <div className="tooltip-content">
+      <div className="timeline-tooltip-metadata">
         <h4>{this.getEventTypeName(link.type)}</h4>
         <div className="tooltip-row">
           <span className="label">From:</span>

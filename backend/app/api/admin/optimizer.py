@@ -42,22 +42,16 @@ async def get_families(
     
     response = []
     for layout in layouts:
-        chain_count = 0
+        node_count = 0
         link_count = 0
-        founding_year_min = None
         
-        # Simple extraction from JSON
-        if layout.layout_data:
-            chains = layout.layout_data.get("chains", [])
-            chain_count = len(chains)
-            link_count = len(layout.layout_data.get("links", []))
-            
-            # Find oldest year for display/sorting (optional)
-            # founding_year_min = min(c.get("startTime", 9999) for c in chains) if chains else None
-
+        # Extract counts from structural fingerprint
+        if layout.data_fingerprint:
+            node_count = len(layout.data_fingerprint.get("node_ids", []))
+            link_count = len(layout.data_fingerprint.get("link_ids", []))
         response.append({
             "family_hash": layout.family_hash,
-            "node_count": chain_count, # Approx proxy
+            "node_count": node_count,
             "link_count": link_count,
             "score": layout.score,
             "optimized_at": layout.optimized_at,

@@ -11,7 +11,8 @@ from sqlalchemy import select, or_
 logger = logging.getLogger(__name__)
 
 from app.models.precomputed_layout import PrecomputedLayout
-from app.models.team import TeamNode
+from app.models.team import TeamNode, TeamEra
+from app.models.sponsor import TeamSponsorLink
 from app.models.lineage import LineageEvent
 from app.optimizer.genetic_optimizer import GeneticOptimizer
 from app.optimizer.fingerprint_service import generate_family_fingerprint, compute_family_hash
@@ -129,10 +130,15 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                     logger.warning(f"Empty node_ids for layout {layout.family_hash}")
                     continue
                 
-                nodes_stmt = select(TeamNode).where(TeamNode.node_id.in_(node_ids))
+                from sqlalchemy.orm import selectinload
+                # Eager load eras and their sponsor links + brands for color calculation
+                nodes_stmt = select(TeamNode).where(TeamNode.node_id.in_(node_ids)).options(
+                    selectinload(TeamNode.eras).selectinload(TeamEra.sponsor_links).selectinload(TeamSponsorLink.brand)
+                )
                 nodes_res = await db.execute(nodes_stmt)
                 nodes = nodes_res.scalars().all()
                 
+                # ... links fetching remains same ...
                 links_stmt = select(LineageEvent).where(
                     or_(
                         LineageEvent.predecessor_node_id.in_(node_ids),
@@ -150,8 +156,40 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 
                 from app.optimizer.chain_builder import build_chains
                 current_year = datetime.now().year
-                nodes_data = [{"id": str(node.node_id), "founding_year": node.founding_year, "dissolution_year": node.dissolution_year, "name": node.legal_name} for node in nodes]
-                links_data = [{"id": str(link.event_id), "parentId": str(link.predecessor_node_id), "childId": str(link.successor_node_id), "time": link.event_year} for link in valid_links]
+                
+                nodes_data = [
+                    {
+                        "id": str(node.node_id), 
+                        "founding_year": node.founding_year, 
+                        "dissolution_year": node.dissolution_year, 
+                        "name": node.legal_name,
+                        "eras": [
+                            {
+                                "year": e.season_year,
+                                "name": e.registered_name,
+                                "sponsors": [
+                                    {
+                                        "id": str(link.brand_id),
+                                        "brand": link.brand.brand_name,
+                                        "color": link.hex_color_override or link.brand.default_hex_color or "#888888",
+                                        "prominence": link.prominence_percent
+                                    } for link in e.sponsor_links
+                                ]
+                            } for e in node.eras
+                        ]
+                    } for node in nodes
+                ]
+                links_data = [
+                    {
+                        "id": str(link.event_id), 
+                        "parentId": str(link.predecessor_node_id), 
+                        "childId": str(link.successor_node_id),
+                        "source": str(link.predecessor_node_id),
+                        "target": str(link.successor_node_id),
+                        "year": link.event_year, 
+                        "type": link.event_type
+                    } for link in valid_links
+                ]
                 chains_data = build_chains(nodes_data, links_data, current_year)
                 
                 family_data = {"chains": chains_data, "links": links_data}
@@ -171,7 +209,13 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 new_fingerprint = generate_family_fingerprint(family_data, links_data)
                 new_hash = compute_family_hash(new_fingerprint)
                 
-                layout.layout_data = y_indices
+                # Ensure backward compatibility by keeping flat keys at top level
+                layout_result = {**y_indices}
+                layout_result["y_indices"] = y_indices
+                layout_result["chains"] = chains_data
+                layout_result["links"] = links_data
+                
+                layout.layout_data = layout_result
                 layout.data_fingerprint = new_fingerprint
                 layout.family_hash = new_hash
                 layout.score = opt_result["score"]
