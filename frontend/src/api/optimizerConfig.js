@@ -1,13 +1,11 @@
-import axios from 'axios';
-
-const API_BASE_URL = '/api/v1/admin/optimizer';
+import apiClient from './client';
 
 export const optimizerConfigApi = {
     /**
      * Get current optimizer configuration
      */
     async getConfig() {
-        const response = await axios.get(`${API_BASE_URL}/config`);
+        const response = await apiClient.get('/api/v1/admin/optimizer/config');
         return response.data;
     },
 
@@ -16,7 +14,7 @@ export const optimizerConfigApi = {
      * @param {Object} config - Full configuration object
      */
     async updateConfig(config) {
-        const response = await axios.put(`${API_BASE_URL}/config`, config);
+        const response = await apiClient.put('/api/v1/admin/optimizer/config', config);
         return response.data;
     }
 };
