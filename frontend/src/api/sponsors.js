@@ -53,6 +53,14 @@ export const sponsorsApi = {
         return response.data;
     },
 
+    mergeBrand: async (sourceBrandId, targetBrandId, reason) => {
+        const response = await apiClient.post(`/api/v1/sponsors/brands/${sourceBrandId}/merge`, {
+            target_brand_id: targetBrandId,
+            reason: reason
+        });
+        return response.data;
+    },
+
     // Era Links
     getEraLinks: async (eraId) => {
         const response = await apiClient.get(`/api/v1/sponsors/eras/${eraId}/links`);

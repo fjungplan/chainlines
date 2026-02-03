@@ -36,11 +36,11 @@ export class PerformanceMonitor {
 
   logMetrics() {
     // eslint-disable-next-line no-console
-    console.log('Performance Metrics:', {
-      avgRenderTime: this.getAverageTime('render').toFixed(2) + 'ms',
-      avgLayoutTime: this.getAverageTime('layout').toFixed(2) + 'ms',
-      nodeCount: this.metrics.nodeCount,
-      linkCount: this.metrics.linkCount,
-    });
+    // console.log('Performance Metrics:', {
+    //   avgRenderTime: this.getAverageTime('render').toFixed(2) + 'ms',
+    //   avgLayoutTime: this.getAverageTime('layout').toFixed(2) + 'ms',
+    //   nodeCount: this.metrics.nodeCount,
+    //   linkCount: this.metrics.linkCount,
+    // });
   }
 }

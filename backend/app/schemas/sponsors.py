@@ -90,3 +90,7 @@ class TeamSponsorLinkResponse(BaseModel):
     brand: Optional[SponsorBrandResponse] = None # Include brand details
     
     model_config = ConfigDict(from_attributes=True)
+
+class SponsorMergeRequest(BaseModel):
+    target_brand_id: UUID
+    reason: str = Field(..., min_length=1, max_length=1000)

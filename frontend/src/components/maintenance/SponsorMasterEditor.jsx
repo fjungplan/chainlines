@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { Merge } from 'lucide-react';
 import { sponsorsApi } from '../../api/sponsors';
 import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import BrandTransferModal from './BrandTransferModal';
+import BrandMergeModal from './BrandMergeModal';
 import './SponsorEditor.css';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -57,8 +59,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
     const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
     const industryInputRef = useRef(null);
 
-    // Brand Transfer Modal
+    // Brand Transfer Modal (Import)
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+    // Brand Merge Modal (Destructive Merge)
+    const [mergeSourceBrand, setMergeSourceBrand] = useState(null);
 
     // === INITIAL LOAD ===
     useEffect(() => {
@@ -137,6 +142,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         });
         setViewMode('BRAND');
         setError(null);
+    };
+
+    const handleMergeClick = (brand, e) => {
+        e.stopPropagation(); // Don't select for edit
+        setMergeSourceBrand(brand);
     };
 
     // === HANDLERS: Master ===
@@ -573,9 +583,25 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                                 >
                                                     <div className="brand-color" style={{ backgroundColor: brand.default_hex_color }}></div>
                                                     <div className="brand-info">
-                                                        <div className="brand-name">{brand.brand_name}</div>
+                                                        <div className="brand-name">
+                                                            {brand.brand_name}
+                                                        </div>
                                                         {brand.display_name && <div className="brand-display">{brand.display_name}</div>}
                                                     </div>
+                                                    {masterId && canDirectEdit && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="tiny-action-btn merge-brand-btn"
+                                                            title="Merge into another brand"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMergeClick(brand, e);
+                                                            }}
+                                                        >
+                                                            <Merge size={14} style={{ transform: 'rotate(90deg)' }} />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -660,6 +686,22 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 onSuccess={() => {
                     setIsTransferModalOpen(false);
                     loadMasterData(); // Refresh to show newly imported brands
+                }}
+            />
+
+            {/* Brand Merge Modal */}
+            <BrandMergeModal
+                isOpen={!!mergeSourceBrand}
+                sourceBrand={mergeSourceBrand}
+                onClose={() => setMergeSourceBrand(null)}
+                onSuccess={() => {
+                    setMergeSourceBrand(null);
+                    // Reload data because source brand is deleted
+                    loadMasterData();
+                    // If we were editing that brand, close view mode
+                    if (currentBrand?.brand_id === mergeSourceBrand?.brand_id) {
+                        setViewMode('MASTER');
+                    }
                 }}
             />
         </>

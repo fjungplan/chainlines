@@ -73,6 +73,11 @@ class SponsorService:
         if not master:
             return False
         
+        # Safeguard: Do not allow deletion if brands exist
+        # This prevents accidental cascade deletion of the entire sponsor tree
+        if master.brands and len(master.brands) > 0:
+            raise ValueError(f"Cannot delete sponsor master '{master.legal_name}' because it still has {len(master.brands)} brands. Delete or transfer these brands first.")
+        
         await session.delete(master)
         await session.flush()
         return True
@@ -169,9 +174,19 @@ class SponsorService:
     
     @staticmethod
     async def search_brands(session: AsyncSession, query: str, limit: int = 20) -> List[SponsorBrand]:
+        from sqlalchemy import or_, func
+        
+        search_query = f"%{query}%"
+        unaccented_query = func.unaccent(search_query)
+        
         stmt = (
             select(SponsorBrand)
-            .where(SponsorBrand.brand_name.ilike(f"%{query}%"))
+            .where(
+                or_(
+                    func.unaccent(SponsorBrand.brand_name).ilike(unaccented_query),
+                    func.unaccent(SponsorBrand.display_name).ilike(unaccented_query)
+                )
+            )
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -372,3 +387,67 @@ class SponsorService:
         await session.delete(link)
         await session.flush()
         return True
+
+    @staticmethod
+    async def merge_brands(
+        session: AsyncSession, 
+        source_brand_id: UUID, 
+        target_brand_id: UUID
+    ) -> dict:
+        """
+        Destructive merge of Source -> Target.
+        1. Repoint all links from Source to Target.
+        2. Resolve conflicts (same Era): Sum prominence, take best rank.
+        3. Delete Source Brand.
+        
+        Returns details about the operations performed.
+        """
+        # Fetch Source Links
+        stmt = select(TeamSponsorLink).where(TeamSponsorLink.brand_id == source_brand_id)
+        source_links = (await session.execute(stmt)).scalars().all()
+        
+        repointed_count = 0
+        consolidated_count = 0
+        
+        for source_link in source_links:
+            # Check for conflict in this Era
+            stmt_conflict = select(TeamSponsorLink).where(
+                TeamSponsorLink.era_id == source_link.era_id,
+                TeamSponsorLink.brand_id == target_brand_id
+            )
+            target_link = (await session.execute(stmt_conflict)).scalar_one_or_none()
+            
+            if target_link:
+                # CONFLICT: Merge into Target
+                # 1. Sum Prominence
+                new_prominence = target_link.prominence_percent + source_link.prominence_percent
+                target_link.prominence_percent = min(new_prominence, 100) # Cap at 100 logic-wise, though validation triggers
+                
+                # 2. Take Best Rank (Min)
+                target_link.rank_order = min(target_link.rank_order, source_link.rank_order)
+                
+                # 3. Delete Source Link
+                await session.delete(source_link)
+                consolidated_count += 1
+            else:
+                # NO CONFLICT: Repoint
+                source_link.brand_id = target_brand_id
+                repointed_count += 1
+
+        # Flush link changes
+        await session.flush()
+        
+        # Delete Source Brand
+        stmt_brand = select(SponsorBrand).where(SponsorBrand.brand_id == source_brand_id)
+        source_brand = (await session.execute(stmt_brand)).scalar_one_or_none()
+        
+        if source_brand:
+            await session.delete(source_brand)
+            
+        await session.flush()
+        
+        return {
+            "repointed_links": repointed_count,
+            "consolidated_links": consolidated_count,
+            "total_links_affected": repointed_count + consolidated_count
+        }

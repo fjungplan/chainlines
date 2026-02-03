@@ -1462,6 +1462,7 @@ class EditService:
             raise ValueError("Cannot edit protected brand")
 
         changes = {}
+        if request.master_id: changes['master_id'] = UUID(request.master_id)
         if request.brand_name: changes['brand_name'] = request.brand_name
         if request.display_name is not None: changes['display_name'] = request.display_name
         if request.default_hex_color: changes['default_hex_color'] = request.default_hex_color
@@ -1479,6 +1480,7 @@ class EditService:
         snapshot_before = {
             "brand": {
                  "brand_id": str(brand.brand_id),
+                 "master_id": str(brand.master_id),
                  "brand_name": brand.brand_name,
                  "default_hex_color": brand.default_hex_color,
                  "is_protected": brand.is_protected
@@ -1492,6 +1494,7 @@ class EditService:
             snapshot_after = {
                 "brand": {
                     "brand_id": str(updated.brand_id),
+                    "master_id": str(updated.master_id),
                     "brand_name": updated.brand_name,
                     "default_hex_color": updated.default_hex_color,
                     "is_protected": updated.is_protected
@@ -1533,3 +1536,104 @@ class EditService:
         await session.commit()
         await session.refresh(edit)
         return EditMetadataResponse(edit_id=str(edit.edit_id), status=edit.status.value, message=message)
+
+    @staticmethod
+    async def create_sponsor_brand_merge_edit(
+        session: AsyncSession,
+        user: User,
+        source_brand_id: UUID,
+        request: "SponsorMergeRequest"
+    ) -> EditMetadataResponse:
+        """
+        Merge one sponsor brand into another.
+        Destructive for the source brand.
+        """
+        from app.services.sponsor_service import SponsorService
+        from app.models.sponsor import SponsorBrand, TeamSponsorLink
+        from sqlalchemy import select, func
+
+        # 1. Verify existence
+        source = await session.get(SponsorBrand, source_brand_id)
+        if not source:
+            raise ValueError("Source brand not found")
+        
+        target = await session.get(SponsorBrand, request.target_brand_id)
+        if not target:
+            raise ValueError("Target brand not found")
+        
+        if source_brand_id == request.target_brand_id:
+            raise ValueError("Cannot merge a brand into itself")
+
+        # 2. Capture snapshot_before
+        # Get count of links for the snapshot
+        link_stmt = select(func.count()).select_from(TeamSponsorLink).where(TeamSponsorLink.brand_id == source_brand_id)
+        link_count = (await session.execute(link_stmt)).scalar() or 0
+
+        snapshot_before = {
+            "brand": {
+                "brand_id": str(source.brand_id),
+                "brand_name": source.brand_name,
+                "master_id": str(source.master_id)
+            },
+            "stats": {
+                "link_count": link_count
+            }
+        }
+
+        # 3. Handle by Role
+        if user.role in [UserRole.ADMIN, UserRole.MODERATOR, UserRole.TRUSTED_EDITOR]:
+            # Apply immediately
+            merge_details = await SponsorService.merge_brands(session, source_brand_id, request.target_brand_id)
+            
+            snapshot_after = {
+                "merged_into": str(request.target_brand_id),
+                "target_brand_name": target.brand_name,
+                "merge_results": merge_details
+            }
+
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=source_brand_id,
+                user_id=user.user_id,
+                action=EditAction.DELETE,  # Merging effectively deletes the source
+                status=EditStatus.APPROVED,
+                reviewed_by=user.user_id,
+                reviewed_at=datetime.utcnow(),
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            
+            user.approved_edits_count += 1
+            message = "Merge created successfully"
+        else:
+            # Pending submission
+            snapshot_after = {
+                "proposed_merge": {
+                    "target_brand_id": str(request.target_brand_id),
+                    "target_brand_name": target.brand_name
+                }
+            }
+
+            edit = EditHistory(
+                entity_type="sponsor_brand",
+                entity_id=source_brand_id,
+                user_id=user.user_id,
+                action=EditAction.DELETE,
+                status=EditStatus.PENDING,
+                snapshot_before=snapshot_before,
+                snapshot_after=snapshot_after,
+                source_notes=request.reason
+            )
+            message = "Merge submitted for moderation"
+
+        session.add(edit)
+        await session.commit()
+        await session.refresh(edit)
+
+        return EditMetadataResponse(
+            edit_id=str(edit.edit_id),
+            status=edit.status.value,
+            message=message
+        )
+

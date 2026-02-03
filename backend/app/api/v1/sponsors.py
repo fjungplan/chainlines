@@ -12,7 +12,8 @@ from app.schemas.sponsors import (
     SponsorMasterCreate, SponsorMasterUpdate, SponsorMasterResponse,
     SponsorBrandCreate, SponsorBrandUpdate, SponsorBrandResponse,
     SponsorMasterListResponse,
-    TeamSponsorLinkCreate, TeamSponsorLinkResponse
+    TeamSponsorLinkCreate, TeamSponsorLinkResponse,
+    SponsorMergeRequest
 )
 from app.services.sponsor_service import SponsorService
 from app.services.edit_service import EditService
@@ -171,10 +172,13 @@ async def delete_master(
         }
     }
 
-    success = await SponsorService.delete_master(session, master_id)
-    if not success:
-         # Should catch earlier
-         raise HTTPException(status_code=404, detail="Sponsor master not found")
+    try:
+        success = await SponsorService.delete_master(session, master_id)
+        if not success:
+             # Should catch earlier
+             raise HTTPException(status_code=404, detail="Sponsor master not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
          
     await EditService.record_direct_edit(
         session=session,
@@ -285,8 +289,34 @@ async def update_brand(
     )
     
     await session.commit()
+    await session.commit()
     await session.refresh(brand)
     return brand
+
+@router.post("/brands/{brand_id}/merge", response_model=None)
+async def merge_brands(
+    brand_id: UUID,
+    data: SponsorMergeRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Merge brand_id (Source) into target_brand_id.
+    Trusted Users: Applied immediately.
+    Regular Editors: Submitted for moderation.
+    """
+    try:
+        response = await EditService.create_sponsor_brand_merge_edit(
+            session=session,
+            user=current_user,
+            source_brand_id=brand_id,
+            request=data
+        )
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise e
 
 @router.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_brand(

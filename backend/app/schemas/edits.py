@@ -346,10 +346,10 @@ class SponsorMasterEditRequest(BaseModel):
 
 class SponsorBrandEditRequest(BaseModel):
     brand_id: Optional[str] = None  # If present, treat as UPDATE
-    master_id: str  # Required to link to master
-    brand_name: str
+    master_id: Optional[str] = None  # Required to link to master
+    brand_name: Optional[str] = None
     display_name: Optional[str] = None
-    default_hex_color: str
+    default_hex_color: Optional[str] = None
     source_url: Optional[str] = None
     source_notes: Optional[str] = None
     is_protected: Optional[bool] = None

@@ -59,6 +59,7 @@ export default function TimelineGraph({
   const [highlightedLineage, setHighlightedLineage] = useState(null);
   const [transformVersion, setTransformVersion] = useState(0); // Increment to force Minimap re-render on zoom/pan
   const [layoutVersion, setLayoutVersion] = useState(0); // Increment to force Minimap re-render on layout change
+  const [precomputedLayouts, setPrecomputedLayouts] = useState(null); // Cache for optimizer results
 
 
 
@@ -106,6 +107,12 @@ export default function TimelineGraph({
         performanceMonitor.current
       );
     }
+
+    // Load precomputed layouts (R19)
+    LayoutCalculator.fetchPrecomputedLayouts()
+      .then(layouts => {
+        setPrecomputedLayouts(layouts);
+      });
   }, []);
 
   // Helper to compute responsive minimum zoom
@@ -161,13 +168,6 @@ export default function TimelineGraph({
     // Safety ceiling to prevent extreme zoom
     const finalMaxScale = Math.min(maxScale, 50); // Cap at 50x to prevent performance issues
 
-    console.log('🔍 MAX SCALE CALC:', {
-      maxScaleX: maxScaleX.toFixed(2),
-      maxScaleY: maxScaleY.toFixed(2),
-      chosen: finalMaxScale.toFixed(2),
-      constraint: maxScaleX < maxScaleY ? 'horizontal (10y)' : 'vertical (2 rows)'
-    });
-
     return finalMaxScale;
   }, []);
 
@@ -193,7 +193,6 @@ export default function TimelineGraph({
     // Log raw API data to check for duplicates at source
     const nodeIds = data.nodes.map(n => n.id);
     const uniqueNodeIds = new Set(nodeIds);
-    console.log('API Response - Total nodes:', nodeIds.length, 'Unique IDs:', uniqueNodeIds.size);
     if (nodeIds.length !== uniqueNodeIds.size) {
       const duplicates = nodeIds.filter((id, idx) => nodeIds.indexOf(id) !== idx);
       console.error('DUPLICATES IN API RESPONSE:', [...new Set(duplicates)]);
@@ -205,7 +204,7 @@ export default function TimelineGraph({
     } catch (error) {
       console.error('Graph render error:', error);
     }
-  }, [data]);
+  }, [data, precomputedLayouts]);
 
   // Calculate full layout for Minimap when fullData is available
   useEffect(() => {
@@ -220,7 +219,6 @@ export default function TimelineGraph({
     const calculator = new LayoutCalculator(fullData, width, height, null);
     const layout = calculator.calculateLayout();
     fullLayoutRef.current = layout;
-    console.log('Calculated full layout for Minimap:', layout.nodes.length, 'nodes');
   }, [fullData]);
 
   // Recalculate layout/zoom bounds on resize so minimum zoom remains responsive
@@ -537,22 +535,14 @@ export default function TimelineGraph({
 
     if (deduplicatedNodes.length < graphData.nodes.length) {
       const removedCount = graphData.nodes.length - deduplicatedNodes.length;
-      console.warn('Found duplicate nodes:', removedCount, duplicateMap);
-      console.log('Original nodes:', graphData.nodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
-      console.log('Deduplicated nodes:', deduplicatedNodes.map(n => ({ id: n.id, name: n.eras?.[0]?.name })));
     }
 
-    console.log('Rendering with nodes:', deduplicatedNodes.map(n => ({
-      id: n.id,
-      name: n.eras?.[0]?.name,
-      founding: n.founding_year,
-      dissolution: n.dissolution_year,
-      eras: n.eras?.length
-    })));
+    // No per-node logs to prevent DevTools crashes
 
     const dedupedData = {
       ...graphData,
-      nodes: deduplicatedNodes
+      nodes: deduplicatedNodes,
+      precomputedLayouts: precomputedLayouts // Inject cached layouts
     };
 
     const layoutStart = performanceMonitor.current.startTiming('layout');
@@ -576,7 +566,6 @@ export default function TimelineGraph({
 
     if (scaleX > scaleY * 1.001) {
       const stretchFactor = scaleX / scaleY;
-      console.log('Applying x-axis stretch for aspect fit', { scaleX, scaleY, stretchFactor, spanX, spanY });
       calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, stretchFactor);
       layout = calculator.calculateLayout();
     }
@@ -827,7 +816,6 @@ export default function TimelineGraph({
         return true; // Allow touch events
       })
       .on('zoom', (event) => {
-        console.log('🎯 ZOOM EVENT:', { k: event.transform.k, x: event.transform.x, y: event.transform.y });
         currentTransform.current = event.transform;
         setTransformVersion(v => v + 1); // Trigger Minimap re-render
         g.attr('transform', event.transform);
@@ -1076,7 +1064,7 @@ export default function TimelineGraph({
             })
             .on('mousemove', (event) => {
               if (tooltip.visible) {
-                setTooltip(prev => ({ ...prev, position: { x: event.pageX, y: event.pageY } }));
+                setTooltip(prev => ({ ...prev, position: { x: event.clientX, y: event.clientY } }));
               }
             })
             .on('mouseleave', (event) => {
@@ -1250,7 +1238,7 @@ export default function TimelineGraph({
     const thresholds = getThresholds();
     if (currentScale < thresholds.HIGH_DETAIL) {
       const content = TooltipBuilder.buildNodeTooltip(node);
-      setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+      setTooltip({ visible: true, content, position: { x: event.clientX, y: event.clientY } });
     }
   };
 
@@ -1266,7 +1254,7 @@ export default function TimelineGraph({
     // Note: Event might need to be stopped from propagating if necessary, but SVG events are specific.
     event.stopPropagation();
     const content = TooltipBuilder.buildEraTooltip(era, node);
-    setTooltip({ visible: true, content, position: { x: event.pageX, y: event.pageY } });
+    setTooltip({ visible: true, content, position: { x: event.clientX, y: event.clientY } });
   };
 
   const handleEraHoverEnd = (event) => {

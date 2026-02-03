@@ -26,6 +26,9 @@ from app.core.exceptions import (
 from app.db.database import create_tables
 import logging
 
+# Register invalidation hooks (import activates SQLAlchemy event listeners)
+import app.optimizer.invalidation_hooks  # noqa: F401
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,6 +55,26 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to seed system user: {e}")
         # We don't raise here to allow app to start, though scraper might fail later
     
+    # Run initial family discovery in background (non-blocking)
+    import asyncio
+    from app.services.family_discovery import FamilyDiscoveryService
+    
+    async def run_initial_discovery():
+        try:
+            logger.info("Starting background family discovery...")
+            async with async_session_maker() as session:
+                service = FamilyDiscoveryService(session, complexity_threshold=20)
+                results = await service.discover_all_families()
+                if results:
+                    logger.info(f"Background discovery complete. Registered {len(results)} new complex families.")
+                else:
+                    logger.info("Background discovery complete. No new complex families found.")
+        except Exception as e:
+            logger.error(f"Background family discovery failed: {e}")
+
+    # Launch task
+    asyncio.create_task(run_initial_discovery())
+
     logger.info("Application startup complete")
     
     yield
@@ -147,6 +170,14 @@ app.include_router(audit_log_router)
 app.include_router(my_edits_router)
 app.include_router(account_account_router, prefix="/api/v1", tags=["account"])
 app.include_router(scraper_router, prefix="/api/v1/admin/scraper")
+
+from app.api.admin import optimizer
+from app.api.admin import optimizer_config
+from app.api import precomputed_layouts
+
+app.include_router(optimizer.router, prefix="/api/v1/admin/optimizer", tags=["admin"])
+app.include_router(optimizer_config.router, prefix="/api/v1/admin/optimizer", tags=["admin"])
+app.include_router(precomputed_layouts.router, prefix="/api/v1", tags=["public"])
 
 
 

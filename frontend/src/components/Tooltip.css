@@ -14,65 +14,75 @@
   /* Glassmorphism hint if supported */
 }
 
-.tooltip-content h4 {
+.timeline-tooltip-metadata h4 {
   margin: 0 0 10px 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: #fff;
   border-bottom: 1px solid #333;
   padding-bottom: 8px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
-.tooltip-row {
+.timeline-tooltip-row {
   display: flex;
   justify-content: space-between;
   margin: 5px 0;
   align-items: baseline;
 }
 
-.tooltip-row .label {
+.timeline-tooltip-row .label {
   font-weight: 500;
-  color: #888;
+  color: #999;
   font-size: 12px;
 }
 
-.tooltip-row .value {
-  color: #ccc;
+.timeline-tooltip-row .value {
+  color: #fff;
+  font-weight: 600;
   font-feature-settings: "tnum";
-  /* Tabular numbers for years */
 }
 
-.tooltip-section {
-  margin-top: 10px;
+.timeline-tooltip-section {
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid #333;
 }
 
-.sponsor-list {
-  list-style: none;
-  padding: 0;
-  margin: 6px 0 0 0;
+.timeline-tooltip-section .label {
+  color: #999;
+  font-size: 12px;
+  margin-bottom: 6px;
 }
 
-.sponsor-list li {
+.timeline-tooltip-sponsor-list {
+  list-style: none;
+  padding: 8px;
+  margin: 6px 0 0 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.timeline-tooltip-sponsor-list li {
   display: flex;
   align-items: center;
-  margin: 4px 0;
-  color: #aaa;
+  margin: 6px 0;
+  color: #ddd;
   font-size: 12px;
+  font-weight: 500;
 }
 
-.sponsor-dot {
-  width: 8px;
-  height: 8px;
+.timeline-tooltip-sponsor-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  margin-right: 8px;
-  border: 1px solid #444;
-  /* Subtle border for dark dots */
+  margin-right: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
 }
 
-.tooltip-hint {
+.timeline-tooltip-hint {
   margin-top: 12px;
   padding-top: 8px;
   border-top: 1px solid #333;
@@ -82,14 +92,14 @@
   text-align: center;
 }
 
-.notes {
+.timeline-tooltip-notes {
   margin: 4px 0 0 0;
   font-size: 12px;
   color: #999;
   line-height: 1.4;
 }
 
-.era-hint {
+.timeline-tooltip-era-hint {
   color: #777;
   font-size: 0.9em;
   margin-left: 4px;

@@ -37,13 +37,13 @@ export default function AdminPanelPage() {
             </div>
           </Link>
 
-          <div className="btn btn-tile disabled">
-            <span className="tile-icon"><i className="bi bi-heart-pulse"></i></span>
+          <Link to="/admin/optimizer" className="btn btn-tile">
+            <span className="tile-icon"><i className="bi bi-cpu"></i></span>
             <div className="tile-content">
-              <h3>System Health</h3>
-              <p>Cache and logs (Coming soon).</p>
+              <h3>Layout Optimizer</h3>
+              <p>Optimize complex family layouts.</p>
             </div>
-          </div>
+          </Link>
         </div>
       </Card>
     </CenteredPageLayout>

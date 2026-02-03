@@ -9,15 +9,26 @@ export default function Tooltip({ content, position, visible }) {
       const tooltip = tooltipRef.current;
       const rect = tooltip.getBoundingClientRect();
 
-      let x = position.x + 15;
-      let y = position.y - 10;
+      const offset = 15;
+      const padding = 10;
 
-      if (x + rect.width > window.innerWidth) {
-        x = position.x - rect.width - 15;
+      // Default: Bottom-Right (as requested)
+      let x = position.x + offset;
+      let y = position.y + offset;
+
+      // Flip Right -> Left if it overflows
+      if (x + rect.width > window.innerWidth - padding) {
+        x = position.x - rect.width - offset;
       }
-      if (y + rect.height > window.innerHeight) {
-        y = window.innerHeight - rect.height - 10;
+
+      // Flip Bottom -> Top if it overflows
+      if (y + rect.height > window.innerHeight - padding) {
+        y = position.y - rect.height - offset;
       }
+
+      // Safety: clamp to screen if STILL overflowing
+      x = Math.max(padding, Math.min(x, window.innerWidth - rect.width - padding));
+      y = Math.max(padding, Math.min(y, window.innerHeight - rect.height - padding));
 
       tooltip.style.left = `${x}px`;
       tooltip.style.top = `${y}px`;
