@@ -66,13 +66,9 @@ export class LayoutCalculator {
     if (_layoutCache) return _layoutCache;
 
     try {
-      // Use absolute URL to bypass local proxy issues. SILENT to avoid DevTools crashes.
-      const url = 'http://127.0.0.1:8000/api/v1/precomputed-layouts';
-      const response = await fetch(url);
-
-      if (!response.ok) return {};
-
-      const data = await response.json();
+      // Use relative path via apiClient to avoid hardcoded IP issues.
+      const response = await apiClient.get('/api/v1/precomputed-layouts');
+      const data = response.data;
       _layoutCache = data;
       console.log('[LayoutCalculator] Successfully primed precomputed layout cache.');
       return data;
