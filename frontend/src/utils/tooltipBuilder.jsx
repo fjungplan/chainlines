@@ -8,19 +8,19 @@ export class TooltipBuilder {
     return (
       <div className="timeline-tooltip-metadata node-summary">
         <h4>{latestEra.name || 'Unknown Team'}</h4>
-        <div className="tooltip-row">
+        <div className="timeline-tooltip-row">
           <span className="label">Timeline:</span>
           <span className="value">{node.founding_year} – {node.dissolution_year || 'Present'}</span>
         </div>
 
         {sponsors.length > 0 && (
-          <div className="tooltip-section">
+          <div className="timeline-tooltip-section">
             <div className="label">Current/Latest Sponsors:</div>
-            <ul className="sponsor-list">
+            <ul className="timeline-tooltip-sponsor-list">
               {sponsors.map((s, i) => (
                 <li key={i}>
                   <span
-                    className="sponsor-dot"
+                    className="timeline-tooltip-sponsor-dot"
                     style={{ backgroundColor: s.color || s.hex_color || '#888' }}
                   />
                   {s.brand || s.name} ({s.prominence}%)
@@ -29,7 +29,7 @@ export class TooltipBuilder {
             </ul>
           </div>
         )}
-        <div className="tooltip-hint">Click for full history • Zoom in for details</div>
+        <div className="timeline-tooltip-hint">Click for full history • Zoom in for details</div>
       </div>
     );
   }
@@ -39,7 +39,7 @@ export class TooltipBuilder {
     return (
       <div className="timeline-tooltip-metadata era-detail">
         <h4>{era.name || era.registered_name || 'Unknown Team'}</h4>
-        <div className="tooltip-row">
+        <div className="timeline-tooltip-row">
           <span className="label">Year:</span>
           <span className="value">{era.year || era.season_year}</span>
           {/* If we knew end year here easily without looking at next era... 
@@ -49,13 +49,13 @@ export class TooltipBuilder {
            */}
         </div>
         {sponsors.length > 0 && (
-          <div className="tooltip-section">
+          <div className="timeline-tooltip-section">
             <div className="label">Sponsors:</div>
-            <ul className="sponsor-list">
+            <ul className="timeline-tooltip-sponsor-list">
               {sponsors.map((s, i) => (
                 <li key={i}>
                   <span
-                    className="sponsor-dot"
+                    className="timeline-tooltip-sponsor-dot"
                     style={{ backgroundColor: s.color || s.hex_color || '#888' }}
                   />
                   {s.brand || s.name} ({s.prominence}%)
@@ -111,22 +111,22 @@ export class TooltipBuilder {
     return (
       <div className="timeline-tooltip-metadata">
         <h4>{this.getEventTypeName(link.type)}</h4>
-        <div className="tooltip-row">
+        <div className="timeline-tooltip-row">
           <span className="label">From:</span>
-          <span className="value">{sourceTeamName} <span className="era-hint">({sourceEraName})</span></span>
+          <span className="value">{sourceTeamName} <span className="timeline-tooltip-era-hint">({sourceEraName})</span></span>
         </div>
-        <div className="tooltip-row">
+        <div className="timeline-tooltip-row">
           <span className="label">To:</span>
-          <span className="value">{targetTeamName} <span className="era-hint">({targetEraName})</span></span>
+          <span className="value">{targetTeamName} <span className="timeline-tooltip-era-hint">({targetEraName})</span></span>
         </div>
-        <div className="tooltip-row">
+        <div className="timeline-tooltip-row">
           <span className="label">Year:</span>
           <span className="value">{link.year}</span>
         </div>
         {link.notes && (
-          <div className="tooltip-section">
+          <div className="timeline-tooltip-section">
             <div className="label">Notes:</div>
-            <p className="notes">{link.notes}</p>
+            <p className="timeline-tooltip-notes">{link.notes}</p>
           </div>
         )}
       </div>
