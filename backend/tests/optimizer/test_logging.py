@@ -28,12 +28,24 @@ def test_append_optimizer_log(tmp_path, monkeypatch):
         }
     }
     config = {
-        "pop_size": 1000,
-        "mutation_rate": 0.2,
-        "patience": 500,
-        "timeout_seconds": 3600,
-        "mutation_strategies": {
+        "GENETIC_ALGORITHM": {
+            "POP_SIZE": 1000,
+            "MUTATION_RATE": 0.2,
+            "PATIENCE": 500,
+            "TOURNAMENT_SIZE": 20, # Added for completeness
+            "TIMEOUT_SECONDS": 3600
+        },
+        "MUTATION_STRATEGIES": {
             "SWAP": 0.2, "HEURISTIC": 0.2, "COMPACTION": 0.3, "EXPLORATION": 0.3
+        },
+        "WEIGHTS": {
+            "ATTRACTION": 1.0,
+            "BLOCKER": 1.0, 
+            "CUT_THROUGH": 1.0,
+            "Y_SHAPE": 1.0,
+            "OVERLAP_BASE": 1000,
+            "OVERLAP_FACTOR": 100,
+            "LANE_SHARING": 5.0
         }
     }
     
@@ -53,4 +65,4 @@ def test_append_optimizer_log(tmp_path, monkeypatch):
     assert "Achieved at Gen 412 / 500" in content
     assert "Pop 1000" in content
     assert "SWAP: 0.2" in content
-    assert "Attraction (Weight N/A): Multiplier (avg dist^2) 1.20 -> Sum 1200.00" in content
+    assert "Attraction (Weight 1.0): Multiplier (avg dist^2) 1.20 -> Sum 1200.00" in content

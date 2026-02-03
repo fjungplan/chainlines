@@ -189,8 +189,8 @@ class TestChainBuilder:
         ]
         
         links = [
-            {"id": "L1", "parentId": "GBC", "childId": "Malvor", "time": 1978},
-            {"id": "L2", "parentId": "Cilo", "childId": "Malvor", "time": 1987}
+            {"id": "L1", "parentId": "GBC", "childId": "Malvor", "year": 1978},
+            {"id": "L2", "parentId": "Cilo", "childId": "Malvor", "year": 1987}
         ]
         
         chains = build_chains(nodes, links)
