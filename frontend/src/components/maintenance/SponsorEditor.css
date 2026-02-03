@@ -48,7 +48,8 @@
 ------------------------------------------------------------- */
 /* Updated to support both full page and centered container */
 .editor-full-page .editor-header,
-.centered-editor-container .editor-header {
+.centered-editor-container .editor-header,
+.editor-modal .editor-header {
     background-color: transparent;
     /* Match maintenance card feel */
     padding: 30px 30px 15px 30px;
@@ -59,6 +60,7 @@
     align-items: center;
     justify-content: space-between;
     min-height: auto;
+    width: 100%;
 }
 
 .centered-editor-container .editor-header h2 {
@@ -281,9 +283,6 @@
 /* -------------------------------------------------------------
    Custom Combobox (Dropdown)
 ------------------------------------------------------------- */
-.industry-input {
-    /* Base input style */
-}
 
 .custom-dropdown-list {
     position: absolute;

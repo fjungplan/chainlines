@@ -187,9 +187,9 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
         <div className="editor-overlay" onClick={onClose}>
             <div className="editor-modal" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div className="editor-header" style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #444' }}>
+                <div className="editor-header">
                     <div className="header-left">
-                        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Import Brands from Another Sponsor</h2>
+                        <h2>Import Brands</h2>
                     </div>
                     <button className="back-btn" onClick={onClose} title="Close">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -244,13 +244,14 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
                             <p style={{ color: '#a0aec0', marginBottom: '0.5rem' }}>
                                 Select brands to import from <strong style={{ color: '#fff' }}>{selectedSourceSponsor?.legal_name}</strong>:
                             </p>
-                            <button
+                            <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => { setStep('search'); setSelectedSourceSponsor(null); setSourceBrands([]); }}
-                                className="secondary-btn small"
                                 style={{ marginBottom: '1rem' }}
                             >
                                 ← Change Source Sponsor
-                            </button>
+                            </Button>
 
                             {brandsLoading && <LoadingSpinner />}
                             {!brandsLoading && sourceBrands.length === 0 && (
@@ -330,12 +331,13 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
                                 </div>
                             )}
 
-                            <button
+                            <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => setStep('select')}
-                                className="secondary-btn small"
                             >
                                 ← Back to Selection
-                            </button>
+                            </Button>
                         </div>
                     )}
 

@@ -78,14 +78,24 @@ describe('BrandTransferModal Cleanup', () => {
         // 3. Confirm Step
         fireEvent.click(screen.getByText(/confirm import/i));
 
-        // 4. Verification (TDD EXPECTATION: SHOULD FAIL HERE FIRST)
-        // Expect prompt
+        // 4. Verification: Check API call payload
+        // TDD EXPECTATION: It should now be called with only master_id and reason (partial payload)
+        expect(editsApi.updateSponsorBrand).toHaveBeenCalledWith('b-1', {
+            master_id: 'target-abc',
+            reason: '' // reason is empty in the test setup unless we set it
+        });
+
+        // 5. Check Close Button position (visual check/selector check)
+        const closeBtn = screen.getByRole('button', { name: /close/i });
+        expect(closeBtn).toHaveClass('back-btn');
+
+        // 6. Expect prompt
         await waitFor(() => {
             expect(screen.getByText(/sponsor cleanup/i)).toBeInTheDocument();
         });
 
         // Click Yes to Delete
-        fireEvent.click(screen.getByText(/yes, delete empty sponsor/i));
+        fireEvent.click(screen.getByRole('button', { name: /yes, delete empty sponsor/i }));
 
         // Verify API Call
         expect(sponsorsApi.deleteMaster).toHaveBeenCalledWith('src-123');

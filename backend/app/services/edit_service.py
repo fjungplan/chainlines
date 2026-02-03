@@ -1462,6 +1462,7 @@ class EditService:
             raise ValueError("Cannot edit protected brand")
 
         changes = {}
+        if request.master_id: changes['master_id'] = UUID(request.master_id)
         if request.brand_name: changes['brand_name'] = request.brand_name
         if request.display_name is not None: changes['display_name'] = request.display_name
         if request.default_hex_color: changes['default_hex_color'] = request.default_hex_color
@@ -1479,6 +1480,7 @@ class EditService:
         snapshot_before = {
             "brand": {
                  "brand_id": str(brand.brand_id),
+                 "master_id": str(brand.master_id),
                  "brand_name": brand.brand_name,
                  "default_hex_color": brand.default_hex_color,
                  "is_protected": brand.is_protected
@@ -1492,6 +1494,7 @@ class EditService:
             snapshot_after = {
                 "brand": {
                     "brand_id": str(updated.brand_id),
+                    "master_id": str(updated.master_id),
                     "brand_name": updated.brand_name,
                     "default_hex_color": updated.default_hex_color,
                     "is_protected": updated.is_protected
