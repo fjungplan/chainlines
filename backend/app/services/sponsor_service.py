@@ -377,3 +377,56 @@ class SponsorService:
         await session.delete(link)
         await session.flush()
         return True
+
+    @staticmethod
+    async def merge_brands(
+        session: AsyncSession, 
+        source_brand_id: UUID, 
+        target_brand_id: UUID
+    ) -> bool:
+        """
+        Destructive merge of Source -> Target.
+        1. Repoint all links from Source to Target.
+        2. Resolve conflicts (same Era): Sum prominence, take best rank.
+        3. Delete Source Brand.
+        """
+        # Fetch Source Links
+        stmt = select(TeamSponsorLink).where(TeamSponsorLink.brand_id == source_brand_id)
+        source_links = (await session.execute(stmt)).scalars().all()
+        
+        for source_link in source_links:
+            # Check for conflict in this Era
+            stmt_conflict = select(TeamSponsorLink).where(
+                TeamSponsorLink.era_id == source_link.era_id,
+                TeamSponsorLink.brand_id == target_brand_id
+            )
+            target_link = (await session.execute(stmt_conflict)).scalar_one_or_none()
+            
+            if target_link:
+                # CONFLICT: Merge into Target
+                # 1. Sum Prominence
+                new_prominence = target_link.prominence_percent + source_link.prominence_percent
+                target_link.prominence_percent = min(new_prominence, 100) # Cap at 100 logic-wise, though validation triggers
+                
+                # 2. Take Best Rank (Min)
+                target_link.rank_order = min(target_link.rank_order, source_link.rank_order)
+                
+                # 3. Delete Source Link
+                await session.delete(source_link)
+            else:
+                # NO CONFLICT: Repoint
+                source_link.brand_id = target_brand_id
+
+        # Flush link changes
+        await session.flush()
+        
+        # Delete Source Brand
+        stmt_brand = select(SponsorBrand).where(SponsorBrand.brand_id == source_brand_id)
+        source_brand = (await session.execute(stmt_brand)).scalar_one_or_none()
+        
+        if source_brand:
+            await session.delete(source_brand)
+            
+        await session.flush()
+        return True
+

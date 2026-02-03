@@ -12,7 +12,8 @@ from app.schemas.sponsors import (
     SponsorMasterCreate, SponsorMasterUpdate, SponsorMasterResponse,
     SponsorBrandCreate, SponsorBrandUpdate, SponsorBrandResponse,
     SponsorMasterListResponse,
-    TeamSponsorLinkCreate, TeamSponsorLinkResponse
+    TeamSponsorLinkCreate, TeamSponsorLinkResponse,
+    SponsorMergeRequest
 )
 from app.services.sponsor_service import SponsorService
 from app.services.edit_service import EditService
@@ -288,8 +289,59 @@ async def update_brand(
     )
     
     await session.commit()
+    await session.commit()
     await session.refresh(brand)
     return brand
+
+@router.post("/brands/{brand_id}/merge", status_code=status.HTTP_204_NO_CONTENT)
+async def merge_brands(
+    brand_id: UUID,
+    data: SponsorMergeRequest,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_trusted_or_higher)
+):
+    """
+    Merge brand_id (Source) into target_brand_id.
+    Destructive operation: Source brand is deleted.
+    Links are repointed, conflicts summed.
+    Trusted Users Only.
+    """
+    # 1. Verify existence
+    source = await session.get(SponsorBrand, brand_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Source brand not found")
+        
+    target = await session.get(SponsorBrand, data.target_brand_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Target brand not found")
+        
+    if brand_id == data.target_brand_id:
+        raise HTTPException(status_code=400, detail="Cannot merge brand into itself")
+
+    # Snapshot for Audit
+    snapshot_before = {
+        "brand": {
+            "brand_id": str(source.brand_id),
+            "brand_name": source.brand_name
+        }
+    }
+    
+    # 2. Execute Merge
+    await SponsorService.merge_brands(session, brand_id, data.target_brand_id)
+    
+    # 3. Log Audit
+    await EditService.record_direct_edit(
+        session=session,
+        user=current_user,
+        entity_type="sponsor_brand",
+        entity_id=brand_id,
+        action=EditAction.DELETE, # Effectively a delete of source
+        snapshot_before=snapshot_before,
+        snapshot_after={"merged_into": str(data.target_brand_id)},
+        notes=f"Merged into {target.brand_name}"
+    )
+    
+    await session.commit()
 
 @router.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_brand(
