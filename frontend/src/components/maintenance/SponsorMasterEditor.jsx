@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Merge } from 'lucide-react';
 import { sponsorsApi } from '../../api/sponsors';
 import { editsApi } from '../../api/edits';
 import { LoadingSpinner } from '../Loading';
@@ -584,19 +585,23 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                                     <div className="brand-info">
                                                         <div className="brand-name">
                                                             {brand.brand_name}
-                                                            {masterId && canDirectEdit && (
-                                                                <button
-                                                                    className="icon-btn tiny-action-btn"
-                                                                    title="Merge into another brand"
-                                                                    onClick={(e) => handleMergeClick(brand, e)}
-                                                                    style={{ marginLeft: '0.5rem', opacity: 0.6, fontSize: '0.8rem', padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}
-                                                                >
-                                                                    🔀
-                                                                </button>
-                                                            )}
                                                         </div>
                                                         {brand.display_name && <div className="brand-display">{brand.display_name}</div>}
                                                     </div>
+                                                    {masterId && canDirectEdit && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="tiny-action-btn merge-brand-btn"
+                                                            title="Merge into another brand"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleMergeClick(brand, e);
+                                                            }}
+                                                        >
+                                                            <Merge size={14} style={{ transform: 'rotate(90deg)' }} />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             );
                                         })}

@@ -435,6 +435,27 @@
     text-overflow: ellipsis;
 }
 
+.merge-brand-btn {
+    margin-left: auto;
+    opacity: 0.3;
+    transition: all 0.2s;
+    color: #a0aec0;
+    padding: 2px !important;
+    min-width: unset !important;
+    height: 28px !important;
+    width: 28px !important;
+}
+
+.brand-item:hover .merge-brand-btn {
+    opacity: 0.8;
+    color: #4A90E2;
+}
+
+.merge-brand-btn:hover {
+    opacity: 1 !important;
+    background-color: rgba(74, 144, 226, 0.15) !important;
+}
+
 .empty-panel {
     display: flex;
     align-items: center;
@@ -558,6 +579,7 @@
     font-size: 0.8rem;
     height: auto;
 }
+
 /* -------------------------------------------------------------
    Standardized Color Input (From SponsorManagerModal)
 ------------------------------------------------------------- */
@@ -595,4 +617,6 @@
 .color-input-group input[type="text"] {
     flex: 1;
     font-family: monospace;
-}"
+}
+
+"
