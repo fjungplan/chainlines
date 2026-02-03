@@ -171,10 +171,13 @@ async def delete_master(
         }
     }
 
-    success = await SponsorService.delete_master(session, master_id)
-    if not success:
-         # Should catch earlier
-         raise HTTPException(status_code=404, detail="Sponsor master not found")
+    try:
+        success = await SponsorService.delete_master(session, master_id)
+        if not success:
+             # Should catch earlier
+             raise HTTPException(status_code=404, detail="Sponsor master not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
          
     await EditService.record_direct_edit(
         session=session,

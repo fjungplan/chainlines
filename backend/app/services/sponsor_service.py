@@ -73,6 +73,11 @@ class SponsorService:
         if not master:
             return False
         
+        # Safeguard: Do not allow deletion if brands exist
+        # This prevents accidental cascade deletion of the entire sponsor tree
+        if master.brands and len(master.brands) > 0:
+            raise ValueError(f"Cannot delete sponsor master '{master.legal_name}' because it still has {len(master.brands)} brands. Delete or transfer these brands first.")
+        
         await session.delete(master)
         await session.flush()
         return True

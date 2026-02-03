@@ -123,6 +123,19 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
         setStep('confirm');
     };
 
+    const handleDeleteSource = async () => {
+        setSubmitting(true);
+        try {
+            await sponsorsApi.deleteMaster(selectedSourceSponsor.master_id);
+            if (onSuccess) onSuccess();
+            onClose();
+        } catch (err) {
+            console.error("Delete failed:", err);
+            setError("Could not delete sponsor. It may have been modified.");
+            setSubmitting(false);
+        }
+    };
+
     const handleTransfer = async () => {
         if (showReasonField && reason.length < 10) {
             setError("Please provide a reason for this change (at least 10 characters).");
@@ -144,8 +157,14 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
                 await editsApi.updateSponsorBrand(brand.brand_id, payload);
             }
 
-            if (onSuccess) onSuccess();
-            onClose();
+            // Check if we emptied the source sponsor
+            if (selectedBrandIds.size === sourceBrands.length) {
+                setStep('delete_prompt');
+                setSubmitting(false);
+            } else {
+                if (onSuccess) onSuccess();
+                onClose();
+            }
         } catch (err) {
             console.error("Transfer failed:", err);
             let errorMessage = "Transfer failed.";
@@ -319,12 +338,34 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
                             </button>
                         </div>
                     )}
+
+                    {/* Step 4: Delete Prompt */}
+                    {step === 'delete_prompt' && (
+                        <div>
+                            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>⚠️</div>
+                                <h3 style={{ margin: '0 0 1rem 0' }}>Sponsor Cleanup</h3>
+                                <p style={{ color: '#e2e8f0', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
+                                    The source sponsor <strong>'{selectedSourceSponsor?.legal_name}'</strong> is now empty.
+                                    <br />
+                                    Would you like to delete it?
+                                </p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}
                 <div className="editor-footer" style={{ padding: '0.75rem 1.5rem' }}>
                     <div className="footer-actions-left">
-                        <Button variant="secondary" onClick={onClose} disabled={submitting}>Cancel</Button>
+                        {step !== 'delete_prompt' && (
+                            <Button variant="secondary" onClick={onClose} disabled={submitting}>Cancel</Button>
+                        )}
+                        {step === 'delete_prompt' && (
+                            <Button variant="secondary" onClick={() => { if (onSuccess) onSuccess(); onClose(); }} disabled={submitting}>
+                                No, Keep Empty
+                            </Button>
+                        )}
                     </div>
                     <div className="footer-actions-right">
                         {step === 'select' && (
@@ -335,6 +376,11 @@ export default function BrandTransferModal({ isOpen, receivingMasterId, receivin
                         {step === 'confirm' && (
                             <Button variant="primary" onClick={handleTransfer} disabled={submitting}>
                                 {submitting ? 'Submitting...' : (canDirectEdit ? 'Confirm Import' : 'Request Import')}
+                            </Button>
+                        )}
+                        {step === 'delete_prompt' && (
+                            <Button variant="danger" onClick={handleDeleteSource} disabled={submitting}>
+                                Yes, Delete Empty Sponsor
                             </Button>
                         )}
                     </div>
