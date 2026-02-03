@@ -66,7 +66,8 @@ async def test_merge_brands_standard(db_session: AsyncSession):
         target_brand_id=brand_b_id
     )
     
-    assert result is True
+    assert result["repointed_links"] == 5
+    assert result["total_links_affected"] == 5
 
     # 3. Verify
     # Brand A should be gone
@@ -142,7 +143,8 @@ async def test_merge_brands_conflict(db_session: AsyncSession):
         target_brand_id=brand_b.brand_id
     )
     
-    assert result is True
+    assert result["consolidated_links"] == 1
+    assert result["total_links_affected"] == 1
 
     # 3. Verify Logic
     # Should only be one link for this Era + Brand B
