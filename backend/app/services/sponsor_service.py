@@ -174,9 +174,19 @@ class SponsorService:
     
     @staticmethod
     async def search_brands(session: AsyncSession, query: str, limit: int = 20) -> List[SponsorBrand]:
+        from sqlalchemy import or_, func
+        
+        search_query = f"%{query}%"
+        unaccented_query = func.unaccent(search_query)
+        
         stmt = (
             select(SponsorBrand)
-            .where(SponsorBrand.brand_name.ilike(f"%{query}%"))
+            .where(
+                or_(
+                    func.unaccent(SponsorBrand.brand_name).ilike(unaccented_query),
+                    func.unaccent(SponsorBrand.display_name).ilike(unaccented_query)
+                )
+            )
             .limit(limit)
         )
         result = await session.execute(stmt)
