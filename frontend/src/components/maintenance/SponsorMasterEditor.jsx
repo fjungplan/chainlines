@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../Loading';
 import Input from '../common/Input';
 import Button from '../common/Button';
 import BrandTransferModal from './BrandTransferModal';
+import BrandMergeModal from './BrandMergeModal';
 import './SponsorEditor.css';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -57,8 +58,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
     const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
     const industryInputRef = useRef(null);
 
-    // Brand Transfer Modal
+    // Brand Transfer Modal (Import)
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+    // Brand Merge Modal (Destructive Merge)
+    const [mergeSourceBrand, setMergeSourceBrand] = useState(null);
 
     // === INITIAL LOAD ===
     useEffect(() => {
@@ -137,6 +141,11 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
         });
         setViewMode('BRAND');
         setError(null);
+    };
+
+    const handleMergeClick = (brand, e) => {
+        e.stopPropagation(); // Don't select for edit
+        setMergeSourceBrand(brand);
     };
 
     // === HANDLERS: Master ===
@@ -573,7 +582,19 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                                                 >
                                                     <div className="brand-color" style={{ backgroundColor: brand.default_hex_color }}></div>
                                                     <div className="brand-info">
-                                                        <div className="brand-name">{brand.brand_name}</div>
+                                                        <div className="brand-name">
+                                                            {brand.brand_name}
+                                                            {masterId && canDirectEdit && (
+                                                                <button
+                                                                    className="icon-btn tiny-action-btn"
+                                                                    title="Merge into another brand"
+                                                                    onClick={(e) => handleMergeClick(brand, e)}
+                                                                    style={{ marginLeft: '0.5rem', opacity: 0.6, fontSize: '0.8rem', padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer', color: '#fff' }}
+                                                                >
+                                                                    🔀
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                         {brand.display_name && <div className="brand-display">{brand.display_name}</div>}
                                                     </div>
                                                 </div>
@@ -660,6 +681,22 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
                 onSuccess={() => {
                     setIsTransferModalOpen(false);
                     loadMasterData(); // Refresh to show newly imported brands
+                }}
+            />
+
+            {/* Brand Merge Modal */}
+            <BrandMergeModal
+                isOpen={!!mergeSourceBrand}
+                sourceBrand={mergeSourceBrand}
+                onClose={() => setMergeSourceBrand(null)}
+                onSuccess={() => {
+                    setMergeSourceBrand(null);
+                    // Reload data because source brand is deleted
+                    loadMasterData();
+                    // If we were editing that brand, close view mode
+                    if (currentBrand?.brand_id === mergeSourceBrand?.brand_id) {
+                        setViewMode('MASTER');
+                    }
                 }}
             />
         </>
