@@ -186,12 +186,21 @@ export default function SponsorManagerModal({ isOpen, onClose, eraId, onUpdate, 
         setError(null);
         try {
             // Send batch update
-            const payload = links.map(l => ({
-                brand_id: l.brand.brand_id || l.brand_id,
-                rank_order: l.rank_order,
-                prominence_percent: l.prominence_percent,
-                hex_color_override: l.hex_color_override
-            }));
+            const payload = links.map(l => {
+                // Auto-detect redundancy to cleanup legacy bad data
+                let finalOverride = l.hex_color_override;
+                if (finalOverride && l.brand?.default_hex_color &&
+                    finalOverride.toLowerCase() === l.brand.default_hex_color.toLowerCase()) {
+                    finalOverride = null;
+                }
+
+                return {
+                    brand_id: l.brand.brand_id || l.brand_id,
+                    rank_order: l.rank_order,
+                    prominence_percent: l.prominence_percent,
+                    hex_color_override: finalOverride
+                };
+            });
 
             await sponsorsApi.replaceEraLinks(eraId, payload);
             if (onUpdate) onUpdate();

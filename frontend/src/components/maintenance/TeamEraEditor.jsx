@@ -350,12 +350,21 @@ export default function TeamEraEditor({ eraId, nodeId, baseEraId, onSuccess, onD
                         uniqueBrands.add(bid);
                         return true;
                     })
-                    .map(l => ({
-                        brand_id: l.brand?.brand_id || l.brand_id,
-                        rank_order: l.rank_order,
-                        prominence_percent: l.prominence_percent,
-                        hex_color_override: l.hex_color_override
-                    }));
+                    .map(l => {
+                        // Auto-detect redundancy
+                        let finalOverride = l.hex_color_override;
+                        if (finalOverride && l.brand?.default_hex_color &&
+                            finalOverride.toLowerCase() === l.brand.default_hex_color.toLowerCase()) {
+                            finalOverride = null;
+                        }
+
+                        return {
+                            brand_id: l.brand?.brand_id || l.brand_id,
+                            rank_order: l.rank_order,
+                            prominence_percent: l.prominence_percent,
+                            hex_color_override: finalOverride
+                        };
+                    });
                 await sponsorsApi.replaceEraLinks(targetEraId, sponsorPayload);
             } catch (spErr) {
                 console.error("Failed to copy sponsors", spErr);
