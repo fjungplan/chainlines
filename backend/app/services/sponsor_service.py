@@ -393,16 +393,21 @@ class SponsorService:
         session: AsyncSession, 
         source_brand_id: UUID, 
         target_brand_id: UUID
-    ) -> bool:
+    ) -> dict:
         """
         Destructive merge of Source -> Target.
         1. Repoint all links from Source to Target.
         2. Resolve conflicts (same Era): Sum prominence, take best rank.
         3. Delete Source Brand.
+        
+        Returns details about the operations performed.
         """
         # Fetch Source Links
         stmt = select(TeamSponsorLink).where(TeamSponsorLink.brand_id == source_brand_id)
         source_links = (await session.execute(stmt)).scalars().all()
+        
+        repointed_count = 0
+        consolidated_count = 0
         
         for source_link in source_links:
             # Check for conflict in this Era
@@ -423,9 +428,11 @@ class SponsorService:
                 
                 # 3. Delete Source Link
                 await session.delete(source_link)
+                consolidated_count += 1
             else:
                 # NO CONFLICT: Repoint
                 source_link.brand_id = target_brand_id
+                repointed_count += 1
 
         # Flush link changes
         await session.flush()
@@ -438,5 +445,9 @@ class SponsorService:
             await session.delete(source_brand)
             
         await session.flush()
-        return True
-
+        
+        return {
+            "repointed_links": repointed_count,
+            "consolidated_links": consolidated_count,
+            "total_links_affected": repointed_count + consolidated_count
+        }

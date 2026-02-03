@@ -23,6 +23,7 @@ export default function BrandMergeModal({ isOpen, sourceBrand, onClose, onSucces
     const [searchResults, setSearchResults] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [targetBrand, setTargetBrand] = useState(null);
+    const [reason, setReason] = useState('');
 
     // Submission State
     const [submitting, setSubmitting] = useState(false);
@@ -35,6 +36,7 @@ export default function BrandMergeModal({ isOpen, sourceBrand, onClose, onSucces
             setSearchQuery('');
             setSearchResults([]);
             setTargetBrand(null);
+            setReason('');
             setError(null);
             setSubmitting(false);
         }
@@ -70,17 +72,24 @@ export default function BrandMergeModal({ isOpen, sourceBrand, onClose, onSucces
     const handleSelectTarget = (brand) => {
         setTargetBrand(brand);
         setStep('confirm');
+        setReason('');
         setError(null);
     };
 
     const handleMerge = async () => {
-        if (!sourceBrand || !targetBrand) return;
+        if (!sourceBrand || !targetBrand || !reason.trim()) return;
 
         setSubmitting(true);
         setError(null);
 
         try {
-            await sponsorsApi.mergeBrand(sourceBrand.brand_id, targetBrand.brand_id);
+            const response = await sponsorsApi.mergeBrand(sourceBrand.brand_id, targetBrand.brand_id, reason.trim());
+
+            // If it's a pending edit, we might want to show the message
+            if (response?.status === 'pending') {
+                alert(response.message || "Merge submitted for moderation.");
+            }
+
             if (onSuccess) onSuccess();
             onClose();
         } catch (err) {
@@ -167,11 +176,32 @@ export default function BrandMergeModal({ isOpen, sourceBrand, onClose, onSucces
                                 <span style={{ color: '#86efac', fontWeight: 'bold' }}>{targetBrand.brand_name}</span>
                             </div>
 
-                            <p style={{ color: '#e2e8f0', fontSize: '0.9rem' }}>
+                            <p style={{ color: '#e2e8f0', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
                                 This action is <strong>irreversible</strong>.
                                 <br />
                                 Any overlapping eras will combine prominence and keep the best rank.
                             </p>
+
+                            <div className="form-group" style={{ textAlign: 'left' }}>
+                                <label htmlFor="merge-reason" style={{ display: 'block', marginBottom: '0.5rem', color: '#e2e8f0' }}>Justification / Source Notes</label>
+                                <textarea
+                                    id="merge-reason"
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    placeholder="Reason for merge (e.g. 'Duplicate brand', 'Official merger 2024')"
+                                    rows={3}
+                                    className="brand-editor-textarea"
+                                    style={{
+                                        width: '100%',
+                                        background: '#0f172a',
+                                        border: '1px solid #334155',
+                                        borderRadius: '4px',
+                                        color: 'white',
+                                        padding: '0.75rem',
+                                        resize: 'vertical'
+                                    }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
@@ -186,7 +216,11 @@ export default function BrandMergeModal({ isOpen, sourceBrand, onClose, onSucces
                     </div>
                     <div className="footer-actions-right">
                         {step === 'confirm' && (
-                            <Button variant="danger" onClick={handleMerge} disabled={submitting}>
+                            <Button
+                                variant="danger"
+                                onClick={handleMerge}
+                                disabled={submitting || !reason.trim()}
+                            >
                                 {submitting ? 'Merging...' : 'Confirm Merge'}
                             </Button>
                         )}

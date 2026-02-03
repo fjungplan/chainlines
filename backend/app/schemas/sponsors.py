@@ -93,3 +93,4 @@ class TeamSponsorLinkResponse(BaseModel):
 
 class SponsorMergeRequest(BaseModel):
     target_brand_id: UUID
+    reason: str = Field(..., min_length=1, max_length=1000)

@@ -79,17 +79,24 @@ describe('BrandMergeModal', () => {
         // 5. Verify Confirmation Step
         // Should show "Merge [Source] into [Target]?"
         await waitFor(() => {
-            expect(screen.getByText(/confirm merge/i)).toBeInTheDocument();
+            expect(screen.getByRole('heading', { name: /confirm merge/i })).toBeInTheDocument();
         });
 
-        // 6. Click Confirm (Look for button specifically)
-        // Since text might match header too, use selector
         const confirmBtn = screen.getByRole('button', { name: /confirm merge/i });
+        const reasonInput = screen.getByLabelText(/justification/i);
+
+        // 6. Verification: Button should be disabled until reason is provided
+        expect(confirmBtn).toBeDisabled();
+
+        fireEvent.change(reasonInput, { target: { value: 'Valid reason for merge' } });
+        expect(confirmBtn).not.toBeDisabled();
+
+        // 7. Click Confirm
         fireEvent.click(confirmBtn);
 
-        // 7. Verify API Call
+        // 8. Verify API Call
         await waitFor(() => {
-            expect(sponsorsApi.mergeBrand).toHaveBeenCalledWith(sourceBrand.brand_id, 'target-1');
+            expect(sponsorsApi.mergeBrand).toHaveBeenCalledWith(sourceBrand.brand_id, 'target-1', 'Valid reason for merge');
             expect(mockOnSuccess).toHaveBeenCalled();
             expect(mockOnClose).toHaveBeenCalled();
         });
