@@ -68,55 +68,8 @@ async def get_families(
         elif layout.data_fingerprint:
             link_count = len(layout.data_fingerprint.get("link_ids", []))
             
-        # Resolve Family Name: Longest node (era span), ties go to younger (higher founding year)
-        if all_nodes_to_check:
-            
-            current_year = 2026 # TODO: Consistent with discovery service
-            best_node = None
-            max_duration = -1
-            
-            for node in all_nodes_to_check:
-                name = node.get("name")
-                if not name:
-                    continue
-                
-                # Try to get duration from eras first (most accurate for longevity)
-                eras = node.get("eras", [])
-                if eras:
-                    duration = len(eras)
-                else:
-                    # Fallback to year span
-                    start = node.get("founding_year") or node.get("startTime", 0)
-                    end = node.get("dissolution_year") or node.get("endTime")
-                    if end is None:
-                        end = current_year
-                    duration = end - start
-                
-                founding = node.get("founding_year") or node.get("startTime", 0)
-                
-                if duration > max_duration:
-                    max_duration = duration
-                    best_node = node
-                elif duration == max_duration:
-                    # Tie-break: Prefer node with more eras if same duration, then younger
-                    if best_node:
-                        best_eras_count = len(best_node.get("eras", []))
-                        curr_eras_count = len(eras)
-                        if curr_eras_count > best_eras_count:
-                            best_node = node
-                        elif curr_eras_count == best_eras_count:
-                            if founding > (best_node.get("founding_year") or best_node.get("startTime", 0)):
-                                best_node = node
-            
-            # Final fallback
-            if not best_node and all_nodes_to_check:
-                for node in all_nodes_to_check:
-                    if node.get("name"):
-                        best_node = node
-                        break
-            
-            if best_node:
-                family_name = best_node.get("name", "Unknown Node")
+        # Determine Family Name
+        family_name = _get_family_name(all_nodes_to_check)
 
         # Determine Status
         is_actually_optimized = layout.optimized_at is not None and layout.score > 0
@@ -189,6 +142,56 @@ async def get_status(
     except:
         status["active_profile_id"] = "A"
     return status
+
+def _get_family_name(all_nodes: List[Dict]) -> str:
+    """
+    Resolve family name: Longest node (era span), 
+    ties go to node with more explicit eras, 
+    then younger Founding Year.
+    """
+    if not all_nodes:
+        return "Unknown Family"
+        
+    current_year = 2026 # Consistent with discovery service
+    best_node = None
+    max_duration = -1
+    
+    for node in all_nodes:
+        name = node.get("name")
+        if not name:
+            continue
+            
+        # Year span is the primary longevity metric
+        start = node.get("founding_year") or node.get("startTime", 0)
+        end = node.get("dissolution_year") or node.get("endTime")
+        if end is None:
+            end = current_year
+        duration = end - start
+            
+        eras = node.get("eras", [])
+        founding = start
+        
+        if duration > max_duration:
+            max_duration = duration
+            best_node = node
+        elif duration == max_duration:
+            if best_node:
+                best_eras_count = len(best_node.get("eras", []))
+                curr_eras_count = len(eras)
+                if curr_eras_count > best_eras_count:
+                    best_node = node
+                elif curr_eras_count == best_eras_count:
+                    if founding > (best_node.get("founding_year") or best_node.get("startTime", 0)):
+                        best_node = node
+    
+    # Final fallback if all failed to determine duration
+    if not best_node:
+        for node in all_nodes:
+            if node.get("name"):
+                return node["name"]
+        return "Unknown Family"
+        
+    return best_node.get("name", "Unknown Node")
 
 @router.get("/families/{family_hash}/logs")
 async def get_family_logs(

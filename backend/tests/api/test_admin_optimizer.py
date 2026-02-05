@@ -18,8 +18,8 @@ async def test_get_families_list(admin_client: AsyncClient, isolated_session):
     from datetime import datetime
 
     fingerprint = {
-        "node_ids": [str(uuid.uuid4())],
-        "link_ids": [],
+        "node_ids": [str(uuid.uuid4()), str(uuid.uuid4())],
+        "link_ids": [str(uuid.uuid4())],
         "node_years": {},
         "link_years": {}
     }
@@ -27,7 +27,7 @@ async def test_get_families_list(admin_client: AsyncClient, isolated_session):
     
     layout = PrecomputedLayout(
         family_hash=family_hash,
-        layout_data={"chains": []},
+        layout_data={"chains": [{"id": "c1"}, {"id": "c2"}], "links": [{"id": "l1"}]},
         data_fingerprint=fingerprint,
         score=123.45,
         optimized_at=datetime.now()
@@ -54,8 +54,8 @@ async def test_trigger_optimization(admin_client: AsyncClient, isolated_session)
     import uuid
     
     fingerprint = {
-        "node_ids": [str(uuid.uuid4())],
-        "link_ids": [],
+        "node_ids": [str(uuid.uuid4()), str(uuid.uuid4())],
+        "link_ids": [str(uuid.uuid4())],
         "node_years": {},
         "link_years": {}
     }
