@@ -1,5 +1,5 @@
 {
-    "active_profile": "A",
+    "active_profile": "B",
     "profiles": {
         "A": {
             "GROUPWISE": {
@@ -118,11 +118,11 @@
             },
             "GENETIC_ALGORITHM": {
                 "POP_SIZE": 1000,
-                "GENERATIONS": 5000,
+                "GENERATIONS": 250,
                 "MUTATION_RATE": 0.35,
                 "TOURNAMENT_SIZE": 4,
                 "TIMEOUT_SECONDS": 3600,
-                "PATIENCE": 500
+                "PATIENCE": 50
             },
             "MUTATION_STRATEGIES": {
                 "SWAP": 0.2,

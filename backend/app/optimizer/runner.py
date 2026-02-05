@@ -209,6 +209,13 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 
                 # 5. Update Layout
                 y_indices = opt_result["y_indices"]
+                
+                # Normalize Y-indices to start at 0 (eliminate gap at top of family)
+                if y_indices:
+                    min_y = min(y_indices.values())
+                    if min_y != 0:
+                        y_indices = {k: v - min_y for k, v in y_indices.items()}
+                
                 new_fingerprint = generate_family_fingerprint(family_data, links_data)
                 new_hash = compute_family_hash(new_fingerprint)
                 
