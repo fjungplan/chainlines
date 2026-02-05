@@ -7,27 +7,41 @@ import { optimizerConfigApi } from '../api/optimizerConfig';
 import './OptimizerSettings.css';
 
 export default function OptimizerSettings() {
+    const [profilesData, setProfilesData] = useState(null);
+    const [activeTab, setActiveTab] = useState('A');
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [activating, setActivating] = useState(false);
     const [error, setError] = useState(null);
     const [hasValidationError, setHasValidationError] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
 
     useEffect(() => {
-        loadConfig();
+        loadProfiles();
     }, []);
 
-    const loadConfig = async () => {
+    const loadProfiles = async () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await optimizerConfigApi.getConfig();
-            setConfig(data);
+            const data = await optimizerConfigApi.getProfiles();
+            setProfilesData(data);
+            // Load the current tab's config
+            setConfig(data.profiles[activeTab]);
         } catch (err) {
             setError('Failed to load configuration: ' + (err.response?.data?.detail || err.message));
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Update config when tab changes
+    const handleSwitchTab = (tabId) => {
+        if (profilesData) {
+            setActiveTab(tabId);
+            setConfig(profilesData.profiles[tabId]);
+            setSuccessMessage('');
         }
     };
 
@@ -41,13 +55,39 @@ export default function OptimizerSettings() {
             setSaving(true);
             setError(null);
             setSuccessMessage('');
-            await optimizerConfigApi.updateConfig(config);
-            setSuccessMessage('Configuration saved successfully!');
+            await optimizerConfigApi.updateProfile(activeTab, config);
+
+            // Update local state copy
+            const newData = { ...profilesData };
+            newData.profiles[activeTab] = config;
+            setProfilesData(newData);
+
+            setSuccessMessage(`Profile ${activeTab} saved successfully!`);
             setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
             setError('Failed to save configuration: ' + (err.response?.data?.detail || err.message));
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleActivate = async () => {
+        try {
+            setActivating(true);
+            setError(null);
+            const result = await optimizerConfigApi.activateProfile(activeTab);
+
+            // Update local state to reflect new active profile
+            const newData = { ...profilesData };
+            newData.active_profile = result.active_profile;
+            setProfilesData(newData);
+
+            setSuccessMessage(`Profile ${activeTab} is now ACTIVE!`);
+            setTimeout(() => setSuccessMessage(''), 5000);
+        } catch (err) {
+            setError('Failed to activate profile: ' + (err.response?.data?.detail || err.message));
+        } finally {
+            setActivating(false);
         }
     };
 
@@ -81,13 +121,13 @@ export default function OptimizerSettings() {
         return (
             <div className="maintenance-page-container">
                 <div className="maintenance-content-card">
-                    <div className="loading-spinner">Loading configuration...</div>
+                    <div className="loading-spinner">Loading profiles...</div>
                 </div>
             </div>
         );
     }
 
-    if (!config) {
+    if (!profilesData || !config) {
         return (
             <div className="maintenance-page-container">
                 <div className="maintenance-content-card">
@@ -96,6 +136,8 @@ export default function OptimizerSettings() {
             </div>
         );
     }
+
+    const isActive = profilesData.active_profile === activeTab;
 
     return (
         <div className="maintenance-page-container">
@@ -108,6 +150,42 @@ export default function OptimizerSettings() {
                             </svg>
                         </Link>
                         <h1>Optimizer Settings</h1>
+                    </div>
+
+                    <div className="profile-tabs" style={{ display: 'flex', gap: '5px', marginLeft: '2rem' }}>
+                        {['A', 'B', 'C'].map(tabId => (
+                            <button
+                                key={tabId}
+                                className={`profile-tab-btn ${activeTab === tabId ? 'active' : ''}`}
+                                onClick={() => handleSwitchTab(tabId)}
+                                style={{
+                                    padding: '8px 24px',
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: '4px 4px 0 0',
+                                    backgroundColor: activeTab === tabId ? 'var(--color-bg-primary)' : 'var(--color-bg-tertiary)',
+                                    color: activeTab === tabId ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                    cursor: 'pointer',
+                                    fontWeight: '600',
+                                    position: 'relative',
+                                    borderBottom: activeTab === tabId ? '2px solid var(--color-primary)' : '1px solid var(--color-border)'
+                                }}
+                            >
+                                Profile {tabId}
+                                {profilesData.active_profile === tabId && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-8px',
+                                        right: '-8px',
+                                        backgroundColor: '#22c55e',
+                                        color: 'white',
+                                        fontSize: '0.6rem',
+                                        padding: '2px 6px',
+                                        borderRadius: '10px',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                                    }}>ACTIVE</span>
+                                )}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -123,7 +201,31 @@ export default function OptimizerSettings() {
                     </div>
                 )}
 
-                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px', paddingTop: '1rem' }}>
+                    <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                        <div>
+                            <h3 style={{ margin: 0 }}>Editing Profile {activeTab}</h3>
+                            <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                                {isActive ? 'This profile is currently active in the optimizer.' : 'Save changes before activating this profile.'}
+                            </p>
+                        </div>
+                        {!isActive && (
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleActivate}
+                                disabled={activating || saving}
+                                style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
+                            >
+                                {activating ? 'Activating...' : `Activate Profile ${activeTab}`}
+                            </button>
+                        )}
+                        {isActive && (
+                            <div style={{ color: '#22c55e', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <i className="bi bi-check-circle-fill"></i> Currently Active
+                            </div>
+                        )}
+                    </div>
+
                     <LiveAlgorithmSection
                         config={{
                             GROUPWISE: config.GROUPWISE,
@@ -152,17 +254,17 @@ export default function OptimizerSettings() {
                 <div className="settings-footer" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
                     <button
                         className="btn btn-secondary"
-                        onClick={loadConfig}
-                        disabled={saving}
+                        onClick={loadProfiles}
+                        disabled={saving || activating}
                     >
-                        Reset
+                        Reset Profile {activeTab}
                     </button>
                     <button
                         className="btn btn-primary"
                         onClick={handleSave}
-                        disabled={saving || hasValidationError}
+                        disabled={saving || activating || hasValidationError}
                     >
-                        {saving ? 'Saving...' : 'Save Changes'}
+                        {saving ? 'Saving...' : `Save Profile ${activeTab}`}
                     </button>
                 </div>
             </div>

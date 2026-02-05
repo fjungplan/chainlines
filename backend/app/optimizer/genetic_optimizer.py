@@ -280,24 +280,43 @@ class GeneticOptimizer:
         chains: List[Dict], 
         links: List[Dict]
     ) -> tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
-        """Build parent and child relationship maps."""
+        """
+        Build parent and child relationship maps between chains.
+        
+        A link parentId -> childId represents a relationship between the chains
+        containing those nodes.
+        """
         chain_parents = {}
         chain_children = {}
-        chain_map = {c["id"]: c for c in chains}
+        
+        # Build map from Node ID -> Chain Object
+        node_to_chain = {}
+        for chain in chains:
+            for node in chain.get("nodes", []):
+                node_to_chain[node["id"]] = chain
         
         for link in links:
-            parent_id = link["parentId"]
-            child_id = link["childId"]
+            parent_node_id = link["parentId"]
+            child_node_id = link["childId"]
             
-            if child_id not in chain_parents:
-                chain_parents[child_id] = []
-            if parent_id not in chain_children:
-                chain_children[parent_id] = []
+            parent_chain = node_to_chain.get(parent_node_id)
+            child_chain = node_to_chain.get(child_node_id)
             
-            if parent_id in chain_map:
-                chain_parents[child_id].append(chain_map[parent_id])
-            if child_id in chain_map:
-                chain_children[parent_id].append(chain_map[child_id])
+            # We only care about links BETWEEN different chains
+            if parent_chain and child_chain and parent_chain["id"] != child_chain["id"]:
+                p_id = parent_chain["id"]
+                c_id = child_chain["id"]
+                
+                if c_id not in chain_parents:
+                    chain_parents[c_id] = []
+                if p_id not in chain_children:
+                    chain_children[p_id] = []
+                
+                # Add to maps if not already present (avoid duplicate relationships)
+                if parent_chain not in chain_parents[c_id]:
+                    chain_parents[c_id].append(parent_chain)
+                if child_chain not in chain_children[p_id]:
+                    chain_children[p_id].append(child_chain)
         
         return chain_parents, chain_children
     

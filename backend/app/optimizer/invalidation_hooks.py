@@ -6,7 +6,7 @@ and marks affected families as needing recomputation.
 """
 import uuid
 from typing import Set
-from sqlalchemy import event
+from sqlalchemy import event, String
 from sqlalchemy.orm import Session
 from app.models.team import TeamNode
 from app.models.lineage import LineageEvent
@@ -85,10 +85,20 @@ def invalidate_on_node_update(mapper, connection, target):
     
     if _should_invalidate_node_update(target, old_values):
         _tracker.mark_node_invalidated(target.node_id)
-        # In production, this would:
-        # 1. Find all families containing this node
-        # 2. Delete their precomputed_layouts entries
-        # or mark them as stale
+        
+        # Mark affected families as stale in DB
+        from app.models.precomputed_layout import PrecomputedLayout
+        from sqlalchemy import update
+        
+        node_id_str = str(target.node_id)
+        # We use a LIKE search for the node_id string within the JSON/JSONB field
+        # to remain relatively cross-db compatible for tests vs production.
+        stmt = (
+            update(PrecomputedLayout)
+            .where(PrecomputedLayout.data_fingerprint.cast(String).like(f'%{node_id_str}%'))
+            .values(is_stale=True)
+        )
+        connection.execute(stmt)
 
 
 @event.listens_for(LineageEvent, 'after_insert')
@@ -115,6 +125,23 @@ def invalidate_on_link_insert(mapper, connection, target):
     _tracker.mark_node_invalidated(target.predecessor_node_id)
     _tracker.mark_node_invalidated(target.successor_node_id)
     
+    # Mark affected families as stale in DB
+    from app.models.precomputed_layout import PrecomputedLayout
+    from sqlalchemy import update
+    
+    pred_str = str(target.predecessor_node_id)
+    succ_str = str(target.successor_node_id)
+    
+    stmt = (
+        update(PrecomputedLayout)
+        .where(
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{pred_str}%')) |
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{succ_str}%'))
+        )
+        .values(is_stale=True)
+    )
+    connection.execute(stmt)
+    
     # TODO: In production, enqueue background task:
     # from app.tasks import assess_family_complexity
     # assess_family_complexity.delay(target.predecessor_node_id)
@@ -131,7 +158,22 @@ def invalidate_on_link_update(mapper, connection, target):
     """
     _tracker.mark_node_invalidated(target.predecessor_node_id)
     _tracker.mark_node_invalidated(target.successor_node_id)
-    # In production: invalidate families containing either node
+    
+    from app.models.precomputed_layout import PrecomputedLayout
+    from sqlalchemy import update
+    
+    pred_str = str(target.predecessor_node_id)
+    succ_str = str(target.successor_node_id)
+    
+    stmt = (
+        update(PrecomputedLayout)
+        .where(
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{pred_str}%')) |
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{succ_str}%'))
+        )
+        .values(is_stale=True)
+    )
+    connection.execute(stmt)
 
 
 @event.listens_for(LineageEvent, 'after_delete')

@@ -54,7 +54,7 @@ def test_append_optimizer_log(tmp_path, monkeypatch):
     import app.optimizer.runner as runner
     monkeypatch.setattr(runner, "OPTIMIZER_LOGS_DIR", str(log_dir))
     
-    append_optimizer_log(family_hash, results, config)
+    append_optimizer_log(family_hash, results, config, node_count=5, link_count=7)
     
     log_file = log_dir / f"family_{family_hash}.log"
     assert log_file.exists()

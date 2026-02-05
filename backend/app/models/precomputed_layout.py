@@ -17,7 +17,8 @@ class PrecomputedLayout(Base):
     layout_data: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     data_fingerprint: Mapped[dict] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
-    optimized_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, nullable=False)
+    is_stale: Mapped[bool] = mapped_column(default=False, server_default="false", nullable=False)
+    optimized_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=utc_now, onupdate=utc_now, nullable=False)
 

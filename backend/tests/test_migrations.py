@@ -175,7 +175,7 @@ async def test_precomputed_layouts_table_structure(isolated_engine):
         assert columns["layout_data"]["nullable"] is False
         assert columns["data_fingerprint"]["nullable"] is False
         assert columns["score"]["nullable"] is False
-        assert columns["optimized_at"]["nullable"] is False
+        assert columns["optimized_at"]["nullable"] is True
         assert columns["created_at"]["nullable"] is False
         assert columns["updated_at"]["nullable"] is False
 

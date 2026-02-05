@@ -23,14 +23,14 @@ class FamilyDiscoveryService:
     """
     Service for discovering and registering complex families.
     
-    A "complex family" is a connected component of nodes that exceeds
-    the complexity threshold (default: 20 nodes).
+    A "family" is any connected component of nodes.
+    By default, we discover all families (threshold: 1 node).
     """
     
     def __init__(
         self,
         session: AsyncSession,
-        complexity_threshold: int = 20
+        complexity_threshold: int = 1
     ):
         """
         Initialize the discovery service.
@@ -111,10 +111,6 @@ class FamilyDiscoveryService:
         
         # Check complexity threshold
         if len(component) < self.complexity_threshold:
-            logger.debug(
-                f"Family with {len(component)} nodes is below threshold "
-                f"({self.complexity_threshold}), skipping"
-            )
             return None
         
         # Get all links within this component
@@ -125,6 +121,11 @@ class FamilyDiscoveryService:
         )
         links_result = await self.session.execute(links_stmt)
         links = links_result.scalars().all()
+        
+        # EXCLUSION THRESHOLD: Must have at least 1 link to be a "family"
+        if not links:
+            logger.debug(f"Family with {len(component)} nodes has 0 links, skipping")
+            return None
         
         # Prepare data for fingerprinting
         current_year = 2026  # TODO: Use datetime.now().year in production
@@ -265,6 +266,10 @@ class FamilyDiscoveryService:
             # Get links for this component
             comp_node_ids = set(visited)
             comp_links = [l for l in all_links if l.predecessor_node_id in comp_node_ids and l.successor_node_id in comp_node_ids]
+            
+            # EXCLUSION THRESHOLD: Must have at least 1 link to be a "family"
+            if not comp_links:
+                continue
             
             # Fingerprint
             current_year = 2026

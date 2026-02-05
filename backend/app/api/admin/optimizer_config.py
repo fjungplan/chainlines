@@ -16,6 +16,7 @@ from pathlib import Path
 FILE_PATH = Path(__file__).resolve()
 BACKEND_APP_ROOT = FILE_PATH.parents[2]  # backend/app/
 BACKEND_CONFIG_PATH = BACKEND_APP_ROOT / "optimizer" / "layout_config.json"
+PROFILES_PATH = BACKEND_APP_ROOT / "optimizer" / "profiles.json"
 
 # Frontend Path: Try to find project root by looking for .git or frontend folder
 def get_project_root(start_path: Path) -> Path:
@@ -77,7 +78,29 @@ class LayoutConfig(BaseModel):
     GENETIC_ALGORITHM: GeneticAlgorithmConfig
     MUTATION_STRATEGIES: MutationStrategies
 
+class ProfilesContainer(BaseModel):
+    active_profile: str
+    profiles: Dict[str, LayoutConfig]
+
 # --- Helpers ---
+
+def load_profiles() -> dict:
+    if not os.path.exists(PROFILES_PATH):
+        # Fallback if somehow missing
+        default_config = load_config()
+        initial = {
+            "active_profile": "A",
+            "profiles": {"A": default_config, "B": default_config, "C": default_config}
+        }
+        with open(PROFILES_PATH, "w") as f:
+            json.dump(initial, f, indent=4)
+        return initial
+    with open(PROFILES_PATH, "r") as f:
+        return json.load(f)
+
+def save_profiles(profiles_data: dict):
+    with open(PROFILES_PATH, "w") as f:
+        json.dump(profiles_data, f, indent=4)
 
 def load_config() -> dict:
     if not os.path.exists(BACKEND_CONFIG_PATH):
@@ -152,6 +175,43 @@ def update_config(config: LayoutConfig):
 
     save_config(config.model_dump())
     return {"status": "success", "message": "Configuration updated"}
+
+@router.get("/profiles")
+def get_profiles():
+    """Get all saved profiles and the active profile ID."""
+    return load_profiles()
+
+@router.put("/profiles/{profile_id}")
+def update_profile(profile_id: str, config: LayoutConfig):
+    """Update a specific profile (e.g., A, B, or C)."""
+    data = load_profiles()
+    if profile_id not in data["profiles"]:
+        raise HTTPException(status_code=404, detail=f"Profile {profile_id} not found")
+    
+    data["profiles"][profile_id] = config.model_dump()
+    save_profiles(data)
+    
+    # If this is the active profile, also update the active layout_config.json
+    if data.get("active_profile") == profile_id:
+        save_config(data["profiles"][profile_id])
+        
+    return {"status": "success", "message": f"Profile {profile_id} updated"}
+
+@router.post("/profiles/{profile_id}/activate")
+def activate_profile(profile_id: str):
+    """Make a specific profile the active one."""
+    data = load_profiles()
+    if profile_id not in data["profiles"]:
+        raise HTTPException(status_code=404, detail=f"Profile {profile_id} not found")
+    
+    # Update active flag
+    data["active_profile"] = profile_id
+    save_profiles(data)
+    
+    # Sync to layout_config.json
+    save_config(data["profiles"][profile_id])
+    
+    return {"status": "success", "active_profile": profile_id}
 
 @router.post("/config/reset")
 def reset_config():

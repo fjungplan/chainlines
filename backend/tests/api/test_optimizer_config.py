@@ -100,3 +100,44 @@ class TestOptimizerConfigAPI:
                 TIMEOUT_SECONDS=3600, PATIENCE=500
             )
 
+    def test_get_profiles_returns_all(self):
+        """test_get_profiles_returns_all: GET /api/admin/optimizer/profiles"""
+        mock_data = {
+            "active_profile": "A",
+            "profiles": {"A": VALID_CONFIG, "B": VALID_CONFIG, "C": VALID_CONFIG}
+        }
+        with patch("app.api.admin.optimizer_config.load_profiles", return_value=mock_data):
+            response = client.get("/api/v1/admin/optimizer/profiles")
+            if response.status_code == 404: pytest.skip("Router not mounted")
+            assert response.status_code == 200
+            assert response.json()["active_profile"] == "A"
+            assert "B" in response.json()["profiles"]
+
+    def test_update_profile_saves_correctly(self):
+        """test_update_profile_saves_correctly: PUT /api/admin/optimizer/profiles/{id}"""
+        payload = VALID_CONFIG.copy()
+        mock_data = {
+            "active_profile": "A",
+            "profiles": {"A": VALID_CONFIG, "B": VALID_CONFIG, "C": VALID_CONFIG}
+        }
+        with patch("app.api.admin.optimizer_config.load_profiles", return_value=mock_data), \
+             patch("app.api.admin.optimizer_config.save_profiles") as mock_save:
+            response = client.put("/api/v1/admin/optimizer/profiles/B", json=payload)
+            assert response.status_code == 200
+            mock_save.assert_called_once()
+
+    def test_activate_profile_updates_active_and_syncs(self):
+        """test_activate_profile_updates_active_and_syncs: POST /api/admin/optimizer/profiles/{id}/activate"""
+        mock_data = {
+            "active_profile": "A",
+            "profiles": {"A": VALID_CONFIG, "B": VALID_CONFIG, "C": VALID_CONFIG}
+        }
+        with patch("app.api.admin.optimizer_config.load_profiles", return_value=mock_data), \
+             patch("app.api.admin.optimizer_config.save_profiles") as mock_save_profiles, \
+             patch("app.api.admin.optimizer_config.save_config") as mock_save_config:
+            response = client.post("/api/v1/admin/optimizer/profiles/B/activate")
+            assert response.status_code == 200
+            assert response.json()["active_profile"] == "B"
+            mock_save_profiles.assert_called_once()
+            mock_save_config.assert_called_once()
+

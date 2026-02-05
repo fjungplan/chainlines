@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
         try:
             logger.info("Starting background family discovery...")
             async with async_session_maker() as session:
-                service = FamilyDiscoveryService(session, complexity_threshold=20)
+                service = FamilyDiscoveryService(session, complexity_threshold=1)
                 results = await service.discover_all_families()
                 if results:
                     logger.info(f"Background discovery complete. Registered {len(results)} new complex families.")
