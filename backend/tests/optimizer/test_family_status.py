@@ -14,9 +14,19 @@ async def test_family_status_lifecycle(isolated_session):
     Test the full lifecycle of family statuses:
     pending -> optimizing -> cached -> stale -> optimizing -> cached
     """
-    # 1. Setup: Create a simple family
-    node = TeamNode(founding_year=2000, legal_name="Status Test Team")
-    isolated_session.add(node)
+    # 1. Setup: Create a simple family (2 nodes, 1 link)
+    node1 = TeamNode(founding_year=2000, legal_name="Status Test Team A")
+    node2 = TeamNode(founding_year=2005, legal_name="Status Test Team B")
+    isolated_session.add_all([node1, node2])
+    await isolated_session.flush()
+    
+    link = LineageEvent(
+        predecessor_node_id=node1.node_id,
+        successor_node_id=node2.node_id,
+        event_year=2005,
+        event_type=LineageEventType.MERGE
+    )
+    isolated_session.add(link)
     await isolated_session.commit()
     
     # 2. Discovery: Should be 'pending' initially
@@ -53,7 +63,7 @@ async def test_family_status_lifecycle(isolated_session):
     assert layout.is_stale is False
 
     # 5. Stale: Update node structure
-    node.founding_year = 2005
+    node1.founding_year = 2005
     await isolated_session.commit()
     await isolated_session.refresh(layout)
     
