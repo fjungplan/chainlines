@@ -26,11 +26,12 @@ OPTIMIZER_LOGS_DIR = os.path.join(BACKEND_DIR, "logs", "optimizer")
 # Global status tracking for background tasks
 _optimization_status = {
     "active_tasks": 0,
+    "active_hashes": set(),
     "last_run": None,
     "last_error": None
 }
 
-def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict[str, Any]):
+def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict[str, Any], node_count: int, link_count: int):
     """Append a formatted optimization result to the family-specific log file."""
     os.makedirs(OPTIMIZER_LOGS_DIR, exist_ok=True)
     log_path = os.path.join(OPTIMIZER_LOGS_DIR, f"family_{family_hash}.log")
@@ -59,10 +60,11 @@ def append_optimizer_log(family_hash: str, results: Dict[str, Any], config: Dict
     
     log_entry = [
         f"[{timestamp}] OPTIMIZATION COMPLETE",
+        f"- Family: {family_hash}",
         f"- Outcome: Score {score:.2f} (Achieved at Gen {best_gen} / {total_gens})",
         f"- Configuration: Pop {pop}, Mut {mut}, Tourney {tourney}, Pat {pat}, Timeout {timeout}s",
         f"- Mutation Strategies: {strat_str}",
-        f"- Layout: {len(results.get('y_indices', {}))} chains in {lane_count} lanes",
+        f"- Layout: {node_count} nodes, {link_count} links in {len(results.get('y_indices', {}))} chains across {lane_count} lanes",
         "- Penalties:"
     ]
     
@@ -121,6 +123,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
         layouts = result.scalars().all()
         
         for layout in layouts:
+            _optimization_status["active_hashes"].add(layout.family_hash)
             try:
                 # ... (node/link fetching logic remains same) ...
                 fingerprint = layout.data_fingerprint
@@ -202,7 +205,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 )
                 
                 # 4. Persistence & Logging
-                append_optimizer_log(layout.family_hash, opt_result, full_config)
+                append_optimizer_log(layout.family_hash, opt_result, full_config, len(nodes_data), len(links_data))
                 
                 # 5. Update Layout
                 y_indices = opt_result["y_indices"]
@@ -219,14 +222,15 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 layout.data_fingerprint = new_fingerprint
                 layout.family_hash = new_hash
                 layout.score = opt_result["score"]
+                layout.is_stale = False
                 layout.optimized_at = datetime.utcnow()
                 
                 db.add(layout)
                 
-            except Exception as e:
-                logger.error(f"Error optimizing family {layout.family_hash}: {e}")
-                _optimization_status["last_error"] = str(e)
+            finally:
+                _optimization_status["active_hashes"].discard(layout.family_hash)
         
+        await db.commit()
         logger.info(f"Optimization complete. Updated {len(layouts)} families.")
         
     except Exception as e:

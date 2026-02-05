@@ -40,22 +40,108 @@ async def get_families(
     result = await db.execute(stmt)
     layouts = result.scalars().all()
     
+    # Get active hashes from runner
+    status_info = get_optimization_status()
+    active_hashes = status_info.get("active_hashes", set())
+    
     response = []
     for layout in layouts:
         node_count = 0
         link_count = 0
+        family_name = "Unknown Family"
         
-        # Extract counts from structural fingerprint
-        if layout.data_fingerprint:
-            node_count = len(layout.data_fingerprint.get("node_ids", []))
+        # Flatten chains if they are actual chain objects (containing a 'nodes' list)
+        chains = layout.layout_data.get("chains", []) if layout.layout_data else []
+        all_nodes_to_check = []
+        for item in chains:
+            if "nodes" in item and isinstance(item["nodes"], list):
+                all_nodes_to_check.extend(item["nodes"])
+            else:
+                all_nodes_to_check.append(item)
+        
+        node_count = len(all_nodes_to_check)
+        
+        # Pull link count from layout_data if available, fallback to fingerprint
+        layout_links = layout.layout_data.get("links", []) if layout.layout_data else []
+        if layout_links:
+            link_count = len(layout_links)
+        elif layout.data_fingerprint:
             link_count = len(layout.data_fingerprint.get("link_ids", []))
+            
+        # Resolve Family Name: Longest node (era span), ties go to younger (higher founding year)
+        if all_nodes_to_check:
+            
+            current_year = 2026 # TODO: Consistent with discovery service
+            best_node = None
+            max_duration = -1
+            
+            for node in all_nodes_to_check:
+                name = node.get("name")
+                if not name:
+                    continue
+                
+                # Try to get duration from eras first (most accurate for longevity)
+                eras = node.get("eras", [])
+                if eras:
+                    duration = len(eras)
+                else:
+                    # Fallback to year span
+                    start = node.get("founding_year") or node.get("startTime", 0)
+                    end = node.get("dissolution_year") or node.get("endTime")
+                    if end is None:
+                        end = current_year
+                    duration = end - start
+                
+                founding = node.get("founding_year") or node.get("startTime", 0)
+                
+                if duration > max_duration:
+                    max_duration = duration
+                    best_node = node
+                elif duration == max_duration:
+                    # Tie-break: Prefer node with more eras if same duration, then younger
+                    if best_node:
+                        best_eras_count = len(best_node.get("eras", []))
+                        curr_eras_count = len(eras)
+                        if curr_eras_count > best_eras_count:
+                            best_node = node
+                        elif curr_eras_count == best_eras_count:
+                            if founding > (best_node.get("founding_year") or best_node.get("startTime", 0)):
+                                best_node = node
+            
+            # Final fallback
+            if not best_node and all_nodes_to_check:
+                for node in all_nodes_to_check:
+                    if node.get("name"):
+                        best_node = node
+                        break
+            
+            if best_node:
+                family_name = best_node.get("name", "Unknown Node")
+
+        # Determine Status
+        is_actually_optimized = layout.optimized_at is not None and layout.score > 0
+        
+        # EXCLUSION THRESHOLD: Must have at least 2 nodes and 1 link to be a "family"
+        if node_count < 2 or link_count < 1:
+            continue
+
+        if layout.family_hash in active_hashes:
+            status = "optimizing"
+        elif layout.is_stale:
+            status = "stale"
+        elif not is_actually_optimized:
+            status = "pending"
+        else:
+            status = "cached"
+
         response.append({
             "family_hash": layout.family_hash,
+            "family_name": family_name,
             "node_count": node_count,
             "link_count": link_count,
             "score": layout.score,
-            "optimized_at": layout.optimized_at,
-            "status": "cached" # TODO: Integrate with invalidation status
+            "optimized_at": layout.optimized_at.isoformat() if is_actually_optimized and layout.optimized_at else None,
+            "status": status
         })
     
     return response
@@ -124,7 +210,29 @@ async def get_family_logs(
         raise HTTPException(status_code=500, detail=f"Failed to read log file: {e}")
 
 
+@router.post("/discover", status_code=202)
+async def discover_families(
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(require_admin)
+):
+    """
+    Trigger background scan for all families (continuous discovery).
+    """
+    background_tasks.add_task(run_discovery_wrapper)
+    return {"message": "Discovery scan started"}
+
+
 # Helper for background task session management
+async def run_discovery_wrapper():
+    from app.db.database import async_session_maker
+    from app.services.family_discovery import FamilyDiscoveryService
+    async with async_session_maker() as session:
+        # Require at least 2 nodes and 1 link for a component to be considered a 'family'
+        service = FamilyDiscoveryService(session, complexity_threshold=2)
+        await service.discover_all_families()
+
+
 async def run_optimization_wrapper(hashes: List[str]):
     from app.db.database import async_session_maker
     async with async_session_maker() as session:

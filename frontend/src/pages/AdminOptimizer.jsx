@@ -15,6 +15,8 @@ export default function AdminOptimizer() {
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [message, setMessage] = useState(null);
 
+    const [sortConfig, setSortConfig] = useState({ key: 'node_count', direction: 'desc' });
+
     const fetchFamilies = useCallback(async () => {
         try {
             const data = await optimizerApi.getFamilies();
@@ -50,32 +52,17 @@ export default function AdminOptimizer() {
         if (isAdmin()) {
             interval = setInterval(() => {
                 fetchStatus();
-                // If we were optimizing and it finished, refresh families to see new scores/dates
-                if (isOptimizing) {
-                    fetchFamilies();
-                }
             }, POLLING_INTERVAL);
         }
         return () => clearInterval(interval);
-    }, [isAdmin, fetchStatus, fetchFamilies, isOptimizing]);
+    }, [isAdmin, fetchStatus]);
 
-    if (!isAdmin()) {
-        return (
-            <div className="maintenance-page-container">
-                <div className="maintenance-content-card">
-                    <div className="optimizer-header">
-                        <h1>Access Denied</h1>
-                    </div>
-                    <div className="optimizer-dashboard">
-                        <p>Admin access required.</p>
-                        <Link to="/admin" className="btn btn-secondary" style={{ display: 'inline-block', marginTop: '1rem' }}>
-                            Back to Admin Panel
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    // Handle data refresh when optimization starts/stops
+    useEffect(() => {
+        if (isAdmin()) {
+            fetchFamilies();
+        }
+    }, [isAdmin, isOptimizing, fetchFamilies]);
 
     const toggleSelection = (hash) => {
         const next = new Set(selectedFamilies);
@@ -92,6 +79,22 @@ export default function AdminOptimizer() {
             setSelectedFamilies(new Set());
         } else {
             setSelectedFamilies(new Set(families.map(f => f.family_hash)));
+        }
+    };
+
+    const handleDiscover = async () => {
+        setLoading(true);
+        try {
+            const res = await optimizerApi.discoverFamilies();
+            setMessage(res.message);
+            // Refresh list after a short delay to allow background task to start/finish some work
+            setTimeout(fetchFamilies, 2000);
+            setTimeout(() => setMessage(null), 5000);
+        } catch (error) {
+            console.error('Failed to trigger discovery:', error);
+            setMessage('Error: ' + (error.response?.data?.detail || error.message));
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -143,6 +146,65 @@ export default function AdminOptimizer() {
         }
     }, [logContent, showLogModal]);
 
+    const sortedFamilies = React.useMemo(() => {
+        let sortableFamilies = [...families];
+        if (sortConfig.key !== null) {
+            sortableFamilies.sort((a, b) => {
+                let aVal = a[sortConfig.key];
+                let bVal = b[sortConfig.key];
+
+                // Handle null/missing values
+                if (aVal === null || aVal === undefined) aVal = (typeof bVal === 'number' ? -1 : '');
+                if (bVal === null || bVal === undefined) bVal = (typeof aVal === 'number' ? -1 : '');
+
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                if (aVal < bVal) {
+                    return sortConfig.direction === 'asc' ? -1 : 1;
+                }
+                if (aVal > bVal) {
+                    return sortConfig.direction === 'asc' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableFamilies;
+    }, [families, sortConfig]);
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const getSortIndicator = (key) => {
+        if (sortConfig.key !== key) return <i className="bi bi-arrow-down-up sort-icon-muted" style={{ fontSize: '0.8rem', opacity: 0.3, marginLeft: '4px' }}></i>;
+        return sortConfig.direction === 'asc' ? <i className="bi bi-sort-up" style={{ marginLeft: '4px' }}></i> : <i className="bi bi-sort-down" style={{ marginLeft: '4px' }}></i>;
+    };
+
+    if (!isAdmin()) {
+        return (
+            <div className="maintenance-page-container">
+                <div className="maintenance-content-card">
+                    <div className="optimizer-header">
+                        <h1>Access Denied</h1>
+                    </div>
+                    <div className="optimizer-dashboard">
+                        <p>Admin access required.</p>
+                        <Link to="/admin" className="btn btn-secondary" style={{ display: 'inline-block', marginTop: '1rem' }}>
+                            Back to Admin Panel
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="maintenance-page-container">
             <div className="maintenance-content-card">
@@ -158,7 +220,7 @@ export default function AdminOptimizer() {
                     </div>
                 </div>
 
-                <div className="optimizer-dashboard scraper-scroll-content">
+                <div className="optimizer-dashboard" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '1.5rem' }}>
                     {isOptimizing && (
                         <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderLeft: '4px solid #3b82f6', color: '#93c5fd' }}>
                             <i className="bi bi-gear-fill spin" style={{ marginRight: '0.5rem' }}></i>
@@ -178,7 +240,7 @@ export default function AdminOptimizer() {
                         </div>
                     )}
 
-                    <div className="actions" style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <div className="actions" style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexShrink: 0 }}>
                         <button
                             className="btn btn-primary"
                             onClick={handleOptimize}
@@ -186,121 +248,145 @@ export default function AdminOptimizer() {
                         >
                             Optimize Selected ({selectedFamilies.size})
                         </button>
-                        <button className="btn btn-secondary" onClick={fetchFamilies} disabled={loading}>
-                            Refresh List
+                        <button className="btn btn-secondary" onClick={handleDiscover} disabled={loading}>
+                            Discover New
                         </button>
                         <Link to="/admin/optimizer/settings" className="btn btn-secondary" style={{ marginLeft: 'auto' }}>
                             Settings
                         </Link>
                     </div>
 
-                    <div className="run-history-section" style={{ padding: 0, border: 'none' }}>
-                        <div className="history-table-container">
-                            <table className="history-table">
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: '40px' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={families.length > 0 && selectedFamilies.size === families.length}
-                                                onChange={toggleAll}
-                                            />
-                                        </th>
-                                        <th>Family Hash</th>
-                                        <th className="text-center">Nodes</th>
-                                        <th className="text-center">Links</th>
-                                        <th className="text-center">Score</th>
-                                        <th>Last Optimized</th>
-                                        <th>Status</th>
-                                        <th className="actions-col">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {loading ? (
-                                        <tr><td colSpan="8" className="text-center p-8">Loading families...</td></tr>
-                                    ) : families.length === 0 ? (
-                                        <tr><td colSpan="8" className="text-center p-8">No cached families found.</td></tr>
-                                    ) : (
-                                        families.map(f => (
-                                            <tr key={f.family_hash}>
-                                                <td>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedFamilies.has(f.family_hash)}
-                                                        onChange={() => toggleSelection(f.family_hash)}
-                                                    />
-                                                </td>
-                                                <td title={f.family_hash}>
-                                                    <code>{f.family_hash.substring(0, 12)}</code>
-                                                </td>
-                                                <td className="text-center">{f.node_count}</td>
-                                                <td className="text-center">{f.link_count}</td>
-                                                <td className="text-center">
-                                                    {f.score?.toFixed(2) || '-'}
-                                                </td>
-                                                <td>
-                                                    {f.optimized_at ? new Date(f.optimized_at).toLocaleString() : 'Never'}
-                                                </td>
-                                                <td>
-                                                    <span className={`status-badge status-${f.status || 'pending'}`}>
-                                                        {f.status || 'UNKNOWN'}
-                                                    </span>
-                                                </td>
-                                                <td className="actions-col">
-                                                    <button
-                                                        className="btn btn-secondary btn-sm"
-                                                        onClick={() => handleViewLogs(f.family_hash)}
-                                                        style={{ padding: '0.25rem 0.5rem', minWidth: 'auto' }}
-                                                    >
-                                                        Logs
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Log Modal */}
-            {showLogModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content log-viewer-modal">
-                        <div className="modal-header">
-                            <h2>Optimizer Execution Log - Family {selectedFamilyHash?.substring(0, 8)}</h2>
-                            <button
-                                onClick={() => {
-                                    setShowLogModal(false);
-                                    setSelectedFamilyHash(null);
-                                }}
-                                className="close-btn"
-                                title="Close"
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
-                        </div>
-                        <div className="log-modal-body">
-                            <div className="log-container" ref={logContainerRef}>
-                                <pre>{loadingLog ? "Loading logs..." : (logContent || "No logs found for this run.")}</pre>
+                    <div className="scraper-scroll-content" style={{ flex: 1, overflowY: 'auto' }}>
+                        <div className="run-history-section" style={{ padding: 0, border: 'none' }}>
+                            <div className="history-table-container" style={{ minHeight: 'auto' }}>
+                                <table className="history-table">
+                                    <thead className="sortable-header">
+                                        <tr>
+                                            <th style={{ width: '40px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={families.length > 0 && selectedFamilies.size === families.length}
+                                                    onChange={toggleAll}
+                                                />
+                                            </th>
+                                            <th onClick={() => requestSort('family_name')} style={{ cursor: 'pointer' }}>
+                                                Name {getSortIndicator('family_name')}
+                                            </th>
+                                            <th onClick={() => requestSort('family_hash')} style={{ cursor: 'pointer' }}>
+                                                Hash {getSortIndicator('family_hash')}
+                                            </th>
+                                            <th className="text-center" onClick={() => requestSort('node_count')} style={{ cursor: 'pointer' }}>
+                                                Nodes {getSortIndicator('node_count')}
+                                            </th>
+                                            <th className="text-center" onClick={() => requestSort('link_count')} style={{ cursor: 'pointer' }}>
+                                                Links {getSortIndicator('link_count')}
+                                            </th>
+                                            <th className="text-center" onClick={() => requestSort('score')} style={{ cursor: 'pointer' }}>
+                                                Score {getSortIndicator('score')}
+                                            </th>
+                                            <th onClick={() => requestSort('optimized_at')} style={{ cursor: 'pointer' }}>
+                                                Last Optimized {getSortIndicator('optimized_at')}
+                                            </th>
+                                            <th onClick={() => requestSort('status')} style={{ cursor: 'pointer' }}>
+                                                Status {getSortIndicator('status')}
+                                            </th>
+                                            <th className="actions-col">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {loading ? (
+                                            <tr><td colSpan="9" className="text-center p-8">Loading families...</td></tr>
+                                        ) : sortedFamilies.length === 0 ? (
+                                            <tr><td colSpan="9" className="text-center p-8">No cached families found.</td></tr>
+                                        ) : (
+                                            sortedFamilies.map(f => (
+                                                <tr key={f.family_hash}>
+                                                    <td>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedFamilies.has(f.family_hash)}
+                                                            onChange={() => toggleSelection(f.family_hash)}
+                                                        />
+                                                    </td>
+                                                    <td title={f.family_name} style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        <strong>{f.family_name}</strong>
+                                                    </td>
+                                                    <td title={f.family_hash}>
+                                                        <code>{f.family_hash.substring(0, 8)}</code>
+                                                    </td>
+                                                    <td className="text-center">{f.node_count}</td>
+                                                    <td className="text-center">{f.link_count}</td>
+                                                    <td className="text-center">
+                                                        {f.score?.toFixed(2) || '0.00'}
+                                                    </td>
+                                                    <td>
+                                                        {f.optimized_at ? (() => {
+                                                            const d = new Date(f.optimized_at);
+                                                            const dStr = d.toLocaleDateString('en-GB'); // DD/MM/YYYY
+                                                            const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }); // HH:mm
+                                                            return `${dStr} ${tStr}`;
+                                                        })() : '-'}
+                                                    </td>
+                                                    <td>
+                                                        <span className={`status-badge status-${f.status || 'pending'}`}>
+                                                            {f.status || 'UNKNOWN'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="actions-col">
+                                                        <button
+                                                            className="btn btn-secondary btn-sm"
+                                                            onClick={() => handleViewLogs(f.family_hash)}
+                                                            style={{ padding: '0.25rem 0.5rem', minWidth: 'auto' }}
+                                                        >
+                                                            Logs
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => {
-                                setShowLogModal(false);
-                                setSelectedFamilyHash(null);
-                            }}>Close Viewer</button>
-                        </div>
                     </div>
                 </div>
-            )}
 
-            <style jsx="true">{`
+                {/* Log Modal */}
+                {showLogModal && (
+                    <div className="modal-overlay">
+                        <div className="modal-content log-viewer-modal">
+                            <div className="modal-header">
+                                <h2>Optimizer Execution Log - Family {selectedFamilyHash?.substring(0, 8)}</h2>
+                                <button
+                                    onClick={() => {
+                                        setShowLogModal(false);
+                                        setSelectedFamilyHash(null);
+                                    }}
+                                    className="close-btn"
+                                    title="Close"
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="log-modal-body">
+                                <div className="log-container" ref={logContainerRef}>
+                                    <pre>{loadingLog ? "Loading logs..." : (logContent || "No logs found for this run.")}</pre>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button className="btn btn-secondary" onClick={() => {
+                                    setShowLogModal(false);
+                                    setSelectedFamilyHash(null);
+                                }}>Close Viewer</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <style jsx="true">{`
                 .spin {
                     animation: spin 2s linear infinite;
                     display: inline-block;
@@ -334,6 +420,7 @@ export default function AdminOptimizer() {
                     text-decoration: none !important;
                 }
             `}</style>
+            </div>
         </div>
     );
 }

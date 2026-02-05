@@ -35,5 +35,13 @@ export const optimizerApi = {
     getFamilyLogs: async (familyHash) => {
         const response = await apiClient.get(`/api/v1/admin/optimizer/families/${familyHash}/logs`);
         return response.data;
+    },
+
+    /**
+     * Trigger background scan for new families.
+     */
+    discoverFamilies: async () => {
+        const response = await apiClient.post('/api/v1/admin/optimizer/discover');
+        return response.data;
     }
 };
