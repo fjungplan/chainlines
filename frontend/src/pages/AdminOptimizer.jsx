@@ -246,13 +246,13 @@ export default function AdminOptimizer() {
                             onClick={handleOptimize}
                             disabled={selectedFamilies.size === 0 || isOptimizing}
                         >
-                            Optimize Selected ({selectedFamilies.size})
+                            Optimize Selected ({selectedFamilies.size}) {status.active_profile_id && <span style={{ opacity: 0.8, fontSize: '0.9em', marginLeft: '5px' }}>[Profile {status.active_profile_id}]</span>}
                         </button>
                         <button className="btn btn-secondary" onClick={handleDiscover} disabled={loading}>
                             Discover New
                         </button>
-                        <Link to="/admin/optimizer/settings" className="btn btn-secondary" style={{ marginLeft: 'auto' }}>
-                            Settings
+                        <Link to="/admin/optimizer/settings" className="btn btn-secondary" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <i className="bi bi-gear-fill"></i> Settings
                         </Link>
                     </div>
 

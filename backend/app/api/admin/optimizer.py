@@ -181,7 +181,14 @@ async def get_status(
     user = Depends(require_admin)
 ):
     """Get optimizer status."""
-    return get_optimization_status()
+    from app.api.admin.optimizer_config import load_profiles
+    status = get_optimization_status()
+    try:
+        profiles = load_profiles()
+        status["active_profile_id"] = profiles.get("active_profile", "A")
+    except:
+        status["active_profile_id"] = "A"
+    return status
 
 @router.get("/families/{family_hash}/logs")
 async def get_family_logs(
