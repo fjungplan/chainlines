@@ -8,7 +8,7 @@ import uuid
 from typing import Set
 from sqlalchemy import event, String
 from sqlalchemy.orm import Session
-from app.models.team import TeamNode
+from app.models.team import TeamNode, TeamEra
 from app.models.lineage import LineageEvent
 
 
@@ -185,4 +185,62 @@ def invalidate_on_link_delete(mapper, connection, target):
     """
     _tracker.mark_node_invalidated(target.predecessor_node_id)
     _tracker.mark_node_invalidated(target.successor_node_id)
-    # In production: invalidate families containing either node
+
+    from app.models.precomputed_layout import PrecomputedLayout
+    from sqlalchemy import update
+    
+    pred_str = str(target.predecessor_node_id)
+    succ_str = str(target.successor_node_id)
+    
+    stmt = (
+        update(PrecomputedLayout)
+        .where(
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{pred_str}%')) |
+            (PrecomputedLayout.data_fingerprint.cast(String).like(f'%{succ_str}%'))
+        )
+        .values(is_stale=True)
+    )
+    connection.execute(stmt)
+
+@event.listens_for(TeamEra, 'after_update')
+def invalidate_on_era_update(mapper, connection, target):
+    """
+    Invalidate layouts when a TeamEra changes its structural data (season_year).
+    """
+    from sqlalchemy import inspect
+    insp = inspect(target)
+    
+    # Check if season_year changed
+    hist = insp.attrs.season_year.load_history()
+    if hist.has_changes():
+        _tracker.mark_node_invalidated(target.node_id)
+        
+        from app.models.precomputed_layout import PrecomputedLayout
+        from sqlalchemy import update
+        
+        node_id_str = str(target.node_id)
+        stmt = (
+            update(PrecomputedLayout)
+            .where(PrecomputedLayout.data_fingerprint.cast(String).like(f'%{node_id_str}%'))
+            .values(is_stale=True)
+        )
+        connection.execute(stmt)
+
+@event.listens_for(TeamEra, 'after_insert')
+@event.listens_for(TeamEra, 'after_delete')
+def invalidate_on_era_structure_change(mapper, connection, target):
+    """
+    Invalidate layouts when an era is added or removed.
+    """
+    _tracker.mark_node_invalidated(target.node_id)
+    
+    from app.models.precomputed_layout import PrecomputedLayout
+    from sqlalchemy import update
+    
+    node_id_str = str(target.node_id)
+    stmt = (
+        update(PrecomputedLayout)
+        .where(PrecomputedLayout.data_fingerprint.cast(String).like(f'%{node_id_str}%'))
+        .values(is_stale=True)
+    )
+    connection.execute(stmt)

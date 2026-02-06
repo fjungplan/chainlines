@@ -19,6 +19,7 @@ import AdminOptimizer from './pages/AdminOptimizer';
 import OptimizerSettings from './pages/OptimizerSettings';
 import AboutPage from './pages/AboutPage';
 import ImprintPage from './pages/ImprintPage';
+import ChangeLogPage from './pages/ChangeLogPage';
 import { ErrorBoundary } from './components/ErrorDisplay';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="about" element={<AboutPage />} />
             <Route path="imprint" element={<ImprintPage />} />
+            <Route path="changelog" element={<ChangeLogPage />} />
 
             <Route path="audit-log" element={<AuditLogPage />} />
             <Route path="audit-log/:editId" element={<AuditLogEditor />} />

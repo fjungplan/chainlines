@@ -1311,7 +1311,7 @@ export default function TimelineGraph({
         <div className="timeline-ruler top" ref={rulerTopRef} aria-hidden="true" />
         <div className="timeline-ruler bottom" ref={rulerBottomRef} aria-hidden="true" />
         <div className="timeline-copyright" aria-label="Copyright">
-          © 2025-{new Date().getFullYear()} ChainLines <span style={{ opacity: 0.4 }}>|</span> Code: <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPLv3</a> • Content: <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC-BY-SA 4.0</a> • <a href="https://github.com/fjungplan/chainlines" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+          © 2025-{new Date().getFullYear()} ChainLines v0.9.3 <span style={{ opacity: 0.4 }}>|</span> Code: <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPLv3</a> • Content: <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC-BY-SA 4.0</a> • <a href="https://github.com/fjungplan/chainlines" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
         </div>
         <svg ref={svgRef}></svg>
       </div>

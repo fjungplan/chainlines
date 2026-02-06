@@ -46,6 +46,9 @@ export default function HamburgerMenu() {
           <button className="menu-item" onClick={() => handleMenuItemClick('/about')}>
             About
           </button>
+          <button className="menu-item" onClick={() => handleMenuItemClick('/changelog')}>
+            Change Log
+          </button>
           <button className="menu-item" onClick={() => handleMenuItemClick('/imprint')}>
             Impressum / Legal
           </button>
