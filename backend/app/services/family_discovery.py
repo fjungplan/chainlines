@@ -7,7 +7,7 @@ Handles both initial discovery (seed) and continuous discovery (reactive).
 import logging
 from typing import List, Dict, Any, Optional, Set
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, update, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -300,6 +300,11 @@ class FamilyDiscoveryService:
             existing_stmt = select(PrecomputedLayout).where(PrecomputedLayout.family_hash == family_hash)
             existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
             
+            # PRUNE SUPERSEDED LAYOUTS:
+            # If any node in this NEW component already exists in an OLD layout, 
+            # delete the old layout as it's now stale/incorrect.
+            await self._prune_superseded_layouts(comp_node_ids, family_hash)
+
             if not existing:
                 layout = PrecomputedLayout(
                     family_hash=family_hash,
@@ -318,3 +323,32 @@ class FamilyDiscoveryService:
         await self.session.commit()
         logger.info(f"Discovery complete: {len(registered_families)} complex families registered.")
         return registered_families
+
+    async def _prune_superseded_layouts(self, node_ids: Set[UUID], current_hash: str):
+        """
+        Delete any PrecomputedLayout records that contain any of the given node_ids
+        but have a different family_hash.
+        """
+        from sqlalchemy import String
+        
+        # We search for node IDs in the JSONB fingerprint
+        # Using a collection of OR clauses for each node ID is most robust
+        # though potentially slow for massive families.
+        filters = []
+        for node_id in node_ids:
+            node_id_str = str(node_id)
+            filters.append(PrecomputedLayout.data_fingerprint.cast(String).like(f'%{node_id_str}%'))
+        
+        if not filters:
+            return
+
+        # Find any layout that mentions these nodes but isn't the current one
+        stmt = (
+            delete(PrecomputedLayout)
+            .where(PrecomputedLayout.family_hash != current_hash)
+            .where(or_(*filters))
+        )
+        
+        result = await self.session.execute(stmt)
+        if result.rowcount > 0:
+            logger.info(f"Pruned {result.rowcount} superseded layout(s) overlapping with current component.")
