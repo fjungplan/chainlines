@@ -188,9 +188,10 @@ class TestChainBuilder:
             {"id": "Cilo", "founding_year": 1978, "dissolution_year": 1987, "name": "Cilo"}
         ]
         
+        from app.models.enums import LineageEventType
         links = [
-            {"id": "L1", "parentId": "GBC", "childId": "Malvor", "year": 1978},
-            {"id": "L2", "parentId": "Cilo", "childId": "Malvor", "year": 1987}
+            {"id": "L1", "parentId": "GBC", "childId": "Malvor", "year": 1978, "type": LineageEventType.LEGAL_TRANSFER},
+            {"id": "L2", "parentId": "Cilo", "childId": "Malvor", "year": 1987, "type": LineageEventType.SPIRITUAL_SUCCESSION}
         ]
         
         chains = build_chains(nodes, links)
