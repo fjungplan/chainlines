@@ -76,25 +76,13 @@ export function buildChains(nodes, links) {
         return Math.abs(childStart - parentEnd) <= 1;
     };
 
-    const currentYear = new Date().getFullYear();
 
-    const getEndYear = (node) => {
-        if (!node) return currentYear;
-        if (node.dissolution_year) {
-            return node.dissolution_year;
-        }
-        // Zombie Node Check: If no dissolution but has eras, use the last era
-        const eras = node.eras || [];
-        if (eras.length > 0) {
-            const maxEraYear = Math.max(...eras.map(e => e.year || 0));
-            if (maxEraYear > 0) return maxEraYear;
-        }
-        return currentYear;
-    };
+    // Note: getEndYear was moved to module scope.
+    // It is now available as a local variable here, or could be used via exports if needed.
 
     /**
      * Identify the unique 'chosen' successor that continues this node's chain.
-     */
+        */
     const getChosenSuccessor = (nodeId) => {
         const sIds = succs.get(nodeId) || [];
         if (sIds.length === 0) return null;
@@ -223,14 +211,35 @@ export function buildChains(nodes, links) {
     return chains;
 }
 
+
+/**
+ * Calculate the effective end year for a node, handling dissolution and zombie status.
+ * Exported for testing and external use.
+ */
+export const getEndYear = (node) => {
+    const currentYear = new Date().getFullYear();
+    if (!node) return currentYear;
+    if (node.dissolution_year) {
+        return node.dissolution_year;
+    }
+    // Zombie Node Check: If no dissolution but has eras, use the last era
+    const eras = node.eras || [];
+    if (eras.length > 0) {
+        const maxEraYear = Math.max(...eras.map(e => e.year || 0));
+        if (maxEraYear > 0) return maxEraYear;
+    }
+    return currentYear;
+};
+
 /**
  * Group chains into connected components (families) based on links between nodes.
  * 
  * @param {Array<Object>} chains - Array of chain objects
  * @param {Array<Object>} links - Array of link objects {source: nodeId, target: nodeId}
- * @returns {Array<Object>} list of families { chains: [], minStart: number }
+ * @param {string} sortMode - Sorting mode: 'START' (default) or 'END'
+ * @returns {Array<Object>} list of families { chains: [], minStart: number, maxEnd: number }
  */
-export function buildFamilies(chains, links) {
+export function buildFamilies(chains, links, sortMode = 'START') {
     // Group chains into connected components
     const chainMap = new Map(); // nodeId -> chainId
     chains.forEach(c => c.nodes.forEach(n => chainMap.set(n.id, c)));
@@ -259,11 +268,13 @@ export function buildFamilies(chains, links) {
         visited.add(c);
 
         let minStart = c.startTime;
+        let maxEnd = c.endTime || c.startTime; // Track max end year
 
         while (q.length) {
             const cur = q.shift();
             familyChains.push(cur);
             if (cur.startTime < minStart) minStart = cur.startTime;
+            if ((cur.endTime || cur.startTime) > maxEnd) maxEnd = (cur.endTime || cur.startTime);
 
             adj.get(cur).forEach(neighbor => {
                 if (!visited.has(neighbor)) {
@@ -275,13 +286,24 @@ export function buildFamilies(chains, links) {
 
         families.push({
             chains: familyChains,
-            minStart
+            minStart,
+            maxEnd
         });
     });
 
-    // Sort families by start year (Gantt style), then by size (largest first)
+    // Sort families by start year (Gantt style) or end year, then by size (largest first)
     families.sort((a, b) => {
-        if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+        if (sortMode === 'END') {
+            // Sort by End Year ASC (Oldest dissolved first, Active last)
+            if (a.maxEnd !== b.maxEnd) return a.maxEnd - b.maxEnd;
+            // Secondary: Start Year ASC
+            if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+        } else {
+            // Default: Start Year ASC
+            if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+            // Secondary: End Year ASC
+            if (a.maxEnd !== b.maxEnd) return a.maxEnd - b.maxEnd;
+        }
         // Tie-breaker: larger families first (optional preference)
         if (a.chains.length !== b.chains.length) return b.chains.length - a.chains.length;
         // Tie-breaker: ID stability (assuming chains[0] exists)

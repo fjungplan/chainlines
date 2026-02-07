@@ -76,6 +76,7 @@ export default function TimelineGraph({
     isSidebarCollapsed: true,
     isLeftSidebarCollapsed: true
   });
+  const [sortMode, setSortMode] = useState('END'); // 'START' or 'END'
 
   // Large padding to ensures ~30px clearance even at 0.05x zoom (600 * 0.05 = 30)
   // This prevents top/bottom nodes from being clipped by the decade ruler overlays
@@ -221,10 +222,10 @@ export default function TimelineGraph({
     const height = container.clientHeight;
 
     // Calculate layout from full data (no year filtering)
-    const calculator = new LayoutCalculator(fullData, width, height, null);
+    const calculator = new LayoutCalculator(fullData, width, height, null, 1, sortMode);
     const layout = calculator.calculateLayout();
     fullLayoutRef.current = layout;
-  }, [fullData]);
+  }, [fullData, sortMode]);
 
   // Recalculate layout/zoom bounds on resize so minimum zoom remains responsive
   useEffect(() => {
@@ -640,7 +641,7 @@ export default function TimelineGraph({
     const layoutStart = performanceMonitor.current.startTiming('layout');
     // Extend the filter range by 1 year to show full span of the end year
     const filterYearRange = { min: currentFilters.startYear, max: currentFilters.endYear + 1 };
-    let calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange);
+    let calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, 1, sortMode);
     let layout = calculator.calculateLayout();
 
     // If the container is wider relative to content height, stretch the x-axis to eliminate horizontal gutters
@@ -658,7 +659,7 @@ export default function TimelineGraph({
 
     if (scaleX > scaleY * 1.001) {
       const stretchFactor = scaleX / scaleY;
-      calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, stretchFactor);
+      calculator = new LayoutCalculator(dedupedData, width, height, filterYearRange, stretchFactor, sortMode);
       layout = calculator.calculateLayout();
     }
     performanceMonitor.current.endTiming('layout', layoutStart);
@@ -1438,6 +1439,8 @@ export default function TimelineGraph({
               initialStartYear={initialStartYear}
               initialEndYear={initialEndYear}
               initialTiers={initialTiers}
+              sortMode={sortMode}
+              onSortChange={setSortMode}
             />
 
 
