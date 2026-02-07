@@ -61,43 +61,38 @@ class TestChainBuilder:
     def test_split_creates_separate_chains(self):
         """
         A -> B (A has 2 successors: B and C)
-        A -> C
-        Should produce 3 chains (A, B, C each separate because A splits).
+        A -> C 
+        If both are candidates (aligned years), they should break.
         """
         nodes = [
             {"id": "A", "founding_year": 1990, "dissolution_year": 1995},
             {"id": "B", "founding_year": 1996, "dissolution_year": 2000},
-            {"id": "C", "founding_year": 1997, "dissolution_year": 2001},
+            {"id": "C", "founding_year": 1996, "dissolution_year": 2001},
         ]
         links = [
-            {"parentId": "A", "childId": "B"},
-            {"parentId": "A", "childId": "C"},
+            {"parentId": "A", "childId": "B", "year": 1996},
+            {"parentId": "A", "childId": "C", "year": 1996},
         ]
         
         chains = build_chains(nodes, links)
-        
-        # A splits into B and C, so all three are separate chains
         assert len(chains) == 3
 
     def test_merge_creates_separate_chains(self):
         """
         A -> C (C has 2 predecessors: A and B)
         B -> C
-        Should produce 3 chains (A, B, C because C merges).
         """
         nodes = [
             {"id": "A", "founding_year": 1990, "dissolution_year": 1995},
-            {"id": "B", "founding_year": 1991, "dissolution_year": 1996},
-            {"id": "C", "founding_year": 1997, "dissolution_year": 2000},
+            {"id": "B", "founding_year": 1991, "dissolution_year": 1995},
+            {"id": "C", "founding_year": 1996, "dissolution_year": 2000},
         ]
         links = [
-            {"parentId": "A", "childId": "C"},
-            {"parentId": "B", "childId": "C"},
+            {"parentId": "A", "childId": "C", "year": 1996},
+            {"parentId": "B", "childId": "C", "year": 1996},
         ]
         
         chains = build_chains(nodes, links)
-        
-        # C has 2 predecessors (merge), so all three are separate chains
         assert len(chains) == 3
 
     def test_no_links_all_separate(self):

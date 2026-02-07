@@ -38,15 +38,36 @@ export function buildChains(nodes, links) {
         });
     });
 
-    // Helper: Is this a "Primary Continuation" based on time?
-    // Matches backend logic: abs(linkYear - childStart) <= 1
+    // Helper: Is this a "Primary Continuation" based on time? (Hand-off)
+    // A continuation is primary if:
+    // 1. It is a LEGAL_TRANSFER
+    // OR 2. The link alignment and node boundaries suggest a direct hand-off.
     const isPrimaryContinuation = (parentId, childId) => {
         const link = linkMap.get(`${parentId}-${childId}`);
         const childNode = nodeMap.get(childId);
-        if (!link || link.year === undefined || !childNode) return false;
+        const parentNode = nodeMap.get(parentId);
 
-        // Tolerance: +/- 1 year
-        return Math.abs(link.year - childNode.founding_year) <= 1;
+        if (!link || !childNode || !parentNode) return false;
+
+        // Rule: LEGAL_TRANSFER is always a continuation candidate
+        if (link.type === "LEGAL_TRANSFER") return true;
+
+        const linkYear = link.year;
+        const childStart = childNode.founding_year;
+        const parentEnd = getEndYear(parentNode);
+
+        // If link year is available, it MUST match the child birth
+        if (linkYear !== undefined) {
+            if (Math.abs(linkYear - childStart) > 1) return false;
+            // Furthermore, for it to be a "hand-off" (vs a mid-life split),
+            // it should be near the parent's death.
+            if (Math.abs(linkYear - parentEnd) > 1 && linkYear < parentEnd) return false;
+            return true;
+        }
+
+        // Fallback: No link year. Compare node boundaries directly.
+        // A direct hand-off is when child starts near parent end.
+        return Math.abs(childStart - parentEnd) <= 1;
     };
 
     const currentYear = new Date().getFullYear();
@@ -67,42 +88,47 @@ export function buildChains(nodes, links) {
 
     /**
      * Identify the unique 'chosen' successor that continues this node's chain.
-     * - If 1 successor: always return it (Rule 1).
-     * - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
      */
     const getChosenSuccessor = (nodeId) => {
         const sIds = succs.get(nodeId) || [];
         if (sIds.length === 0) return null;
-        if (sIds.length === 1) return sIds[0];
 
-        // Resolve Split: Check for unique LEGAL_TRANSFER
-        const legalSuccs = sIds.filter(sId => {
+        // Filter for candidates that are primary continuations
+        const candidates = sIds.filter(sId => isPrimaryContinuation(nodeId, sId));
+
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        const legalCandidates = candidates.filter(sId => {
             const link = linkMap.get(`${nodeId}-${sId}`);
             return link && link.type === "LEGAL_TRANSFER";
         });
 
-        if (legalSuccs.length === 1) return legalSuccs[0];
+        if (legalCandidates.length === 1) return legalCandidates[0];
         return null;
     };
 
     /**
      * Identify the unique 'chosen' predecessor that this node continues the chain from.
-     * - If 1 predecessor: always return it (Rule 1).
-     * - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
      */
     const getChosenPredecessor = (nodeId) => {
         const pIds = preds.get(nodeId) || [];
         if (pIds.length === 0) return null;
-        if (pIds.length === 1) return pIds[0];
 
-        // Resolve Merge: Check for unique LEGAL_TRANSFER
-        // We only count those that are also temporally primary continuations
-        const legalPreds = pIds.filter(pId => {
+        // Filter for candidates that are primary continuations
+        const candidates = pIds.filter(pId => isPrimaryContinuation(pId, nodeId));
+
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        const legalCandidates = candidates.filter(pId => {
             const link = linkMap.get(`${pId}-${nodeId}`);
-            return link && link.type === "LEGAL_TRANSFER" && isPrimaryContinuation(pId, nodeId);
+            return link && link.type === "LEGAL_TRANSFER";
         });
 
-        if (legalPreds.length === 1) return legalPreds[0];
+        if (legalCandidates.length === 1) return legalCandidates[0];
         return null;
     };
 

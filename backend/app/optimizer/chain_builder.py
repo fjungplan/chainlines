@@ -85,66 +85,86 @@ def build_chains(
 
     def is_primary_continuation(parent_id: str, child_id: str) -> bool:
         """
-        Determine if the link is a 'primary' temporal continuation.
-        Used to resolve merges: if one parent connects at the child's birth,
-        it claims the chain, while others are treated as secondary mergers.
+        Determine if the link is a 'primary' temporal continuation (Hand-off).
+        A continuation is primary if:
+        1. It is a LEGAL_TRANSFER
+        OR 2. The link alignment and node boundaries suggest a direct hand-off.
         """
         link = link_map.get((parent_id, child_id))
         child = node_map.get(child_id)
+        parent = node_map.get(parent_id)
         
-        if not link or not child:
+        if not link or not child or not parent:
             return False
             
+        is_legal = link.get("type") == LineageEventType.LEGAL_TRANSFER
+        if is_legal:
+            return True
+
         link_year = link.get("year")
         child_start = child.get("founding_year")
+        parent_end = get_end_year(parent)
         
-        if link_year is None or child_start is None:
-            return False
-            
-        # Tolerance: Link matches child start year (allowing for +/- 1 year fuzziness)
-        # e.g. GBC(End 1977) -> Link(1978) -> Malvor(Start 1978)
-        return abs(link_year - child_start) <= 1
+        # If link year is available, it MUST match the child birth
+        if link_year is not None:
+            if abs(link_year - child_start) > 1:
+                return False
+            # Furthermore, for it to be a "hand-off" (vs a mid-life split),
+            # it should be near the parent's death.
+            if abs(link_year - parent_end) > 1 and link_year < parent_end:
+                return False
+            return True
+
+        # Fallback: No link year. Compare node boundaries directly.
+        # A direct hand-off is when child starts near parent end.
+        return abs(child_start - parent_end) <= 1
     
     def get_chosen_successor(node_id: str) -> Optional[str]:
         """
         Identify the unique 'chosen' successor that continues this node's chain.
-        - If 1 successor: always return it (Rule 1).
-        - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
         """
         s_ids = succs.get(node_id, [])
         if len(s_ids) == 0:
             return None
-        if len(s_ids) == 1:
-            return s_ids[0]
             
-        # Resolve Split: Check for unique LEGAL_TRANSFER
-        legal_succs = [s_id for s_id in s_ids 
-                       if link_map.get((node_id, s_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER]
+        # Filter for candidates that are primary continuations
+        candidates = [s_id for s_id in s_ids if is_primary_continuation(node_id, s_id)]
         
-        if len(legal_succs) == 1:
-            return legal_succs[0]
+        if len(candidates) == 0:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+            
+        # Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        legal_candidates = [s_id for s_id in candidates 
+                            if link_map.get((node_id, s_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER]
+        
+        if len(legal_candidates) == 1:
+            return legal_candidates[0]
         return None
 
     def get_chosen_predecessor(node_id: str) -> Optional[str]:
         """
         Identify the unique 'chosen' predecessor that this node continues the chain from.
-        - If 1 predecessor: always return it (Rule 1).
-        - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
         """
         p_ids = preds.get(node_id, [])
         if len(p_ids) == 0:
             return None
-        if len(p_ids) == 1:
-            return p_ids[0]
             
-        # Resolve Merge: Check for unique LEGAL_TRANSFER
-        # We only count those that are also temporally primary continuations
-        legal_preds = [p_id for p_id in p_ids 
-                       if link_map.get((p_id, node_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER
-                       and is_primary_continuation(p_id, node_id)]
+        # Filter for candidates that are primary continuations
+        candidates = [p_id for p_id in p_ids if is_primary_continuation(p_id, node_id)]
         
-        if len(legal_preds) == 1:
-            return legal_preds[0]
+        if len(candidates) == 0:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+            
+        # Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        legal_candidates = [p_id for p_id in candidates 
+                            if link_map.get((p_id, node_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER]
+        
+        if len(legal_candidates) == 1:
+            return legal_candidates[0]
         return None
 
     def is_chain_start(node_id: str) -> bool:

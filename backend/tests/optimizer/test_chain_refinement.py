@@ -99,3 +99,33 @@ class TestChainBuilderRefinement:
         
         # All three should be separate chains
         assert len(chains) == 3
+def test_handoff_priority():
+    """
+    Verify that a mid-life SPLIT does not break a later hand-off (Utensilnord scenario).
+    Parent: 2000-2009
+    Split: 2005 -> Child1 (starts 2005)
+    Handoff: 2010 -> Child2 (starts 2010)
+    Only Child2 should continue the chain.
+    """
+    from app.optimizer.chain_builder import build_chains
+    nodes = [
+        {"id": "P", "founding_year": 2000, "dissolution_year": 2009, "name": "Parent"},
+        {"id": "C1", "founding_year": 2005, "dissolution_year": 2010, "name": "Split Child"},
+        {"id": "C2", "founding_year": 2010, "dissolution_year": 2015, "name": "Handoff Child"}
+    ]
+    from app.models.enums import LineageEventType
+    links = [
+        {"id": "L1", "parentId": "P", "childId": "C1", "year": 2005, "type": LineageEventType.SPLIT},
+        {"id": "L2", "parentId": "P", "childId": "C2", "year": 2010, "type": LineageEventType.SPIRITUAL_SUCCESSION}
+    ]
+    
+    chains = build_chains(nodes, links)
+    
+    # Parent and C2 should be together
+    p_chain = next(c for c in chains if any(n["id"] == "P" for n in c["nodes"]))
+    node_ids = [n["id"] for n in p_chain["nodes"]]
+    
+    assert "P" in node_ids
+    assert "C2" in node_ids
+    assert "C1" not in node_ids
+    assert len(node_ids) == 2
