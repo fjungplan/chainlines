@@ -1,5 +1,13 @@
 # Exhaustive Technical History (v0.1.0 - v0.9.3)
 
+### v0.9.4 - 2026-02-07
+- **Feature**: Timeline Sorting Toggle (Start/End Year) with secondary criteria for improved visual flow.
+- **Fix**: Synchronized Minimap layout calculation to guarantee consistency with the main timeline view.
+- **Feature**: Adaptive Velocity-Based Zoom for smoother navigation at deep zoom levels.
+- **Refactor**: Decoupled Live vs Profile optimizer settings and refined chain building logic for strict temporal continuity.
+- **Feature**: Enhanced Team Creation with Dissolution Year support and Source URL/Notes tracking.
+- **Stability**: Enforced lineage link uniqueness and resolved Sponsor creation reliability issues.
+
 ### v0.9.3 - 2026-02-06
 - **Feature**: Integrated Project Change Log and versioning transparency in UI.
 - **Improved**: Normalized UI layout by pushing timeline copyright 20px inwards to clear minimap frame.
