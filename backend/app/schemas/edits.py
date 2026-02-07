@@ -56,6 +56,7 @@ class CreateTeamRequest(BaseModel):
     legal_name: str # Unique internal identifier (for TeamNode)
     registered_name: str  # Team name for the first era
     founding_year: int
+    dissolution_year: Optional[int] = None
     uci_code: Optional[str] = None
     tier_level: int  # Initial tier
     reason: Optional[str] = None  # Optional for admins
@@ -79,6 +80,20 @@ class CreateTeamRequest(BaseModel):
     def validate_founding_year(cls, v):
         if v < 1900 or v > 2100:
             raise ValueError('Founding year must be between 1900 and 2100')
+        return v
+    
+    @field_validator('dissolution_year')
+    @classmethod
+    def validate_dissolution_year(cls, v):
+        if v and (v < 1900 or v > 2100):
+            raise ValueError('Dissolution year must be between 1900 and 2100')
+        return v
+    
+    @field_validator('dissolution_year')
+    @classmethod
+    def validate_dissolution_year(cls, v):
+        if v and (v < 1900 or v > 2100):
+            raise ValueError('Dissolution year must be between 1900 and 2100')
         return v
     
     @field_validator('uci_code')

@@ -623,6 +623,7 @@ class EditService:
             # Apply immediately
             node = TeamNode(
                 founding_year=request.founding_year,
+                dissolution_year=request.dissolution_year,
                 legal_name=request.legal_name,
                 display_name=request.registered_name,
                 created_by=user.user_id
@@ -638,7 +639,8 @@ class EditService:
                 "node": {
                     "node_id": str(node.node_id),
                     "legal_name": node.legal_name,
-                    "founding_year": node.founding_year
+                    "founding_year": node.founding_year,
+                    "dissolution_year": node.dissolution_year
                 }
             }
             
@@ -822,6 +824,7 @@ class EditService:
             # Create new node (WITHOUT is_active - it's generated!)
             new_node = TeamNode(
                 founding_year=request.split_year,
+                dissolution_year=None, # New teams from a split don't have a dissolution year yet
                 legal_name=gen_legal_name,
                 display_name=new_team_info.name,
                 created_by=user.user_id
