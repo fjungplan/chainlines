@@ -17,12 +17,47 @@ except ImportError:
 client = TestClient(app)
 
 VALID_CONFIG = {
-    "GROUPWISE": {"MAX_RIGID_DELTA": 20},
-    "SCOREBOARD": {"ENABLED": True},
-    "PASS_SCHEDULE": [],
+    "GROUPWISE": {
+        "MAX_RIGID_DELTA": 20,
+        "SA_INITIAL_TEMP": 100,
+        "SA_MAX_ITER": 50,
+        "SEARCH_RADIUS": 10
+    },
+    "SCOREBOARD": {
+        "ENABLED": True,
+        "OUTPUT_DIR": "logs/layout_scores"
+    },
+    "PASS_SCHEDULE": [
+        {
+            "iterations": 90,
+            "minFamilySize": 0,
+            "minLinks": 0,
+            "strategies": ["PARENTS", "CHILDREN", "HUBS"]
+        },
+        {
+            "iterations": 1,
+            "minFamilySize": 10,
+            "minLinks": 10,
+            "strategies": ["HYBRID"]
+        },
+        {
+            "iterations": 10,
+            "minFamilySize": 10,
+            "minLinks": 10,
+            "strategies": ["HUBS"]
+        }
+    ],
     "SEARCH_RADIUS": 50,
     "TARGET_RADIUS": 10,
-    "WEIGHTS": {"ATTRACTION": 1000.0},
+    "WEIGHTS": {
+        "ATTRACTION": 1000.0,
+        "BLOCKER": 5000.0,
+        "CUT_THROUGH": 10000.0,
+        "LANE_SHARING": 1000.0,
+        "OVERLAP_BASE": 500000.0,
+        "OVERLAP_FACTOR": 10000.0,
+        "Y_SHAPE": 500.0
+    },
     "GENETIC_ALGORITHM": {
         "POP_SIZE": 1000,
         "GENERATIONS": 5000,
@@ -47,7 +82,10 @@ class TestOptimizerConfigAPI:
         # or mock open if the endpoint reads directly.
         # We'll assume the endpoint calls a load_config() utility in the same module
         
-        with patch("app.api.admin.optimizer_config.load_config", return_value=VALID_CONFIG) as mock_load:
+        # Mock load_profiles to ensure we rely on the mocked VALID_CONFIG (or explicitly return it in live)
+        with patch("app.api.admin.optimizer_config.load_config", return_value=VALID_CONFIG) as mock_load, \
+             patch("app.api.admin.optimizer_config.load_profiles", return_value={"live": VALID_CONFIG}):
+            
             # We also need to ensure the router is mounted. 
             # If not yet mounted in app.main, clear 404.
             # But we can test the router instance directly in unit tests if needed.
@@ -139,5 +177,6 @@ class TestOptimizerConfigAPI:
             assert response.status_code == 200
             assert response.json()["active_profile"] == "B"
             mock_save_profiles.assert_called_once()
-            mock_save_config.assert_called_once()
+            # save_config should NOT be called as per new logic
+            mock_save_config.assert_not_called()
 
