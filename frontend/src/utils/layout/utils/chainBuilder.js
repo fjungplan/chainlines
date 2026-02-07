@@ -49,20 +49,19 @@ export function buildChains(nodes, links) {
 
         if (!link || !childNode || !parentNode) return false;
 
-        // Rule: LEGAL_TRANSFER is always a continuation candidate
-        if (link.type === "LEGAL_TRANSFER") return true;
-
         const linkYear = link.year;
         const childStart = childNode.founding_year;
         const parentEnd = getEndYear(parentNode);
+        const isLegal = link.type === "LEGAL_TRANSFER";
 
         // If link year is available, it MUST match the child birth
         if (linkYear !== undefined) {
-            if (Math.abs(linkYear - childStart) > 1) return false;
+            const birthMatch = Math.abs(linkYear - childStart) <= 1;
             // Furthermore, for it to be a "hand-off" (vs a mid-life split),
-            // it should be near the parent's death.
-            if (Math.abs(linkYear - parentEnd) > 1 && linkYear < parentEnd) return false;
-            return true;
+            // it should be near the parent's death OR be a legal transfer.
+            const deathMatch = Math.abs(linkYear - parentEnd) <= 1 || linkYear > parentEnd;
+
+            return birthMatch && (deathMatch || isLegal);
         }
 
         // Fallback: No link year. Compare node boundaries directly.
