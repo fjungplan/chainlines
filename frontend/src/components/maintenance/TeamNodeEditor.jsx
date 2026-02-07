@@ -123,6 +123,9 @@ export default function TeamNodeEditor({ nodeId, onClose, onSuccess, onEraSelect
                     legal_name: payload.legal_name,
                     registered_name: payload.display_name || payload.legal_name,
                     founding_year: payload.founding_year,
+                    dissolution_year: payload.dissolution_year,
+                    source_url: payload.source_url,
+                    source_notes: payload.source_notes,
                     uci_code: null,
                     tier_level: 3,
                     reason: payload.reason

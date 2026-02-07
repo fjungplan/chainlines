@@ -38,8 +38,9 @@ def test_chain_gap():
     
     chains = build_chains(nodes, links, current_year=2024)
     
-    assert len(chains) == 1
-    assert len(chains[0]["nodes"]) == 2
+    # Gap of 3 years (2005 -> 2008) exceeds tolerance of 1 year.
+    # Should break into 2 chains.
+    assert len(chains) == 2
 
 def test_chain_overlap_fails():
     """

@@ -5,7 +5,7 @@ Write-Host "🚀 Starting Deployment to Chainlines ($serverIP)..." -ForegroundCo
 
 # 1. SSH into the server and run the update commands in one go
 # The quotes "" group the commands together so they run strictly on the server
-ssh "root@$serverIP" "cd /var/www/chainlines && git pull origin main && docker compose up -d --build --wait && docker exec cycling_backend alembic upgrade head && docker exec cycling_backend python -m app.scripts.seed_fictional_timeline"
+ssh "root@$serverIP" "cd /var/www/chainlines && git pull origin main && docker compose up -d --build --wait && docker exec cycling_backend alembic upgrade head"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "✅ Deployment Successful!" -ForegroundColor Green

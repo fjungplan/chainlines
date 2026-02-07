@@ -68,6 +68,27 @@ class PassStrategy(BaseModel):
     class Config:
         populate_by_name = True  # Allow both camelCase and snake_case
 
+# Live Config: Frontend heuristic settings only
+class LiveConfig(BaseModel):
+    GROUPWISE: Dict[str, Any]
+    SCOREBOARD: Dict[str, Any]
+    PASS_SCHEDULE: List[PassStrategy]
+    SEARCH_RADIUS: int = Field(gt=0)
+    TARGET_RADIUS: int = Field(gt=0)
+    WEIGHTS: Dict[str, float]
+
+# Profile Config: Backend GA settings with weights
+class ProfileConfig(BaseModel):
+    GROUPWISE: Dict[str, Any]
+    SCOREBOARD: Dict[str, Any]
+    PASS_SCHEDULE: List[PassStrategy]
+    SEARCH_RADIUS: int = Field(gt=0)
+    TARGET_RADIUS: int = Field(gt=0)
+    WEIGHTS: Dict[str, float]
+    GENETIC_ALGORITHM: GeneticAlgorithmConfig
+    MUTATION_STRATEGIES: MutationStrategies
+
+# Legacy: Full config (for backward compatibility)
 class LayoutConfig(BaseModel):
     GROUPWISE: Dict[str, Any]
     SCOREBOARD: Dict[str, Any]
@@ -80,7 +101,8 @@ class LayoutConfig(BaseModel):
 
 class ProfilesContainer(BaseModel):
     active_profile: str
-    profiles: Dict[str, LayoutConfig]
+    live: LiveConfig
+    profiles: Dict[str, ProfileConfig]
 
 # --- Helpers ---
 
@@ -162,19 +184,26 @@ def save_config(config: dict):
 
 @router.get("/config")
 def get_config():
-    """Get current layout configuration."""
-    return load_config()
+    """Get current layout configuration (legacy - returns live config)."""
+    profiles_data = load_profiles()
+    return profiles_data.get("live", load_config())
 
 @router.put("/config")
-def update_config(config: LayoutConfig):
-    """Update layout configuration with validation."""
+def update_config(config: LiveConfig):
+    """Update live configuration with validation."""
     # Validate pass schedule logic (optional extra checks)
     for strategy in config.PASS_SCHEDULE:
         if "HYBRID" in strategy.strategies and len(strategy.strategies) > 1:
             raise HTTPException(status_code=422, detail="HYBRID strategy must be exclusive")
 
+    # Update live config in profiles.json
+    profiles_data = load_profiles()
+    profiles_data["live"] = config.model_dump()
+    save_profiles(profiles_data)
+    
+    # Sync to layout_config.json for frontend
     save_config(config.model_dump())
-    return {"status": "success", "message": "Configuration updated"}
+    return {"status": "success", "message": "Live configuration updated"}
 
 @router.get("/profiles")
 def get_profiles():
@@ -182,7 +211,7 @@ def get_profiles():
     return load_profiles()
 
 @router.put("/profiles/{profile_id}")
-def update_profile(profile_id: str, config: LayoutConfig):
+def update_profile(profile_id: str, config: ProfileConfig):
     """Update a specific profile (e.g., A, B, or C)."""
     data = load_profiles()
     if profile_id not in data["profiles"]:
@@ -191,15 +220,14 @@ def update_profile(profile_id: str, config: LayoutConfig):
     data["profiles"][profile_id] = config.model_dump()
     save_profiles(data)
     
-    # If this is the active profile, also update the active layout_config.json
-    if data.get("active_profile") == profile_id:
-        save_config(data["profiles"][profile_id])
+    # Note: We do NOT sync to layout_config.json here anymore
+    # layout_config.json is now dedicated to the "live" config
         
     return {"status": "success", "message": f"Profile {profile_id} updated"}
 
 @router.post("/profiles/{profile_id}/activate")
 def activate_profile(profile_id: str):
-    """Make a specific profile the active one."""
+    """Make a specific profile the active one (for backend optimization)."""
     data = load_profiles()
     if profile_id not in data["profiles"]:
         raise HTTPException(status_code=404, detail=f"Profile {profile_id} not found")
@@ -208,8 +236,8 @@ def activate_profile(profile_id: str):
     data["active_profile"] = profile_id
     save_profiles(data)
     
-    # Sync to layout_config.json
-    save_config(data["profiles"][profile_id])
+    # Note: We do NOT sync to layout_config.json here anymore
+    # layout_config.json is now dedicated to the "live" config
     
     return {"status": "success", "active_profile": profile_id}
 

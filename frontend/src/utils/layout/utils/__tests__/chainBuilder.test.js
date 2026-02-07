@@ -29,8 +29,8 @@ describe('chainBuilder - Merge Logic Alignment', () => {
         ];
 
         const links = [
-            { source: 'aki', target: 'vini', event_year: 1998 },
-            { source: 'amica', target: 'vini', event_year: 2001 }
+            { source: 'aki', target: 'vini', event_year: 1998, event_type: 'LEGAL_TRANSFER' },
+            { source: 'amica', target: 'vini', event_year: 2001, event_type: 'SPIRITUAL_SUCCESSION' }
         ];
 
         // Original logic: Breaks at ANY merge (node with >1 predecessors)
@@ -68,5 +68,39 @@ describe('chainBuilder - Merge Logic Alignment', () => {
         const childChain = chains.find(c => c.nodes[0].id === 'child');
         expect(childChain).toBeDefined();
         expect(childChain.nodes.length).toBe(1);
+    });
+
+    it('should continue chain through a 1:1 link no matter the type (Rule 1)', () => {
+        const nodes = [
+            { id: 'a', founding_year: 1990, dissolution_year: 1995 },
+            { id: 'b', founding_year: 1996, dissolution_year: 2000 }
+        ];
+        const links = [
+            { source: 'a', target: 'b', event_year: 1996, event_type: 'SPIRITUAL_SUCCESSION' }
+        ];
+
+        const chains = buildChains(nodes, links);
+
+        const aChain = chains.find(c => c.nodes.some(n => n.id === 'a'));
+        expect(aChain.nodes.some(n => n.id === 'b')).toBe(true);
+        expect(aChain.nodes.length).toBe(2);
+    });
+
+    it('should break on split if multiple successors exist and zero are LEGAL_TRANSFER', () => {
+        const nodes = [
+            { id: 'parent', founding_year: 1990, dissolution_year: 1995 },
+            { id: 'child1', founding_year: 1996, dissolution_year: 2000 },
+            { id: 'child2', founding_year: 1996, dissolution_year: 2000 }
+        ];
+        const links = [
+            { source: 'parent', target: 'child1', event_year: 1996, event_type: 'SPLIT' },
+            { source: 'parent', target: 'child2', event_year: 1996, event_type: 'SPIRITUAL_SUCCESSION' }
+        ];
+
+        const chains = buildChains(nodes, links);
+
+        const parentChain = chains.find(c => c.nodes[0].id === 'parent');
+        expect(parentChain.nodes.length).toBe(1);
+        expect(chains.length).toBe(3);
     });
 });

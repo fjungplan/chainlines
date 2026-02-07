@@ -8,6 +8,18 @@ export default function ChangeLogPage() {
         <CenteredPageLayout>
             <Card title="Project Change Log">
                 <section>
+                    <h2>v0.9.4 - 2026-02-07: Timeline & Optimizer Refinement</h2>
+                    <ul>
+                        <li><strong>Timeline</strong>: Implemented "Sort by End Year" toggle with secondary sorting criteria for improved visual flow.</li>
+                        <li><strong>Timeline</strong>: Fixed Minimap synchronization to guarantee layout consistency with the main timeline view.</li>
+                        <li><strong>Timeline</strong>: Added adaptive velocity-based zoom for smoother navigation at deep zoom levels.</li>
+                        <li><strong>Optimizer</strong>: Decoupled Live vs Profile settings and refined chain building logic for strict temporal continuity.</li>
+                        <li><strong>Data</strong>: Enhanced Team Creation with Dissolution Year support and Source URL tracking.</li>
+                        <li><strong>Stability</strong>: Enforced lineage link uniqueness and resolved Sponsor creation reliability issues.</li>
+                    </ul>
+                </section>
+
+                <section>
                     <h2>v0.9.3 - 2026-02-06: Versioning & Transparency</h2>
                     <ul>
                         <li><strong>Versioning</strong>: Integrated project versioning transparency and this dedicated Change Log page.</li>

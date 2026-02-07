@@ -191,9 +191,17 @@ export default function SponsorMasterEditor({ masterId, onClose, onSuccess }) {
             } else {
                 // CREATE
                 if (canDirectEdit) {
-                    await sponsorsApi.createMaster(payload);
+                    const newMaster = await sponsorsApi.createMaster(payload);
                     // Note: Reason lost here if sponsorsApi doesn't support it, but flow is smoother
-                    onSuccess();
+
+                    if (shouldClose) {
+                        onClose();
+                        if (onSuccess) onSuccess();
+                    } else {
+                        // Pass ID to switch to Edit Mode
+                        if (onSuccess) onSuccess(newMaster.master_id);
+                        setSubmitting(false); // Reset UI state for next edit
+                    }
                 } else {
                     await editsApi.createSponsorMaster(payload);
                     message = "Sponsor creation request submitted for moderation";

@@ -22,13 +22,21 @@ async def list_lineage_events(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=1000),
     search: str = Query(None, description="Search by predecessor or successor team name"),
+    sort_by: str = Query("event_year", description="Field to sort by"),
+    order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     List lineage events with pagination and optional search.
     """
     service = LineageService(db)
-    events, total = await service.list_events(skip=skip, limit=limit, search=search)
+    events, total = await service.list_events(
+        skip=skip, 
+        limit=limit, 
+        search=search,
+        sort_by=sort_by,
+        order=order
+    )
     
     payload = {
         "items": events,

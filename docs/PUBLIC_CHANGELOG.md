@@ -1,5 +1,13 @@
 # ChainLines Project Change Log
 
+### v0.9.4 - 2026-02-07: Timeline & Optimizer Refinement
+- **Timeline**: Implemented "Sort by End Year" toggle with secondary sorting criteria for improved visual flow.
+- **Timeline**: Fixed Minimap synchronization to guarantee layout consistency with the main timeline view.
+- **Timeline**: Added adaptive velocity-based zoom for smoother navigation at deep zoom levels.
+- **Optimizer**: Decoupled Live vs Profile settings and refined chain building logic for strict temporal continuity.
+- **Data**: Enhanced Team Creation with Dissolution Year support and Source URL tracking.
+- **Stability**: Enforced lineage link uniqueness and resolved Sponsor creation reliability issues.
+
 ### v0.9.3 - 2026-02-06: Versioning & Transparency
 - **Versioning**: Integrated project versioning transparency and this dedicated Change Log page.
 - **UI Geometry**: Pushed timeline copyright 20px inwards to prevent overlap with the collapsed minimap border.

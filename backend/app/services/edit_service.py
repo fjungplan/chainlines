@@ -623,8 +623,11 @@ class EditService:
             # Apply immediately
             node = TeamNode(
                 founding_year=request.founding_year,
+                dissolution_year=request.dissolution_year,
                 legal_name=request.legal_name,
                 display_name=request.registered_name,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
                 created_by=user.user_id
             )
             session.add(node)
@@ -638,7 +641,8 @@ class EditService:
                 "node": {
                     "node_id": str(node.node_id),
                     "legal_name": node.legal_name,
-                    "founding_year": node.founding_year
+                    "founding_year": node.founding_year,
+                    "dissolution_year": node.dissolution_year
                 }
             }
             
@@ -822,6 +826,7 @@ class EditService:
             # Create new node (WITHOUT is_active - it's generated!)
             new_node = TeamNode(
                 founding_year=request.split_year,
+                dissolution_year=None, # New teams from a split don't have a dissolution year yet
                 legal_name=gen_legal_name,
                 display_name=new_team_info.name,
                 created_by=user.user_id
@@ -882,15 +887,15 @@ class EditService:
             if not is_mod:
                 raise ValueError("Only moderators can change protection status")
 
-        # Build changes
+        # Build changes - use model_fields_set to detect explicitly provided fields (even if None/null)
         changes = {}
-        if request.legal_name is not None: changes['legal_name'] = request.legal_name
-        if request.display_name is not None: changes['display_name'] = request.display_name
-        if request.founding_year is not None: changes['founding_year'] = request.founding_year
-        if request.dissolution_year is not None: changes['dissolution_year'] = request.dissolution_year
-        if request.source_url is not None: changes['source_url'] = request.source_url
-        if request.source_notes is not None: changes['source_notes'] = request.source_notes
-        if request.is_protected is not None: changes['is_protected'] = request.is_protected
+        if 'legal_name' in request.model_fields_set: changes['legal_name'] = request.legal_name
+        if 'display_name' in request.model_fields_set: changes['display_name'] = request.display_name
+        if 'founding_year' in request.model_fields_set: changes['founding_year'] = request.founding_year
+        if 'dissolution_year' in request.model_fields_set: changes['dissolution_year'] = request.dissolution_year
+        if 'source_url' in request.model_fields_set: changes['source_url'] = request.source_url
+        if 'source_notes' in request.model_fields_set: changes['source_notes'] = request.source_notes
+        if 'is_protected' in request.model_fields_set: changes['is_protected'] = request.is_protected
 
         if not changes:
             raise ValueError("No changes specified")

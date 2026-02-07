@@ -29,67 +29,117 @@ export function buildChains(nodes, links) {
     const chains = [];
     const visited = new Set();
 
-    // Link Map for fast lookup of {source, target} -> link year
+    // Link Map for fast lookup of {source, target} -> {year, type}
+    // We prioritize LEGAL_TRANSFER links to ensure logical hand-offs claim the chain
     const linkMap = new Map();
-    links.forEach(l => linkMap.set(`${l.source}-${l.target}`, l.year || l.event_year));
+    links.forEach(l => {
+        const key = `${l.source || l.parentId}-${l.target || l.childId}`;
+        const existing = linkMap.get(key);
+        const isLegal = l.event_type === "LEGAL_TRANSFER" || l.type === "LEGAL_TRANSFER";
 
-    // Helper: Is this a "Primary Continuation" based on time?
-    // Matches backend logic: abs(linkYear - childStart) <= 1
+        if (!existing || isLegal) {
+            linkMap.set(key, {
+                year: l.year || l.event_year,
+                type: l.event_type || l.type
+            });
+        }
+    });
+
+    // Helper: Is this a "Primary Continuation" based on time? (Hand-off)
+    // A continuation is primary if:
+    // 1. It is a LEGAL_TRANSFER
+    // OR 2. The link alignment and node boundaries suggest a direct hand-off.
     const isPrimaryContinuation = (parentId, childId) => {
-        const linkYear = linkMap.get(`${parentId}-${childId}`);
+        const link = linkMap.get(`${parentId}-${childId}`);
         const childNode = nodeMap.get(childId);
-        if (linkYear === undefined || !childNode) return false;
+        const parentNode = nodeMap.get(parentId);
 
-        // Tolerance: +/- 1 year
-        return Math.abs(linkYear - childNode.founding_year) <= 1;
+        if (!link || !childNode || !parentNode) return false;
+
+        const linkYear = link.year;
+        const childStart = childNode.founding_year;
+        const parentEnd = getEndYear(parentNode);
+        const isLegal = link.type === "LEGAL_TRANSFER";
+
+        // If link year is available, it MUST match the child birth
+        if (linkYear !== undefined) {
+            const birthMatch = Math.abs(linkYear - childStart) <= 1;
+            // Furthermore, for it to be a "hand-off" (vs a mid-life split),
+            // it should be near the parent's death OR be a legal transfer.
+            const deathMatch = Math.abs(linkYear - parentEnd) <= 1 || linkYear > parentEnd;
+
+            return birthMatch && (deathMatch || isLegal);
+        }
+
+        // Fallback: No link year. Compare node boundaries directly.
+        // A direct hand-off is when child starts near parent end.
+        return Math.abs(childStart - parentEnd) <= 1;
     };
 
-    const currentYear = new Date().getFullYear();
 
-    const getEndYear = (node) => {
-        if (node.dissolution_year) {
-            return node.dissolution_year;
-        }
-        // Zombie Node Check: If no dissolution but has eras, use the last era
-        const eras = node.eras || [];
-        if (eras.length > 0) {
-            const maxEraYear = Math.max(...eras.map(e => e.year || 0));
-            if (maxEraYear > 0) return maxEraYear;
-        }
-        return currentYear;
+    // Note: getEndYear was moved to module scope.
+    // It is now available as a local variable here, or could be used via exports if needed.
+
+    /**
+     * Identify the unique 'chosen' successor that continues this node's chain.
+        */
+    const getChosenSuccessor = (nodeId) => {
+        const sIds = succs.get(nodeId) || [];
+        if (sIds.length === 0) return null;
+
+        // Filter for candidates that are primary continuations
+        // Unique them via Set to handle duplicate links in data
+        const candidates = [...new Set(sIds.filter(sId => isPrimaryContinuation(nodeId, sId)))];
+
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        const legalCandidates = [...new Set(candidates.filter(sId => {
+            const link = linkMap.get(`${nodeId}-${sId}`);
+            return link && link.type === "LEGAL_TRANSFER";
+        }))];
+
+        if (legalCandidates.length === 1) return legalCandidates[0];
+        return null;
     };
 
-    // Helper: Get all primary predecessors for a node
-    const getPrimaryPredecessors = (nodeId) => {
-        const p = preds.get(nodeId) || [];
-        return p.filter(parentId => isPrimaryContinuation(parentId, nodeId));
+    /**
+     * Identify the unique 'chosen' predecessor that this node continues the chain from.
+     */
+    const getChosenPredecessor = (nodeId) => {
+        const pIds = preds.get(nodeId) || [];
+        if (pIds.length === 0) return null;
+
+        // Filter for candidates that are primary continuations
+        // Unique them via Set to handle duplicate links in data
+        const candidates = [...new Set(pIds.filter(pId => isPrimaryContinuation(pId, nodeId)))];
+
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+
+        // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
+        const legalCandidates = [...new Set(candidates.filter(pId => {
+            const link = linkMap.get(`${pId}-${nodeId}`);
+            return link && link.type === "LEGAL_TRANSFER";
+        }))];
+
+        if (legalCandidates.length === 1) return legalCandidates[0];
+        return null;
     };
 
     // 1. Identification of "Chain Starter" nodes
     const isChainStart = (nodeId) => {
-        const p = preds.get(nodeId) || [];
+        // A node starts a chain if it has no chosen predecessor,
+        // OR if its chosen predecessor has a different chosen successor (split conflict).
+        const pId = getChosenPredecessor(nodeId);
+        if (!pId) return true;
 
-        // Case 1: No Predecessors -> Start
-        if (p.length === 0) return true;
+        // Check if parent chooses US as the primary continuation
+        if (getChosenSuccessor(pId) !== nodeId) return true;
 
-        // Case 2: Multiple Predecessors (Merge)
-        if (p.length > 1) {
-            // CHECK PRIORITY: If there is EXACTLY ONE primary predecessor,
-            // we do NOT start a chain (we let the primary parent continue).
-            const primaryPreds = getPrimaryPredecessors(nodeId);
-            if (primaryPreds.length === 1) return false;
-            return true; // Ambiguous or None -> Start new chain
-        }
-
-        // Case 3: Single Predecessor
-        const parentId = p[0];
-        const parentSuccs = succs.get(parentId) || [];
-
-        // Parent has multiple successors (Split) -> Start new chain
-        if (parentSuccs.length > 1) return true;
-
-        // ALSO: Check for VISUAL overlap with the single parent.
-        const parentNode = nodeMap.get(parentId);
+        // ALSO: Check for VISUAL overlap with the chosen parent.
+        const parentNode = nodeMap.get(pId);
         const myNode = nodeMap.get(nodeId);
 
         const parentEnd = getEndYear(parentNode);
@@ -111,27 +161,13 @@ export function buildChains(nodes, links) {
                 visited.add(curr);
                 chainNodes.push(nodeMap.get(curr));
 
-                const s = succs.get(curr) || [];
-                // Stop if No Successors
-                if (s.length === 0) break;
+                // Find the unique logical continuation
+                const nextId = getChosenSuccessor(curr);
+                if (!nextId) break;
 
-                // Handling Splits (current node has >1 successor)
-                if (s.length > 1) break;
-
-                const nextId = s[0];
-                const nextPreds = preds.get(nextId) || [];
-
-                // Handling Merges (next node has >1 predecessors)
-                if (nextPreds.length > 1) {
-                    // Only continue if 'curr' is the Primary Predecessor
-                    if (!isPrimaryContinuation(curr, nextId)) break;
-
-                    // AND if it is the ONLY primary predecessor
-                    const primaryPreds = getPrimaryPredecessors(nextId);
-                    if (primaryPreds.length !== 1) break;
-
-                    // Also verify we are that predecessor (implicit by length==1 check above + we are primary)
-                }
+                // Symmetry check: handle merges
+                // The next node MUST choose MUST choose US as its primary predecessor
+                if (getChosenPredecessor(nextId) !== curr) break;
 
                 // Continue
                 // CRITICAL: Check for VISUAL overlap (Dirty Data Protection)
@@ -175,14 +211,35 @@ export function buildChains(nodes, links) {
     return chains;
 }
 
+
+/**
+ * Calculate the effective end year for a node, handling dissolution and zombie status.
+ * Exported for testing and external use.
+ */
+export const getEndYear = (node) => {
+    const currentYear = new Date().getFullYear();
+    if (!node) return currentYear;
+    if (node.dissolution_year) {
+        return node.dissolution_year;
+    }
+    // Zombie Node Check: If no dissolution but has eras, use the last era
+    const eras = node.eras || [];
+    if (eras.length > 0) {
+        const maxEraYear = Math.max(...eras.map(e => e.year || 0));
+        if (maxEraYear > 0) return maxEraYear;
+    }
+    return currentYear;
+};
+
 /**
  * Group chains into connected components (families) based on links between nodes.
  * 
  * @param {Array<Object>} chains - Array of chain objects
  * @param {Array<Object>} links - Array of link objects {source: nodeId, target: nodeId}
- * @returns {Array<Object>} list of families { chains: [], minStart: number }
+ * @param {string} sortMode - Sorting mode: 'START' (default) or 'END'
+ * @returns {Array<Object>} list of families { chains: [], minStart: number, maxEnd: number }
  */
-export function buildFamilies(chains, links) {
+export function buildFamilies(chains, links, sortMode = 'START') {
     // Group chains into connected components
     const chainMap = new Map(); // nodeId -> chainId
     chains.forEach(c => c.nodes.forEach(n => chainMap.set(n.id, c)));
@@ -211,11 +268,13 @@ export function buildFamilies(chains, links) {
         visited.add(c);
 
         let minStart = c.startTime;
+        let maxEnd = c.endTime || c.startTime; // Track max end year
 
         while (q.length) {
             const cur = q.shift();
             familyChains.push(cur);
             if (cur.startTime < minStart) minStart = cur.startTime;
+            if ((cur.endTime || cur.startTime) > maxEnd) maxEnd = (cur.endTime || cur.startTime);
 
             adj.get(cur).forEach(neighbor => {
                 if (!visited.has(neighbor)) {
@@ -227,13 +286,24 @@ export function buildFamilies(chains, links) {
 
         families.push({
             chains: familyChains,
-            minStart
+            minStart,
+            maxEnd
         });
     });
 
-    // Sort families by start year (Gantt style), then by size (largest first)
+    // Sort families by start year (Gantt style) or end year, then by size (largest first)
     families.sort((a, b) => {
-        if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+        if (sortMode === 'END') {
+            // Sort by End Year ASC (Oldest dissolved first, Active last)
+            if (a.maxEnd !== b.maxEnd) return a.maxEnd - b.maxEnd;
+            // Secondary: Start Year ASC
+            if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+        } else {
+            // Default: Start Year ASC
+            if (a.minStart !== b.minStart) return a.minStart - b.minStart;
+            // Secondary: End Year ASC
+            if (a.maxEnd !== b.maxEnd) return a.maxEnd - b.maxEnd;
+        }
         // Tie-breaker: larger families first (optional preference)
         if (a.chains.length !== b.chains.length) return b.chains.length - a.chains.length;
         // Tie-breaker: ID stability (assuming chains[0] exists)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import SearchBar from './SearchBar';
+import ToggleField from './admin/fields/ToggleField';
 import './ControlPanel.css';
 
 export default function ControlPanel({
@@ -11,7 +12,9 @@ export default function ControlPanel({
   searchNodes = [],
   initialStartYear = 2020,
   initialEndYear = new Date().getFullYear(),
-  initialTiers = [1, 2, 3]
+  initialTiers = [1, 2, 3],
+  sortMode = 'START',
+  onSortChange
 }) {
   const currentYear = new Date().getFullYear();
   const [startYear, setStartYear] = useState(initialStartYear);
@@ -66,6 +69,15 @@ export default function ControlPanel({
 
   return (
     <div className="control-panel">
+      <div className="control-section" style={{ marginBottom: '1rem' }}>
+        <ToggleField
+          label="Sort by End Year"
+          value={sortMode === 'END'}
+          onChange={(checked) => onSortChange && onSortChange(checked ? 'END' : 'START')}
+          tooltip="Sort timeline by dissolution year (Ascending) instead of founding year."
+        />
+      </div>
+
       {searchNodes.length > 0 && (
         <div className="control-section">
           <h3>Find Team</h3>

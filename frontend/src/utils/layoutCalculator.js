@@ -22,12 +22,13 @@ let _layoutCache = null;
  * - GroupwiseOptimizer: Handles vertical placement optimization
  */
 export class LayoutCalculator {
-  constructor(graphData, width, height, yearRange = null, stretchFactor = 1) {
+  constructor(graphData, width, height, yearRange = null, stretchFactor = 1, sortMode = 'START') {
     this.nodes = graphData.nodes;
     this.links = graphData.links;
     this.width = width;
     this.height = height;
     this.stretchFactor = stretchFactor;
+    this.sortMode = sortMode; // START or END
     this.yearRange = calculateYearRange(this.nodes);
 
     // Always calculate yearRange from actual node data to ensure xScale covers all nodes
@@ -192,7 +193,7 @@ export class LayoutCalculator {
     return buildChains(nodes, links);
   }
   buildFamilies(chains) {
-    return buildFamilies(chains, this.links);
+    return buildFamilies(chains, this.links, this.sortMode);
   }
 
 
@@ -331,8 +332,41 @@ export class LayoutCalculator {
     if (family.chains.length === 0) return 0;
 
     // 1. Initial Placement (Topological / Barycenter guess)
-    // Sort chains by start time to process legal parents first
-    const chainsToPlace = [...family.chains].sort((a, b) => a.startTime - b.startTime);
+
+    // Sort Helper
+    const compareChains = (a, b) => {
+      if (this.sortMode === 'END') {
+        // Sort by End Year ASC (Oldest dissolved first, Active last)
+        if (a.endTime !== b.endTime) return a.endTime - b.endTime;
+        // Secondary: Start Year ASC
+        if (a.startTime !== b.startTime) return a.startTime - b.startTime;
+      } else {
+        // Default: Start Year ASC
+        if (a.startTime !== b.startTime) return a.startTime - b.startTime;
+        // Secondary: End Year ASC
+        if (a.endTime !== b.endTime) return a.endTime - b.endTime;
+      }
+      // Tie-breaker: ID stability
+      return a.id.localeCompare(b.id);
+    };
+
+    // Sort chains to process legal parents first (or by sort mode?)
+    // Layout Logic dictates parents should processed before children usually.
+    // However, if we sort by End Time, we might violate topological processing order?
+    // Wait. "Sort chains by start time to process legal parents first" (line 334).
+    // This sort is for processing order (which chain to pick first as root?).
+    // Usually we pick ROOTS first.
+    // Line 414: `const roots = family.chains.filter...`.
+    // Line 417: `roots.sort(...)`. This controls vertical placement of independent roots.
+    // Line 335: `chainsToPlace`. Used for fallback.
+    // Line 430: `children.sort(...)`. This controls vertical placement of siblings.
+
+    // We should apply the user sort preference to:
+    // 1. Roots sorting (line 417)
+    // 2. Siblings sorting (line 430, 484)
+    // Does it affect fallback order (line 335)? Likely yes.
+
+    const chainsToPlace = [...family.chains].sort(compareChains);
 
     const ySlots = preplacedState?.ySlots || new Map(); // yIndex -> Array of {start, end, chainId}
     const placedChains = preplacedState?.placedChains || new Set();
@@ -413,8 +447,8 @@ export class LayoutCalculator {
 
     // Initialize queue with roots (no parents)
     const roots = family.chains.filter(c => (chainParents.get(c.id) || []).length === 0);
-    // Sort roots by start time to keep top-left sanity
-    roots.sort((a, b) => a.startTime - b.startTime);
+    // Sort roots by user preference to determine vertical stacking order
+    roots.sort(compareChains);
     roots.forEach(r => queue.push(r));
 
     // Consumed set to avoid re-queueing
@@ -424,10 +458,9 @@ export class LayoutCalculator {
     let fallbackIndex = 0;
 
     const processChain = (chain) => {
-      // If already placed (e.g. from cache), simply queue children and skip logic
       if (placedChains.has(chain.id)) {
         const children = chainChildrenMap.get(chain.id) || [];
-        children.sort((a, b) => a.startTime - b.startTime);
+        children.sort(compareChains);
         children.forEach(child => {
           if (!queuedIds.has(child.id)) {
             queuedIds.add(child.id);
@@ -480,8 +513,8 @@ export class LayoutCalculator {
 
       // Add children to queue
       const children = chainChildrenMap.get(chain.id) || [];
-      // Sort children by start time
-      children.sort((a, b) => a.startTime - b.startTime);
+      // Sort children by user preference
+      children.sort(compareChains);
 
       children.forEach(child => {
         if (!queuedIds.has(child.id)) {
