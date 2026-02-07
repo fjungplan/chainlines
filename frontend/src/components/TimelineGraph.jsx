@@ -54,6 +54,11 @@ export default function TimelineGraph({
   const fullLayoutRef = useRef(null); // Full unfiltered layout for Minimap
   const virtualizationTimeout = useRef(null);
 
+  // Velocity-based zoom tracking
+  const lastWheelTime = useRef(0);
+  const wheelVelocity = useRef(0);
+  const velocityDecayTimeout = useRef(null);
+
   const [zoomLevel, setZoomLevel] = useState('OVERVIEW');
   const [tooltip, setTooltip] = useState({ visible: false, content: null, position: null });
   const [highlightedLineage, setHighlightedLineage] = useState(null);
@@ -259,9 +264,96 @@ export default function TimelineGraph({
     const scaleFactor = 3; // Adjust for scroll speed
 
     const handleWheel = (e) => {
-      // 1. Prevent Browser Zoom (Ctrl + Wheel) - D3 handles this if filter allows
+      // 1. Handle Ctrl+Wheel for Velocity-Based Zoom
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+
+        if (!zoomBehavior.current || !svgRef.current) return;
+
+        // Calculate velocity (events per second)
+        const now = performance.now();
+        const timeDelta = now - lastWheelTime.current;
+
+        // Reset velocity if more than 500ms since last event
+        if (timeDelta > 500) {
+          wheelVelocity.current = 0;
+        } else {
+          // Calculate events per second (1000ms / timeDelta)
+          const eventsPerSecond = 1000 / Math.max(timeDelta, 1);
+          // Smooth velocity with exponential moving average
+          wheelVelocity.current = wheelVelocity.current * 0.7 + eventsPerSecond * 0.3;
+        }
+
+        lastWheelTime.current = now;
+
+        // Clear existing decay timeout
+        if (velocityDecayTimeout.current) {
+          clearTimeout(velocityDecayTimeout.current);
+        }
+
+        // Set new decay timeout to reset velocity after 500ms
+        velocityDecayTimeout.current = setTimeout(() => {
+          wheelVelocity.current = 0;
+        }, 500);
+
+        // Map velocity to zoom multiplier with EXPONENTIAL scaling
+        // Slow (0-3 events/sec) → 0.3x-0.5x multiplier (very small steps)
+        // Medium (3-10 events/sec) → 0.5x-1.5x multiplier (normal to fast)
+        // Fast (10-20 events/sec) → 1.5x-4.0x multiplier (very fast, exponential boost)
+        const velocity = wheelVelocity.current;
+        let velocityMultiplier = 1.0;
+
+        if (velocity < 3) {
+          // Slow: 0.3x to 0.5x (linear)
+          velocityMultiplier = 0.3 + (velocity / 3) * 0.2;
+        } else if (velocity < 10) {
+          // Medium: 0.5x to 1.5x (linear)
+          velocityMultiplier = 0.5 + ((velocity - 3) / 7) * 1.0;
+        } else {
+          // Fast: 1.5x to 6.0x (exponential - quadratic growth)
+          const fastVelocity = Math.min(velocity - 10, 10); // Cap at 20 events/sec
+          velocityMultiplier = 1.5 + Math.pow(fastVelocity / 10, 2) * 4.5;
+        }
+
+        // Get current zoom bounds from zoomBehavior
+        const scaleExtent = zoomBehavior.current.scaleExtent();
+        const minScale = scaleExtent[0];
+        const maxScale = scaleExtent[1];
+        const zoomRange = maxScale / minScale; // Ratio of max to min
+
+        // Adaptive base sensitivity: adjust based on zoom range
+        // For small zoom ranges (e.g., 5x-10x), linear scaling works better than logarithmic
+        // Target: ~250 wheel ticks to traverse the full range at slow speed
+        const targetTicksForFullRange = 250;
+
+        // Calculate how much to zoom per tick as a percentage of current scale
+        // If zoomRange is 10x, we want to go from 1.0 to 10.0 in 250 ticks
+        // Each tick should multiply scale by (10.0)^(1/250) = 1.0093
+        // In exponential terms: exp(ln(10)/250) = exp(0.0092)
+        // So zoomDelta should be ln(zoomRange) / targetTicks
+        const adaptiveSensitivity = Math.log(zoomRange) / targetTicksForFullRange;
+
+        // Apply velocity-adjusted zoom with adaptive sensitivity
+        const currentT = d3.zoomTransform(svgRef.current);
+        // Base zoom delta: one tick should be 1/targetTicks of the full range
+        // With deltaY ~100, we normalize and apply adaptive sensitivity
+        const baseZoomDelta = (e.deltaY / 100) * adaptiveSensitivity;
+        // Apply velocity multiplier to make fast scrolling zoom more
+        const zoomDelta = -baseZoomDelta * (0.5 + velocityMultiplier);
+        let newScale = currentT.k * Math.exp(zoomDelta);
+
+        // Clamp to stay within bounds
+        newScale = Math.max(minScale, Math.min(maxScale, newScale));
+
+        // Get mouse position for zoom center
+        const rect = svgRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Apply zoom centered on mouse position WITHOUT transition for immediate feedback
+        d3.select(svgRef.current)
+          .call(zoomBehavior.current.scaleTo, newScale, [mouseX, mouseY]);
+
         return;
       }
 
@@ -805,9 +897,9 @@ export default function TimelineGraph({
       .scaleExtent([minScale, maxScale])
       .translateExtent(extent)
       .filter((event) => {
-        // Allow ONLY Ctrl+Wheel for zooming
+        // Block ALL wheel events - we handle zoom in custom handleWheel function
         if (event.type === 'wheel') {
-          return event.ctrlKey || event.metaKey;
+          return false; // Block D3's default wheel zoom
         }
         // Allow Left Click (0) or Middle Click (1) for Panning
         if (event.type === 'mousedown') {
