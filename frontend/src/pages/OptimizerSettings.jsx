@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import LiveAlgorithmSection from '../components/admin/LiveAlgorithmSection';
-import SharedParametersSection from '../components/SharedParametersSection';
+import GeometricParametersSection from '../components/GeometricParametersSection';
 import GeneticAlgorithmSection from '../components/admin/GeneticAlgorithmSection';
 import { optimizerConfigApi } from '../api/optimizerConfig';
 import './OptimizerSettings.css';
 
 export default function OptimizerSettings() {
     const [profilesData, setProfilesData] = useState(null);
-    const [activeTab, setActiveTab] = useState('A');
+    const [activeTab, setActiveTab] = useState('live'); // 'live', 'A', 'B', or 'C'
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -28,7 +28,11 @@ export default function OptimizerSettings() {
             const data = await optimizerConfigApi.getProfiles();
             setProfilesData(data);
             // Load the current tab's config
-            setConfig(data.profiles[activeTab]);
+            if (activeTab === 'live') {
+                setConfig(data.live);
+            } else {
+                setConfig(data.profiles[activeTab]);
+            }
         } catch (err) {
             setError('Failed to load configuration: ' + (err.response?.data?.detail || err.message));
         } finally {
@@ -40,7 +44,11 @@ export default function OptimizerSettings() {
     const handleSwitchTab = (tabId) => {
         if (profilesData) {
             setActiveTab(tabId);
-            setConfig(profilesData.profiles[tabId]);
+            if (tabId === 'live') {
+                setConfig(profilesData.live);
+            } else {
+                setConfig(profilesData.profiles[tabId]);
+            }
             setSuccessMessage('');
         }
     };
@@ -55,14 +63,25 @@ export default function OptimizerSettings() {
             setSaving(true);
             setError(null);
             setSuccessMessage('');
-            await optimizerConfigApi.updateProfile(activeTab, config);
 
-            // Update local state copy
-            const newData = { ...profilesData };
-            newData.profiles[activeTab] = config;
-            setProfilesData(newData);
+            if (activeTab === 'live') {
+                // Save live config
+                await optimizerConfigApi.updateConfig(config);
+                // Update local state
+                const newData = { ...profilesData };
+                newData.live = config;
+                setProfilesData(newData);
+                setSuccessMessage('Live configuration saved successfully!');
+            } else {
+                // Save profile config
+                await optimizerConfigApi.updateProfile(activeTab, config);
+                // Update local state copy
+                const newData = { ...profilesData };
+                newData.profiles[activeTab] = config;
+                setProfilesData(newData);
+                setSuccessMessage(`Profile ${activeTab} saved successfully!`);
+            }
 
-            setSuccessMessage(`Profile ${activeTab} saved successfully!`);
             setTimeout(() => setSuccessMessage(''), 3000);
         } catch (err) {
             setError('Failed to save configuration: ' + (err.response?.data?.detail || err.message));
@@ -153,7 +172,7 @@ export default function OptimizerSettings() {
                     </div>
 
                     <div className="profile-tabs" style={{ display: 'flex', gap: '5px', marginLeft: '2rem' }}>
-                        {['A', 'B', 'C'].map(tabId => (
+                        {['live', 'A', 'B', 'C'].map(tabId => (
                             <button
                                 key={tabId}
                                 className={`profile-tab-btn ${activeTab === tabId ? 'active' : ''}`}
@@ -170,8 +189,8 @@ export default function OptimizerSettings() {
                                     borderBottom: activeTab === tabId ? '2px solid var(--color-primary)' : '1px solid var(--color-border)'
                                 }}
                             >
-                                Profile {tabId}
-                                {profilesData.active_profile === tabId && (
+                                {tabId === 'live' ? 'Live Timeline' : `Profile ${tabId}`}
+                                {tabId !== 'live' && profilesData.active_profile === tabId && (
                                     <span style={{
                                         position: 'absolute',
                                         top: '-8px',
@@ -202,53 +221,66 @@ export default function OptimizerSettings() {
                 )}
 
                 <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px', paddingTop: '1rem' }}>
-                    <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
-                        <div>
-                            <h3 style={{ margin: 0 }}>Editing Profile {activeTab}</h3>
-                            <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                                {isActive ? 'This profile is currently active in the optimizer.' : 'Save changes before activating this profile.'}
-                            </p>
-                        </div>
-                        {!isActive && (
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleActivate}
-                                disabled={activating || saving}
-                                style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
-                            >
-                                {activating ? 'Activating...' : `Activate Profile ${activeTab}`}
-                            </button>
-                        )}
-                        {isActive && (
-                            <div style={{ color: '#22c55e', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <i className="bi bi-check-circle-fill"></i> Currently Active
+                    {activeTab !== 'live' && (
+                        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+                            <div>
+                                <h3 style={{ margin: 0 }}>Editing Profile {activeTab}</h3>
+                                <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+                                    {isActive ? 'This profile is currently active in the optimizer.' : 'Save changes before activating this profile.'}
+                                </p>
                             </div>
-                        )}
-                    </div>
+                            {!isActive && (
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleActivate}
+                                    disabled={activating || saving}
+                                    style={{ backgroundColor: '#22c55e', borderColor: '#22c55e' }}
+                                >
+                                    {activating ? 'Activating...' : `Activate Profile ${activeTab}`}
+                                </button>
+                            )}
+                            {isActive && (
+                                <div style={{ color: '#22c55e', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <i className="bi bi-check-circle-fill"></i> Currently Active
+                                </div>
+                            )}
+                        </div>
+                    )}
 
-                    <LiveAlgorithmSection
-                        config={{
-                            GROUPWISE: config.GROUPWISE,
-                            SCOREBOARD: config.SCOREBOARD,
-                            PASS_SCHEDULE: config.PASS_SCHEDULE
-                        }}
-                        onChange={handleLiveChange}
-                    />
+                    {activeTab === 'live' ? (
+                        <>
+                            <LiveAlgorithmSection
+                                config={{
+                                    GROUPWISE: config.GROUPWISE,
+                                    SCOREBOARD: config.SCOREBOARD,
+                                    PASS_SCHEDULE: config.PASS_SCHEDULE
+                                }}
+                                onChange={handleLiveChange}
+                            />
 
-                    <SharedParametersSection
-                        config={config}
-                        onChange={handleSharedChange}
-                    />
+                            <GeometricParametersSection
+                                config={config}
+                                onChange={handleSharedChange}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <GeneticAlgorithmSection
+                                config={{
+                                    GENETIC_ALGORITHM: config.GENETIC_ALGORITHM,
+                                    MUTATION_STRATEGIES: config.MUTATION_STRATEGIES,
+                                    SCOREBOARD: config.SCOREBOARD
+                                }}
+                                onChange={handleGAChange}
+                                onError={setHasValidationError}
+                            />
 
-                    <GeneticAlgorithmSection
-                        config={{
-                            GENETIC_ALGORITHM: config.GENETIC_ALGORITHM,
-                            MUTATION_STRATEGIES: config.MUTATION_STRATEGIES,
-                            SCOREBOARD: config.SCOREBOARD
-                        }}
-                        onChange={handleGAChange}
-                        onError={setHasValidationError}
-                    />
+                            <GeometricParametersSection
+                                config={config}
+                                onChange={handleSharedChange}
+                            />
+                        </>
+                    )}
                 </div>
 
                 <div className="settings-footer" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
@@ -257,14 +289,14 @@ export default function OptimizerSettings() {
                         onClick={loadProfiles}
                         disabled={saving || activating}
                     >
-                        Reset Profile {activeTab}
+                        Reset {activeTab === 'live' ? 'Live' : `Profile ${activeTab}`}
                     </button>
                     <button
                         className="btn btn-primary"
                         onClick={handleSave}
                         disabled={saving || activating || hasValidationError}
                     >
-                        {saving ? 'Saving...' : `Save Profile ${activeTab}`}
+                        {saving ? 'Saving...' : `Save ${activeTab === 'live' ? 'Live' : `Profile ${activeTab}`}`}
                     </button>
                 </div>
             </div>

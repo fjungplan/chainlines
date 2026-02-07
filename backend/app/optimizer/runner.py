@@ -111,12 +111,27 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
     _optimization_status["last_run"] = datetime.utcnow()
     
     try:
-        optimizer = GeneticOptimizer()
+        # Load active profile config for backend optimization
+        from app.api.admin.optimizer_config import load_profiles
+        profiles_data = load_profiles()
+        active_profile_id = profiles_data.get("active_profile", "A")
+        active_config = profiles_data["profiles"][active_profile_id]
         
-        # Load full config for logging purposes
-        from app.api.admin.optimizer_config import load_config
-        full_config = load_config()
+        # Initialize optimizer with profile-specific parameters
+        ga_config = active_config.get("GENETIC_ALGORITHM", {})
+        optimizer = GeneticOptimizer(
+            pop_size=ga_config.get("POP_SIZE", 1000),
+            generations=ga_config.get("GENERATIONS", 5000),
+            mutation_rate=ga_config.get("MUTATION_RATE", 0.35),
+            tournament_size=ga_config.get("TOURNAMENT_SIZE", 4),
+            patience=ga_config.get("PATIENCE", 500),
+            mutation_strategies=active_config.get("MUTATION_STRATEGIES", {})
+        )
+        # Set weights from profile
+        optimizer.weights = active_config.get("WEIGHTS", optimizer.weights)
+        optimizer.timeout_seconds = ga_config.get("TIMEOUT_SECONDS", 3600)
         
+
         # 1. Fetch layouts
         stmt = select(PrecomputedLayout).where(PrecomputedLayout.family_hash.in_(family_hashes))
         result = await db.execute(stmt)
@@ -205,7 +220,7 @@ async def run_optimization(family_hashes: List[str], db: AsyncSession):
                 )
                 
                 # 4. Persistence & Logging
-                append_optimizer_log(layout.family_hash, opt_result, full_config, len(nodes_data), len(links_data))
+                append_optimizer_log(layout.family_hash, opt_result, active_config, len(nodes_data), len(links_data))
                 
                 # 5. Update Layout
                 y_indices = opt_result["y_indices"]

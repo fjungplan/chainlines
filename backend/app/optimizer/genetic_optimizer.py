@@ -86,26 +86,6 @@ class GeneticOptimizer:
         """
         start_time = time.time()
         
-        # Hot Reload Config (User Tweak Support)
-        try:
-            config_path = os.path.join(os.path.dirname(__file__), 'layout_config.json')
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config_data = json.load(f)
-                    self.weights = config_data.get("WEIGHTS", self.weights)
-                    # Load GA settings
-                    ga_config = config_data.get("GENETIC_ALGORITHM", {})
-                    self.pop_size = ga_config.get("POP_SIZE", self.pop_size)
-                    self.generations = ga_config.get("GENERATIONS", self.generations)
-                    self.mutation_rate = ga_config.get("MUTATION_RATE", self.mutation_rate)
-                    self.tournament_size = ga_config.get("TOURNAMENT_SIZE", self.tournament_size)
-                    self.timeout_seconds = ga_config.get("TIMEOUT_SECONDS", self.timeout_seconds)
-                    self.patience = ga_config.get("PATIENCE", self.patience)
-                    self.mutation_strategies = config_data.get("MUTATION_STRATEGIES", self.mutation_strategies)
-                    logger.info(f"Loaded config from {os.path.abspath(config_path)}: pop={self.pop_size}, gens={self.generations}, mut={self.mutation_rate}, timeout={self.timeout_seconds}, patience={self.patience}")
-        except Exception as e:
-            logger.error(f"Failed to load layout_config.json: {e}")
-
         chains = family.get("chains", [])
         links = family.get("links", [])
         
