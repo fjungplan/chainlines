@@ -75,9 +75,16 @@ export default function SponsorMaintenancePage() {
         fetchMasters(); // Refetch to prevent stale data
     };
 
-    const handleEditorSuccess = () => {
-        handleEditorClose();
-        fetchMasters();
+    const handleEditorSuccess = (newMasterId) => {
+        if (newMasterId) {
+            // Stay open and switch to Edit Mode for the new master
+            setSelectedMasterId(newMasterId);
+            fetchMasters();
+        } else {
+            // Close
+            handleEditorClose();
+            fetchMasters();
+        }
     };
 
     if (!user) return <div className="sponsor-page-container">Please log in.</div>;

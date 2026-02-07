@@ -96,18 +96,25 @@ async def create_master(
             notes=data.source_notes
         )
         
-        # Capture ID before commit expires the object
-        new_master_id = master.master_id
+        
+        # Create response manually to avoid any lazy loading issues with Pydantic
+        # For a new sponsor, brands is always empty
+        response = SponsorMasterResponse(
+            master_id=master.master_id,
+            legal_name=master.legal_name,
+            display_name=master.display_name,
+            industry_sector=master.industry_sector,
+            is_protected=master.is_protected,
+            source_url=master.source_url,
+            source_notes=master.source_notes,
+            created_at=master.created_at,
+            updated_at=master.updated_at,
+            brands=[]
+        )
         
         await session.commit()
-        # Re-fetch with brands (even if empty) to avoid MissingGreenlet during Pydantic validation
-        stmt = (
-            select(SponsorMaster)
-            .options(selectinload(SponsorMaster.brands))
-            .where(SponsorMaster.master_id == new_master_id)
-        )
-        master = (await session.execute(stmt)).scalar_one()
-        return master
+        return response
+
     except Exception as e:
         # Generic catch for unique constraint for now
         if "unique constraint" in str(e).lower():
