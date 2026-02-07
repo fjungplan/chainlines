@@ -97,7 +97,14 @@ async def create_master(
         )
         
         await session.commit()
-        await session.refresh(master)
+        # Re-fetch with brands to avoid MissingGreenlet during Pydantic validation
+        # as session.refresh() does not load relationships and create_master returns a bare instance
+        stmt = (
+            select(SponsorMaster)
+            .options(selectinload(SponsorMaster.brands))
+            .where(SponsorMaster.master_id == master.master_id)
+        )
+        master = (await session.execute(stmt)).scalar_one()
         return master
     except Exception as e:
         # Generic catch for unique constraint for now
@@ -150,7 +157,13 @@ async def update_master(
     )
     
     await session.commit()
-    await session.refresh(result)
+    # Re-fetch with brands to avoid MissingGreenlet during Pydantic validation
+    stmt = (
+        select(SponsorMaster)
+        .options(selectinload(SponsorMaster.brands))
+        .where(SponsorMaster.master_id == master_id)
+    )
+    result = (await session.execute(stmt)).scalar_one()
     return result
 
 @router.delete("/masters/{master_id}", status_code=status.HTTP_204_NO_CONTENT)
