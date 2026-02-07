@@ -96,13 +96,15 @@ async def create_master(
             notes=data.source_notes
         )
         
+        # Capture ID before commit expires the object
+        new_master_id = master.master_id
+        
         await session.commit()
-        # Re-fetch with brands to avoid MissingGreenlet during Pydantic validation
-        # as session.refresh() does not load relationships and create_master returns a bare instance
+        # Re-fetch with brands (even if empty) to avoid MissingGreenlet during Pydantic validation
         stmt = (
             select(SponsorMaster)
             .options(selectinload(SponsorMaster.brands))
-            .where(SponsorMaster.master_id == master.master_id)
+            .where(SponsorMaster.master_id == new_master_id)
         )
         master = (await session.execute(stmt)).scalar_one()
         return master
