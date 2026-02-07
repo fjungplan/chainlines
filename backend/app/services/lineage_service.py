@@ -49,6 +49,19 @@ class LineageService:
         # Prevent circular references
         if previous_id and next_id and previous_id == next_id:
             raise ValidationException("Cannot create circular lineage event.")
+        
+        # Check for existing duplicate link
+        if previous_id and next_id:
+            dup_q = await self.db.execute(
+                select(LineageEvent).where(
+                    LineageEvent.predecessor_node_id == previous_id,
+                    LineageEvent.successor_node_id == next_id,
+                    LineageEvent.event_year == year
+                )
+            )
+            if dup_q.scalar_one_or_none():
+                raise ValidationException(f"A lineage link already exists between these nodes for the year {year}. Duplicate links are not allowed.")
+
         event = LineageEvent(
             predecessor_node_id=previous_id,
             successor_node_id=next_id,

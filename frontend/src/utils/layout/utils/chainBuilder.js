@@ -30,12 +30,19 @@ export function buildChains(nodes, links) {
     const visited = new Set();
 
     // Link Map for fast lookup of {source, target} -> {year, type}
+    // We prioritize LEGAL_TRANSFER links to ensure logical hand-offs claim the chain
     const linkMap = new Map();
     links.forEach(l => {
-        linkMap.set(`${l.source}-${l.target}`, {
-            year: l.year || l.event_year,
-            type: l.event_type || l.type
-        });
+        const key = `${l.source || l.parentId}-${l.target || l.childId}`;
+        const existing = linkMap.get(key);
+        const isLegal = l.event_type === "LEGAL_TRANSFER" || l.type === "LEGAL_TRANSFER";
+
+        if (!existing || isLegal) {
+            linkMap.set(key, {
+                year: l.year || l.event_year,
+                type: l.event_type || l.type
+            });
+        }
     });
 
     // Helper: Is this a "Primary Continuation" based on time? (Hand-off)
@@ -93,16 +100,17 @@ export function buildChains(nodes, links) {
         if (sIds.length === 0) return null;
 
         // Filter for candidates that are primary continuations
-        const candidates = sIds.filter(sId => isPrimaryContinuation(nodeId, sId));
+        // Unique them via Set to handle duplicate links in data
+        const candidates = [...new Set(sIds.filter(sId => isPrimaryContinuation(nodeId, sId)))];
 
         if (candidates.length === 0) return null;
         if (candidates.length === 1) return candidates[0];
 
         // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
-        const legalCandidates = candidates.filter(sId => {
+        const legalCandidates = [...new Set(candidates.filter(sId => {
             const link = linkMap.get(`${nodeId}-${sId}`);
             return link && link.type === "LEGAL_TRANSFER";
-        });
+        }))];
 
         if (legalCandidates.length === 1) return legalCandidates[0];
         return null;
@@ -116,16 +124,17 @@ export function buildChains(nodes, links) {
         if (pIds.length === 0) return null;
 
         // Filter for candidates that are primary continuations
-        const candidates = pIds.filter(pId => isPrimaryContinuation(pId, nodeId));
+        // Unique them via Set to handle duplicate links in data
+        const candidates = [...new Set(pIds.filter(pId => isPrimaryContinuation(pId, nodeId)))];
 
         if (candidates.length === 0) return null;
         if (candidates.length === 1) return candidates[0];
 
         // Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
-        const legalCandidates = candidates.filter(pId => {
+        const legalCandidates = [...new Set(candidates.filter(pId => {
             const link = linkMap.get(`${pId}-${nodeId}`);
             return link && link.type === "LEGAL_TRANSFER";
-        });
+        }))];
 
         if (legalCandidates.length === 1) return legalCandidates[0];
         return null;

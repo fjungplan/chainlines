@@ -2,7 +2,7 @@ from typing import Optional
 import uuid
 from datetime import datetime, date
 
-from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String, Boolean
+from sqlalchemy import Column, ForeignKey, Integer, Text, Enum, CheckConstraint, DateTime, Date, String, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.db.base import Base, utc_now
 from app.db.types import GUID
@@ -36,6 +36,7 @@ class LineageEvent(Base):
     last_modified_by_user: Mapped["User"] = relationship("User", foreign_keys=[last_modified_by])
 
     __table_args__ = (
+        UniqueConstraint("predecessor_node_id", "successor_node_id", "event_year", name="uq_lineage_link"),
         CheckConstraint('predecessor_node_id != successor_node_id', name='check_not_circular'),
         CheckConstraint('event_year >= 1900 AND event_year <= 2100', name='check_event_year'),
     )

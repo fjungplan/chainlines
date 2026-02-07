@@ -57,9 +57,12 @@ def build_chains(
     from app.models.enums import LineageEventType
 
     # Link lookup map: (parent, child) -> link object
+    # We prioritize LEGAL_TRANSFER links when multiple links exist between the same nodes
     link_map: Dict[tuple, Dict] = {}
     for link in links:
-        link_map[(link["parentId"], link["childId"])] = link
+        key = (link["parentId"], link["childId"])
+        if key not in link_map or link.get("type") == LineageEventType.LEGAL_TRANSFER:
+            link_map[key] = link
     
     def get_end_year(node: Dict) -> int:
         """
@@ -98,25 +101,19 @@ def build_chains(
             return False
             
         is_legal = link.get("type") == LineageEventType.LEGAL_TRANSFER
-        if is_legal:
-            return True
-
+        
         link_year = link.get("year")
         child_start = child.get("founding_year")
         parent_end = get_end_year(parent)
         
         # If link year is available, it MUST match the child birth
         if link_year is not None:
-            if abs(link_year - child_start) > 1:
-                return False
-            # Furthermore, for it to be a "hand-off" (vs a mid-life split),
-            # it should be near the parent's death.
-            if abs(link_year - parent_end) > 1 and link_year < parent_end:
-                return False
-            return True
+            birth_match = abs(link_year - child_start) <= 1
+            death_match = abs(link_year - parent_end) <= 1 or link_year > parent_end
+            
+            return birth_match and (death_match or is_legal)
 
         # Fallback: No link year. Compare node boundaries directly.
-        # A direct hand-off is when child starts near parent end.
         return abs(child_start - parent_end) <= 1
     
     def get_chosen_successor(node_id: str) -> Optional[str]:
@@ -128,7 +125,8 @@ def build_chains(
             return None
             
         # Filter for candidates that are primary continuations
-        candidates = [s_id for s_id in s_ids if is_primary_continuation(node_id, s_id)]
+        # Unique them to handle duplicate links in database
+        candidates = list(set(s_id for s_id in s_ids if is_primary_continuation(node_id, s_id)))
         
         if len(candidates) == 0:
             return None
@@ -136,8 +134,8 @@ def build_chains(
             return candidates[0]
             
         # Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
-        legal_candidates = [s_id for s_id in candidates 
-                            if link_map.get((node_id, s_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER]
+        legal_candidates = list(set(s_id for s_id in candidates 
+                            if link_map.get((node_id, s_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER))
         
         if len(legal_candidates) == 1:
             return legal_candidates[0]
@@ -152,7 +150,8 @@ def build_chains(
             return None
             
         # Filter for candidates that are primary continuations
-        candidates = [p_id for p_id in p_ids if is_primary_continuation(p_id, node_id)]
+        # Unique them to handle duplicate links in database
+        candidates = list(set(p_id for p_id in p_ids if is_primary_continuation(p_id, node_id)))
         
         if len(candidates) == 0:
             return None
@@ -160,8 +159,8 @@ def build_chains(
             return candidates[0]
             
         # Resolve Ambiguity: Check for unique LEGAL_TRANSFER among candidates
-        legal_candidates = [p_id for p_id in candidates 
-                            if link_map.get((p_id, node_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER]
+        legal_candidates = list(set(p_id for p_id in candidates 
+                            if link_map.get((p_id, node_id), {}).get("type") == LineageEventType.LEGAL_TRANSFER))
         
         if len(legal_candidates) == 1:
             return legal_candidates[0]
