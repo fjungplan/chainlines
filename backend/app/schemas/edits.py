@@ -57,6 +57,8 @@ class CreateTeamRequest(BaseModel):
     registered_name: str  # Team name for the first era
     founding_year: int
     dissolution_year: Optional[int] = None
+    source_url: Optional[str] = None
+    source_notes: Optional[str] = None
     uci_code: Optional[str] = None
     tier_level: int  # Initial tier
     reason: Optional[str] = None  # Optional for admins

@@ -626,6 +626,8 @@ class EditService:
                 dissolution_year=request.dissolution_year,
                 legal_name=request.legal_name,
                 display_name=request.registered_name,
+                source_url=request.source_url,
+                source_notes=request.source_notes,
                 created_by=user.user_id
             )
             session.add(node)
