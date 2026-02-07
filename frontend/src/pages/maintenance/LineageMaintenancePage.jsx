@@ -42,6 +42,8 @@ const LineageMaintenance = () => {
     const [selectedEventId, setSelectedEventId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [sortBy, setSortBy] = useState('event_year');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     const PAGE_SIZE = 1000;
 
@@ -51,7 +53,9 @@ const LineageMaintenance = () => {
             const data = await lineageApi.listEvents({
                 skip: 0,
                 limit: PAGE_SIZE,
-                search: search || undefined
+                search: search || undefined,
+                sort_by: sortBy,
+                order: sortOrder
             });
             setEvents(data.items);
             setTotal(data.total);
@@ -62,13 +66,22 @@ const LineageMaintenance = () => {
         }
     };
 
-    // Debounced search
+    // Debounced search + Sort Trigger
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchEvents(searchQuery);
         }, 300);
         return () => clearTimeout(timer);
-    }, [searchQuery]);
+    }, [searchQuery, sortBy, sortOrder]);
+
+    const handleSort = (field) => {
+        if (sortBy === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setSortOrder('desc');
+        }
+    };
 
     const handleAddClick = () => {
         setSelectedEventId(null);
@@ -128,8 +141,26 @@ const LineageMaintenance = () => {
                             <table className="team-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: '80px' }}>Year</th>
-                                        <th style={{ width: '120px' }}>Type</th>
+                                        <th
+                                            style={{ width: '100px' }}
+                                            className="sortable-header"
+                                            onClick={() => handleSort('event_year')}
+                                        >
+                                            Year
+                                            <span className={`sort-icon ${sortBy === 'event_year' ? 'active' : ''}`}>
+                                                {sortBy === 'event_year' ? (sortOrder === 'asc' ? '▲' : '▼') : '⇅'}
+                                            </span>
+                                        </th>
+                                        <th
+                                            style={{ width: '140px' }}
+                                            className="sortable-header"
+                                            onClick={() => handleSort('event_type')}
+                                        >
+                                            Type
+                                            <span className={`sort-icon ${sortBy === 'event_type' ? 'active' : ''}`}>
+                                                {sortBy === 'event_type' ? (sortOrder === 'asc' ? '▲' : '▼') : '⇅'}
+                                            </span>
+                                        </th>
                                         <th>Predecessor</th>
                                         <th>Successor</th>
                                         <th>Notes</th>

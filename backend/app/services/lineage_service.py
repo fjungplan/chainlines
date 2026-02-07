@@ -183,10 +183,12 @@ class LineageService:
         self,
         skip: int = 0,
         limit: int = 50,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        sort_by: str = "event_year",
+        order: str = "desc"
     ) -> Tuple[List[LineageEvent], int]:
-        """List lineage events with optional search by team name."""
-        from sqlalchemy import or_
+        """List lineage events with optional search and sorting."""
+        from sqlalchemy import or_, desc, asc
         
         # Base query with eager loading
         base_query = (
@@ -221,10 +223,14 @@ class LineageService:
         total_result = await self.db.execute(count_stmt)
         total = total_result.scalar()
 
-        # Query with pagination
+        # Handle sorting
+        sort_col = getattr(LineageEvent, sort_by, LineageEvent.event_year)
+        order_func = desc if order.lower() == "desc" else asc
+        
+        # Query with pagination and sorting
         stmt = (
             base_query
-            .order_by(LineageEvent.event_year.desc(), LineageEvent.created_at.desc())
+            .order_by(order_func(sort_col), LineageEvent.created_at.desc())
             .offset(skip)
             .limit(limit)
         )
