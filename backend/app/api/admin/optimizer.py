@@ -74,8 +74,9 @@ async def get_families(
         # Determine Status
         is_actually_optimized = layout.optimized_at is not None and layout.score > 0
         
-        # EXCLUSION THRESHOLD: Must have at least 2 nodes and 1 link to be a "family"
-        if node_count < 2 or link_count < 1:
+        # EXCLUSION THRESHOLD: Standardized complexity check
+        from app.services.family_discovery import FamilyDiscoveryService
+        if not FamilyDiscoveryService.is_complex_family(node_count, link_count):
             continue
 
         if layout.family_hash in active_hashes:
@@ -165,7 +166,20 @@ def _get_family_name(all_nodes: List[Dict]) -> str:
         start = node.get("founding_year") or node.get("startTime", 0)
         end = node.get("dissolution_year") or node.get("endTime")
         if end is None:
-            end = current_year
+            # Zombie Node Check: If no dissolution, use last era year to avoid naming bias
+            eras = node.get("eras") or []
+            if eras:
+                try:
+                    max_era = max(e.get("year", 0) for e in eras)
+                    if max_era > 0:
+                        end = max_era
+                except:
+                    pass
+            
+            # Absolute fallback
+            if end is None:
+                end = current_year
+        
         duration = end - start
             
         eras = node.get("eras", [])
@@ -239,7 +253,7 @@ async def run_discovery_wrapper():
     from app.services.family_discovery import FamilyDiscoveryService
     async with async_session_maker() as session:
         # Require at least 2 nodes and 1 link for a component to be considered a 'family'
-        service = FamilyDiscoveryService(session, complexity_threshold=2)
+        service = FamilyDiscoveryService(session)
         await service.discover_all_families()
 
 

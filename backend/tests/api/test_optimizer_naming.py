@@ -28,3 +28,23 @@ def test_family_naming_empty():
     assert _get_family_name([]) == "Unknown Family"
     assert _get_family_name([{"name": None}]) == "Unknown Family"
     assert _get_family_name([{"name": "Found"}]) == "Found"
+def test_family_naming_zombie_nodes():
+    # Ancient zombie team (1980-1985, no dissolution)
+    # Modern active team (2000-2025, no dissolution)
+    nodes = [
+        {
+            "name": "Ancient Zombie", 
+            "founding_year": 1980, 
+            "dissolution_year": None,
+            "eras": [{"year": 1980}, {"year": 1985}]
+        },
+        {
+            "name": "Active Powerhouse", 
+            "founding_year": 2000, 
+            "dissolution_year": None,
+            "eras": [{"year": 2000}, {"year": 2025}]
+        }
+    ]
+    # Current (incorrect) behavior would choose Ancient Zombie (1980-2026 vs 2000-2026)
+    # Expected behavior should choose Active Powerhouse (2000-2025 vs 1980-1985)
+    assert _get_family_name(nodes) == "Active Powerhouse"

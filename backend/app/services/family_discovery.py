@@ -24,13 +24,13 @@ class FamilyDiscoveryService:
     Service for discovering and registering complex families.
     
     A "family" is any connected component of nodes.
-    By default, we discover all families (threshold: 1 node).
+    By default, we discover families with at least 2 nodes and 1 link.
     """
     
     def __init__(
         self,
         session: AsyncSession,
-        complexity_threshold: int = 1
+        complexity_threshold: int = 2
     ):
         """
         Initialize the discovery service.
@@ -41,6 +41,16 @@ class FamilyDiscoveryService:
         """
         self.session = session
         self.complexity_threshold = complexity_threshold
+
+    @staticmethod
+    def is_complex_family(node_count: int, link_count: int, node_threshold: int = 2) -> bool:
+        """
+        Standardized check for what constitutes a "complex family" 
+        worthy of precomputed layout optimization.
+        
+        Default: At least 2 nodes AND at least 1 link.
+        """
+        return node_count >= node_threshold and link_count >= 1
     
     async def find_connected_component(self, start_node_id: UUID) -> List[TeamNode]:
         """
@@ -109,10 +119,6 @@ class FamilyDiscoveryService:
         # Find the connected component
         component = await self.find_connected_component(node_id)
         
-        # Check complexity threshold
-        if len(component) < self.complexity_threshold:
-            return None
-        
         # Get all links within this component
         node_ids = {node.node_id for node in component}
         links_stmt = select(LineageEvent).where(
@@ -122,9 +128,9 @@ class FamilyDiscoveryService:
         links_result = await self.session.execute(links_stmt)
         links = links_result.scalars().all()
         
-        # EXCLUSION THRESHOLD: Must have at least 1 link to be a "family"
-        if not links:
-            logger.debug(f"Family with {len(component)} nodes has 0 links, skipping")
+        # EXCLUSION THRESHOLD: Standardized complexity check
+        if not self.is_complex_family(len(component), len(links), self.complexity_threshold):
+            logger.debug(f"Family with {len(component)} nodes and {len(links)} links below threshold, skipping")
             return None
         
         # Prepare data for fingerprinting
@@ -259,16 +265,10 @@ class FamilyDiscoveryService:
             processed_nodes.update(visited)
             
             # 3. ASSESS COMPLEXITY
-            if len(component_nodes) < self.complexity_threshold:
-                continue
-            
-            # 4. REGISTER FAMILY
-            # Get links for this component
             comp_node_ids = set(visited)
             comp_links = [l for l in all_links if l.predecessor_node_id in comp_node_ids and l.successor_node_id in comp_node_ids]
             
-            # EXCLUSION THRESHOLD: Must have at least 1 link to be a "family"
-            if not comp_links:
+            if not self.is_complex_family(len(component_nodes), len(comp_links), self.complexity_threshold):
                 continue
             
             # Fingerprint
