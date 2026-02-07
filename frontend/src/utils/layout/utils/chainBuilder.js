@@ -29,24 +29,30 @@ export function buildChains(nodes, links) {
     const chains = [];
     const visited = new Set();
 
-    // Link Map for fast lookup of {source, target} -> link year
+    // Link Map for fast lookup of {source, target} -> {year, type}
     const linkMap = new Map();
-    links.forEach(l => linkMap.set(`${l.source}-${l.target}`, l.year || l.event_year));
+    links.forEach(l => {
+        linkMap.set(`${l.source}-${l.target}`, {
+            year: l.year || l.event_year,
+            type: l.event_type || l.type
+        });
+    });
 
     // Helper: Is this a "Primary Continuation" based on time?
     // Matches backend logic: abs(linkYear - childStart) <= 1
     const isPrimaryContinuation = (parentId, childId) => {
-        const linkYear = linkMap.get(`${parentId}-${childId}`);
+        const link = linkMap.get(`${parentId}-${childId}`);
         const childNode = nodeMap.get(childId);
-        if (linkYear === undefined || !childNode) return false;
+        if (!link || link.year === undefined || !childNode) return false;
 
         // Tolerance: +/- 1 year
-        return Math.abs(linkYear - childNode.founding_year) <= 1;
+        return Math.abs(link.year - childNode.founding_year) <= 1;
     };
 
     const currentYear = new Date().getFullYear();
 
     const getEndYear = (node) => {
+        if (!node) return currentYear;
         if (node.dissolution_year) {
             return node.dissolution_year;
         }
@@ -59,37 +65,59 @@ export function buildChains(nodes, links) {
         return currentYear;
     };
 
-    // Helper: Get all primary predecessors for a node
-    const getPrimaryPredecessors = (nodeId) => {
-        const p = preds.get(nodeId) || [];
-        return p.filter(parentId => isPrimaryContinuation(parentId, nodeId));
+    /**
+     * Identify the unique 'chosen' successor that continues this node's chain.
+     * - If 1 successor: always return it (Rule 1).
+     * - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
+     */
+    const getChosenSuccessor = (nodeId) => {
+        const sIds = succs.get(nodeId) || [];
+        if (sIds.length === 0) return null;
+        if (sIds.length === 1) return sIds[0];
+
+        // Resolve Split: Check for unique LEGAL_TRANSFER
+        const legalSuccs = sIds.filter(sId => {
+            const link = linkMap.get(`${nodeId}-${sId}`);
+            return link && link.type === "LEGAL_TRANSFER";
+        });
+
+        if (legalSuccs.length === 1) return legalSuccs[0];
+        return null;
+    };
+
+    /**
+     * Identify the unique 'chosen' predecessor that this node continues the chain from.
+     * - If 1 predecessor: always return it (Rule 1).
+     * - If multiple: return the one with LEGAL_TRANSFER if unique (Rule 2).
+     */
+    const getChosenPredecessor = (nodeId) => {
+        const pIds = preds.get(nodeId) || [];
+        if (pIds.length === 0) return null;
+        if (pIds.length === 1) return pIds[0];
+
+        // Resolve Merge: Check for unique LEGAL_TRANSFER
+        // We only count those that are also temporally primary continuations
+        const legalPreds = pIds.filter(pId => {
+            const link = linkMap.get(`${pId}-${nodeId}`);
+            return link && link.type === "LEGAL_TRANSFER" && isPrimaryContinuation(pId, nodeId);
+        });
+
+        if (legalPreds.length === 1) return legalPreds[0];
+        return null;
     };
 
     // 1. Identification of "Chain Starter" nodes
     const isChainStart = (nodeId) => {
-        const p = preds.get(nodeId) || [];
+        // A node starts a chain if it has no chosen predecessor,
+        // OR if its chosen predecessor has a different chosen successor (split conflict).
+        const pId = getChosenPredecessor(nodeId);
+        if (!pId) return true;
 
-        // Case 1: No Predecessors -> Start
-        if (p.length === 0) return true;
+        // Check if parent chooses US as the primary continuation
+        if (getChosenSuccessor(pId) !== nodeId) return true;
 
-        // Case 2: Multiple Predecessors (Merge)
-        if (p.length > 1) {
-            // CHECK PRIORITY: If there is EXACTLY ONE primary predecessor,
-            // we do NOT start a chain (we let the primary parent continue).
-            const primaryPreds = getPrimaryPredecessors(nodeId);
-            if (primaryPreds.length === 1) return false;
-            return true; // Ambiguous or None -> Start new chain
-        }
-
-        // Case 3: Single Predecessor
-        const parentId = p[0];
-        const parentSuccs = succs.get(parentId) || [];
-
-        // Parent has multiple successors (Split) -> Start new chain
-        if (parentSuccs.length > 1) return true;
-
-        // ALSO: Check for VISUAL overlap with the single parent.
-        const parentNode = nodeMap.get(parentId);
+        // ALSO: Check for VISUAL overlap with the chosen parent.
+        const parentNode = nodeMap.get(pId);
         const myNode = nodeMap.get(nodeId);
 
         const parentEnd = getEndYear(parentNode);
@@ -111,27 +139,13 @@ export function buildChains(nodes, links) {
                 visited.add(curr);
                 chainNodes.push(nodeMap.get(curr));
 
-                const s = succs.get(curr) || [];
-                // Stop if No Successors
-                if (s.length === 0) break;
+                // Find the unique logical continuation
+                const nextId = getChosenSuccessor(curr);
+                if (!nextId) break;
 
-                // Handling Splits (current node has >1 successor)
-                if (s.length > 1) break;
-
-                const nextId = s[0];
-                const nextPreds = preds.get(nextId) || [];
-
-                // Handling Merges (next node has >1 predecessors)
-                if (nextPreds.length > 1) {
-                    // Only continue if 'curr' is the Primary Predecessor
-                    if (!isPrimaryContinuation(curr, nextId)) break;
-
-                    // AND if it is the ONLY primary predecessor
-                    const primaryPreds = getPrimaryPredecessors(nextId);
-                    if (primaryPreds.length !== 1) break;
-
-                    // Also verify we are that predecessor (implicit by length==1 check above + we are primary)
-                }
+                // Symmetry check: handle merges
+                // The next node MUST choose MUST choose US as its primary predecessor
+                if (getChosenPredecessor(nextId) !== curr) break;
 
                 // Continue
                 // CRITICAL: Check for VISUAL overlap (Dirty Data Protection)
