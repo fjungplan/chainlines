@@ -189,10 +189,17 @@ class LineageService:
     ) -> Tuple[List[LineageEvent], int]:
         """List lineage events with optional search and sorting."""
         from sqlalchemy import or_, desc, asc
+        from sqlalchemy.orm import aliased
+        
+        # Aliases for sorting by team names
+        PredecessorNode = aliased(TeamNode, name="predecessor_node_alias")
+        SuccessorNode = aliased(TeamNode, name="successor_node_alias")
         
         # Base query with eager loading
         base_query = (
             select(LineageEvent)
+            .outerjoin(PredecessorNode, LineageEvent.predecessor_node_id == PredecessorNode.node_id)
+            .outerjoin(SuccessorNode, LineageEvent.successor_node_id == SuccessorNode.node_id)
             .options(
                 selectinload(LineageEvent.predecessor_node),
                 selectinload(LineageEvent.successor_node),
@@ -204,19 +211,16 @@ class LineageService:
         # Apply search filter if provided
         if search and search.strip():
             search_term = f"%{search.strip()}%"
-            # Join with TeamNode to search by name
-            base_query = base_query.join(
-                TeamNode,
+            # We already have joins for sorting, let's reuse aliases or add another join for search logic
+            # To avoid affecting distinct/multiplicity if same team is pred/succ, we use the aliases or a subquery
+            base_query = base_query.where(
                 or_(
-                    LineageEvent.predecessor_node_id == TeamNode.node_id,
-                    LineageEvent.successor_node_id == TeamNode.node_id
+                    PredecessorNode.legal_name.ilike(search_term),
+                    PredecessorNode.display_name.ilike(search_term),
+                    SuccessorNode.legal_name.ilike(search_term),
+                    SuccessorNode.display_name.ilike(search_term)
                 )
-            ).where(
-                or_(
-                    TeamNode.legal_name.ilike(search_term),
-                    TeamNode.display_name.ilike(search_term)
-                )
-            ).distinct()
+            )
         
         # Count
         count_stmt = select(func.count()).select_from(base_query.subquery())
@@ -224,8 +228,18 @@ class LineageService:
         total = total_result.scalar()
 
         # Handle sorting
-        sort_col = getattr(LineageEvent, sort_by, LineageEvent.event_year)
         order_func = desc if order.lower() == "desc" else asc
+        
+        if sort_by == "predecessor":
+            sort_col = PredecessorNode.display_name
+        elif sort_by == "successor":
+            sort_col = SuccessorNode.display_name
+        elif sort_by == "event_type":
+            sort_col = LineageEvent.event_type
+        elif sort_by == "notes":
+            sort_col = LineageEvent.notes
+        else:
+            sort_col = LineageEvent.event_year
         
         # Query with pagination and sorting
         stmt = (

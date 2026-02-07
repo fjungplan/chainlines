@@ -143,27 +143,36 @@ const LineageMaintenance = () => {
                                     <tr>
                                         <th
                                             style={{ width: '100px' }}
-                                            className="sortable-header"
+                                            className="sortable"
                                             onClick={() => handleSort('event_year')}
                                         >
-                                            Year
-                                            <span className={`sort-icon ${sortBy === 'event_year' ? 'active' : ''}`}>
-                                                {sortBy === 'event_year' ? (sortOrder === 'asc' ? '▲' : '▼') : '⇅'}
-                                            </span>
+                                            Year {sortBy === 'event_year' && (sortOrder === 'asc' ? '↑' : '↓')}
                                         </th>
                                         <th
                                             style={{ width: '140px' }}
-                                            className="sortable-header"
+                                            className="sortable"
                                             onClick={() => handleSort('event_type')}
                                         >
-                                            Type
-                                            <span className={`sort-icon ${sortBy === 'event_type' ? 'active' : ''}`}>
-                                                {sortBy === 'event_type' ? (sortOrder === 'asc' ? '▲' : '▼') : '⇅'}
-                                            </span>
+                                            Type {sortBy === 'event_type' && (sortOrder === 'asc' ? '↑' : '↓')}
                                         </th>
-                                        <th>Predecessor</th>
-                                        <th>Successor</th>
-                                        <th>Notes</th>
+                                        <th
+                                            className="sortable"
+                                            onClick={() => handleSort('predecessor')}
+                                        >
+                                            Predecessor {sortBy === 'predecessor' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th
+                                            className="sortable"
+                                            onClick={() => handleSort('successor')}
+                                        >
+                                            Successor {sortBy === 'successor' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                        </th>
+                                        <th
+                                            className="sortable"
+                                            onClick={() => handleSort('notes')}
+                                        >
+                                            Notes {sortBy === 'notes' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                        </th>
                                         <th className="actions-col">Actions</th>
                                     </tr>
                                 </thead>
