@@ -1,25 +1,11 @@
 services:
-  # --- The Gatekeeper (Caddy) ---
-  # Handles HTTPS and routes traffic to Frontend vs Backend
-  caddy:
-    image: caddy:alpine
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-      - backend
-
   # --- Database ---
   postgres:
     image: postgres:15-alpine
     container_name: cycling_postgres
     restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -73,5 +59,3 @@ services:
 
 volumes:
   postgres_data:
-  caddy_data:
-  caddy_config:
